@@ -1,0 +1,57 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: preview/package-lock.json
+      - name: Install preview deps
+        run: npm --prefix preview ci
+      - name: Build preview (GitHub Pages base)
+        run: GITHUB_PAGES=true npm --prefix preview run build
+      - name: Generate static systems index
+        run: node scripts/build-static.mjs
+      - name: Prepare Pages artifact
+        run: |
+          rm -rf _site
+          mkdir -p _site/preview
+          mkdir -p _site/src/core _site/src/viewer _site/src/server
+          cp index.html _site/
+          cp -r src _site/src
+          cp -r systems _site/systems
+          cp -r preview/dist/* _site/preview/
+          # Ensure preview base is correct for Pages (already built with GITHUB_PAGES)
+          # Add .nojekyll
+          touch _site/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

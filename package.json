@@ -1,0 +1,18 @@
+{
+  "name": "design-system-viewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone tool: paste a CSS token block, get a categorized design-system gallery.",
+  "scripts": {
+    "start": "node src/server/server.js",
+    "test": "node --test src/core/*.test.js src/server/*.test.js",
+    "build": "npm --prefix preview install && npm --prefix preview run build",
+    "build:static": "node scripts/build-static.mjs",
+    "build:pages": "cross-env GITHUB_PAGES=true npm --prefix preview run build && node scripts/build-static.mjs",
+    "prestart": "node -e \"require('fs').existsSync('preview/dist')||process.exit(1)\" || npm run build"
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0"
+  }
+}

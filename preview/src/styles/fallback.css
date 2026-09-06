@@ -1,0 +1,181 @@
+/*
+ * Neutral light-theme fallback for every canonical token in schema.js.
+ * The active system's CSS is injected into <style id="dsv-tokens"> AFTER this
+ * file, so any token it defines wins; anything it omits still has a sane value
+ * and the preview never renders unstyled.
+ */
+:root {
+  /* Surface / Elevation */
+  --color-bg: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-overlay: #ffffff;
+  --color-surface-sunken: #eceef1;
+
+  /* Text */
+  --color-text: #1a1d21;
+  --color-text-secondary: #4b5563;
+  --color-text-muted: #6b7280;
+  --color-text-disabled: #9ca3af;
+  --color-text-link: #4f46e5;
+  --color-text-inverse: #ffffff;
+
+  /* Border */
+  --color-border: #d8dbe0;
+  --color-border-subtle: #e8eaed;
+  --color-border-strong: #b7bcc4;
+  --color-divider: #e2e4e8;
+
+  /* Accent */
+  --color-accent: #4f46e5;
+  --color-accent-hover: #4338ca;
+  --color-accent-active: #3730a3;
+  --color-accent-subtle: #eef2ff;
+  --color-accent-muted: #c7d2fe;
+  --color-accent-border: #a5b4fc;
+  --color-accent-text: #4338ca;
+  --color-on-accent: #ffffff;
+
+  /* Interaction */
+  --color-focus-ring: #818cf8;
+  --color-hover-overlay: rgb(15 23 42 / 0.04);
+  --color-active-overlay: rgb(15 23 42 / 0.08);
+  --color-selected: #eef2ff;
+
+  /* Semantic State */
+  --color-success: #16a34a;
+  --color-success-subtle: #f0fdf4;
+  --color-success-muted: #bbf7d0;
+  --color-success-border: #86efac;
+  --color-success-text: #15803d;
+  --color-on-success: #ffffff;
+  --color-warning: #d97706;
+  --color-warning-subtle: #fffbeb;
+  --color-warning-muted: #fde68a;
+  --color-warning-border: #fcd34d;
+  --color-warning-text: #b45309;
+  --color-on-warning: #ffffff;
+  --color-danger: #dc2626;
+  --color-danger-subtle: #fef2f2;
+  --color-danger-muted: #fecaca;
+  --color-danger-border: #fca5a5;
+  --color-danger-text: #b91c1c;
+  --color-on-danger: #ffffff;
+  --color-info: #0284c7;
+  --color-info-subtle: #f0f9ff;
+  --color-info-muted: #bae6fd;
+  --color-info-border: #7dd3fc;
+  --color-info-text: #0369a1;
+  --color-on-info: #ffffff;
+
+  /* Alpha / Overlay */
+  --color-scrim: rgb(15 23 42 / 0.5);
+  --color-shadow: rgb(15 23 42 / 0.12);
+  --color-tint-subtle: rgb(79 70 229 / 0.04);
+
+  /* Font Family */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Font Size */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+  --font-size-4xl: 2.25rem;
+  --font-size-5xl: 3rem;
+
+  /* Font Weight */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Line Height */
+  --line-height-tight: 1.2;
+  --line-height-snug: 1.375;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.625;
+
+  /* Letter Spacing */
+  --letter-spacing-tight: -0.02em;
+  --letter-spacing-normal: 0;
+  --letter-spacing-wide: 0.02em;
+
+  /* Spacing */
+  --space-0: 0;
+  --space-px: 1px;
+  --space-0-5: 0.125rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+
+  /* Border Radius */
+  --radius-none: 0;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-full: 9999px;
+
+  /* Border Width */
+  --border-width-none: 0;
+  --border-width-thin: 1px;
+  --border-width-thick: 2px;
+
+  /* Sizes */
+  --size-icon-sm: 1rem;
+  --size-icon-md: 1.25rem;
+  --size-icon-lg: 1.5rem;
+  --size-control-sm: 2rem;
+  --size-control-md: 2.5rem;
+  --size-control-lg: 3rem;
+
+  /* Shadow */
+  --shadow-xs: 0 1px 2px rgb(15 23 42 / 0.04);
+  --shadow-sm: 0 1px 3px rgb(15 23 42 / 0.08), 0 1px 2px rgb(15 23 42 / 0.04);
+  --shadow-md: 0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06);
+  --shadow-lg: 0 10px 15px -3px rgb(15 23 42 / 0.1), 0 4px 6px -4px rgb(15 23 42 / 0.06);
+  --shadow-xl: 0 20px 25px -5px rgb(15 23 42 / 0.1), 0 8px 10px -6px rgb(15 23 42 / 0.06);
+  --shadow-2xl: 0 25px 50px -12px rgb(15 23 42 / 0.18);
+  --shadow-inner: inset 0 2px 4px rgb(15 23 42 / 0.05);
+  --shadow-focus: 0 0 0 3px rgb(129 140 248 / 0.35);
+
+  /* Duration */
+  --duration-instant: 0ms;
+  --duration-fast: 100ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+  --duration-slower: 500ms;
+
+  /* Easing */
+  --ease-linear: linear;
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Z-index */
+  --z-base: 0;
+  --z-dropdown: 1000;
+  --z-sticky: 1100;
+  --z-overlay: 1200;
+  --z-modal: 1300;
+  --z-popover: 1400;
+  --z-toast: 1500;
+  --z-tooltip: 1600;
+}

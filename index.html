@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design System Viewer</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --ui-bg: #0a0a0f;
+        --ui-bg-2: #14141a;
+        --ui-panel: #1c1c22;
+        --ui-panel-2: #25252e;
+        --ui-line: #25252e;
+        --ui-line-2: #2e2e3a;
+        --ui-text: #f0f0f3;
+        --ui-text-2: #a1a1b0;
+        --ui-dim: #71717a;
+        --ui-accent: #6366f1;
+        --ui-accent-2: #4f46e5;
+        --ui-accent-ink: #fff;
+        --ui-danger: #ef4444;
+        --ui-ok: #22c55e;
+        --ui-warn: #f59e0b;
+        --ui-check: rgba(255,255,255,0.04);
+        --r: 10px;
+        --r-sm: 6px;
+        --r-lg: 14px;
+        --hd: 60px;
+        --tb: 48px;
+        font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        font-synthesis: none;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+      }
+      [data-theme="light"] {
+        color-scheme: light;
+        --ui-bg: #fcfcfd;
+        --ui-bg-2: #f4f4f6;
+        --ui-panel: #ffffff;
+        --ui-panel-2: #f9f9fb;
+        --ui-line: #e8e8ec;
+        --ui-line-2: #e0e0e6;
+        --ui-text: #0f0f12;
+        --ui-text-2: #52525c;
+        --ui-dim: #8a8a96;
+        --ui-accent: #6366f1;
+        --ui-accent-2: #4f46e5;
+        --ui-accent-ink: #fff;
+        --ui-danger: #ef4444;
+        --ui-ok: #16a34a;
+        --ui-warn: #d97706;
+        --ui-check: rgba(0,0,0,0.04);
+      }
+
+      * { box-sizing: border-box; margin: 0; }
+      body { background: var(--ui-bg); color: var(--ui-text); line-height: 1.6; font-size: 14px; letter-spacing: -0.01em; }
+      ::selection { background: color-mix(in srgb, var(--ui-accent) 25%, transparent); }
+      :focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; border-radius: var(--r-sm); }
+      ::-webkit-scrollbar { width: 8px; height: 8px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: var(--ui-line-2); border-radius: 4px; border: 1px solid var(--ui-bg); }
+      ::-webkit-scrollbar-thumb:hover { background: var(--ui-dim); }
+
+      header {
+        display: flex; align-items: center; gap: 16px;
+        height: var(--hd); padding: 0 24px;
+        border-bottom: 1px solid var(--ui-line);
+        position: sticky; top: 0; z-index: 10;
+        background: color-mix(in srgb, var(--ui-bg) 92%, transparent);
+        backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      }
+      .logo { display: flex; align-items: center; gap: 12px; font-size: 15px; font-weight: 650; letter-spacing: -0.02em; white-space: nowrap; }
+      .logo svg { flex-shrink: 0; filter: drop-shadow(0 1px 2px rgba(99,102,241,0.2)); }
+      .spacer { flex: 1; }
+
+      select, button, input, textarea { font: inherit; }
+      button {
+        border: 1px solid var(--ui-line-2); background: var(--ui-panel);
+        color: var(--ui-text-2); padding: 8px 16px; border-radius: var(--r);
+        cursor: pointer; font-size: 13px; font-weight: 500;
+        transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+      }
+      button:hover { border-color: var(--ui-dim); color: var(--ui-text); background: var(--ui-panel-2); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+      button:active { transform: translateY(0); box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+      .btn.primary {
+        background: linear-gradient(135deg, var(--ui-accent), var(--ui-accent-2)); border-color: transparent; color: var(--ui-accent-ink); font-weight: 600;
+        box-shadow: 0 2px 8px rgba(99,102,241,0.25);
+      }
+      .btn.primary:hover { background: linear-gradient(135deg, var(--ui-accent-2), #4338ca); color: var(--ui-accent-ink); box-shadow: 0 4px 16px rgba(99,102,241,0.35); transform: translateY(-1px); }
+      .icon-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 36px; height: 36px; padding: 0; border-radius: var(--r);
+        color: var(--ui-dim); background: transparent; border-color: transparent;
+        box-shadow: none;
+      }
+      .icon-btn:hover { color: var(--ui-text); background: var(--ui-panel); border-color: var(--ui-line-2); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+      button.tiny { padding: 5px 12px; font-size: 12px; border-radius: var(--r-sm); font-weight: 500; }
+
+      .icon-moon { display: none; }
+      [data-theme="light"] .icon-sun { display: none; }
+      [data-theme="light"] .icon-moon { display: block; }
+
+      select {
+        background: var(--ui-panel); color: var(--ui-text);
+        border: 1px solid var(--ui-line-2); border-radius: var(--r);
+        padding: 8px 12px; font-size: 13px; font-weight: 500; cursor: pointer;
+        transition: all 150ms ease; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+      }
+      select:hover { border-color: var(--ui-accent); background: var(--ui-panel-2); }
+      select:focus { outline: 0; border-color: var(--ui-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 15%, transparent); }
+
+      nav.tabs {
+        display: flex; align-items: center; gap: 4px;
+        padding: 0 24px; height: var(--tb);
+        border-bottom: 1px solid var(--ui-line);
+        background: var(--ui-bg);
+        position: sticky; top: var(--hd); z-index: 9;
+        backdrop-filter: blur(8px);
+      }
+      nav.tabs button {
+        display: inline-flex; align-items: center; gap: 8px;
+        border: 0; background: none; color: var(--ui-dim);
+        padding: 0 16px; height: 100%; border-radius: 0;
+        font-size: 13px; font-weight: 600; position: relative;
+        letter-spacing: -0.01em; transition: color 150ms ease;
+      }
+      nav.tabs button::after {
+        content: ""; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2.5px;
+        border-radius: 2px 2px 0 0; background: var(--ui-accent);
+        transform: scaleX(0); transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      nav.tabs button:hover { color: var(--ui-text-2); background: none; }
+      nav.tabs button.active { color: var(--ui-text); }
+      nav.tabs button.active::after { transform: scaleX(1); }
+      nav.tabs button svg { opacity: 0.45; transition: opacity 150ms; }
+      nav.tabs button.active svg { opacity: 1; }
+      nav.tabs button:hover svg { opacity: 0.75; }
+
+      main { padding: 32px 28px 96px; max-width: 1180px; margin: 0 auto; }
+      #previewFrame {
+        width: 100%; height: calc(100vh - var(--hd) - var(--tb));
+        border: 0; display: block; background: var(--ui-bg);
+      }
+
+      .welcome { text-align: center; padding: 80px 24px; max-width: 520px; margin: 0 auto; }
+      .welcome-icon { color: var(--ui-accent); opacity: 0.6; margin-bottom: 24px; filter: drop-shadow(0 4px 12px rgba(99,102,241,0.15)); }
+      .welcome h2 { font-size: 22px; font-weight: 700; margin-bottom: 10px; letter-spacing: -0.02em; }
+      .welcome > p { color: var(--ui-dim); font-size: 14.5px; line-height: 1.6; margin-bottom: 32px; }
+      .welcome-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+      .welcome-card {
+        display: flex; flex-direction: column; align-items: center; gap: 12px;
+        padding: 32px 20px; border-radius: var(--r-lg);
+        border: 1px dashed var(--ui-line-2); background: var(--ui-bg-2);
+        cursor: pointer; transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1); text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      }
+      .welcome-card:hover {
+        border-color: var(--ui-accent); border-style: solid;
+        background: color-mix(in srgb, var(--ui-accent) 7%, var(--ui-bg-2));
+        transform: translateY(-2px); box-shadow: 0 8px 24px rgba(99,102,241,0.12);
+      }
+      .welcome-card svg { color: var(--ui-dim); transition: all 200ms; }
+      .welcome-card:hover svg { color: var(--ui-accent); transform: scale(1.05); }
+      .welcome-card b { font-size: 14.5px; color: var(--ui-text); font-weight: 650; letter-spacing: -0.01em; }
+      .welcome-card span { font-size: 12.5px; color: var(--ui-dim); line-height: 1.5; }
+      .welcome-hint { font-size: 12.5px; color: var(--ui-dim); font-style: italic; }
+
+      .sys-meta { color: var(--ui-dim); font-size: 12.5px; margin: 4px 0 28px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .sys-meta code {
+        color: var(--ui-text-2); background: var(--ui-panel); padding: 3px 8px;
+        border-radius: var(--r-sm); font-size: 12px; font-weight: 500; border: 1px solid var(--ui-line);
+      }
+
+      details.warn-row {
+        margin: -8px 0 24px; font-size: 12.5px; color: var(--ui-text-2);
+        background: color-mix(in srgb, var(--ui-warn) 7%, var(--ui-bg-2));
+        border: 1px solid color-mix(in srgb, var(--ui-warn) 20%, var(--ui-line));
+        border-radius: var(--r); padding: 14px 16px;
+        box-shadow: 0 2px 8px rgba(245,158,11,0.08);
+      }
+      details.warn-row summary { cursor: pointer; color: var(--ui-warn); font-weight: 650; list-style: none; display: flex; align-items: center; gap: 6px; }
+      details.warn-row summary::-webkit-details-marker { display: none; }
+      details.warn-row > div { margin-top: 10px; padding-top: 10px; border-top: 1px dashed color-mix(in srgb, var(--ui-warn) 15%, transparent); }
+      details.warn-row code { color: var(--ui-text-2); word-break: break-all; background: var(--ui-panel); padding: 1px 4px; border-radius: 3px; }
+
+      .toolbar {
+        display: flex; align-items: center; gap: 16px; margin: 0 0 32px; flex-wrap: wrap;
+        padding: 16px 20px; background: var(--ui-bg-2); border: 1px solid var(--ui-line);
+        border-radius: var(--r-lg); box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        backdrop-filter: blur(8px);
+      }
+      .toolbar .cov { font-size: 13px; color: var(--ui-dim); display: flex; align-items: center; gap: 10px; font-weight: 500; }
+      .toolbar .cov b { color: var(--ui-text); font-weight: 700; }
+      .tok-filter {
+        background: var(--ui-panel); color: var(--ui-text); font-size: 13px;
+        border: 1px solid var(--ui-line-2); border-radius: var(--r);
+        padding: 8px 14px; width: 200px; margin-left: auto;
+        transition: all 150ms ease; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+      }
+      .tok-filter:focus { outline: 0; border-color: var(--ui-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 12%, transparent), 0 1px 2px rgba(0,0,0,0.04); }
+      .tok-filter::placeholder { color: var(--ui-dim); }
+      label.inline { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ui-dim); cursor: pointer; font-weight: 500; user-select: none; }
+      label.inline input { accent-color: var(--ui-accent); width: 16px; height: 16px; }
+
+      .group { margin: 0 0 48px; }
+      .group > h2 {
+        font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--ui-dim); border-bottom: 1px solid var(--ui-line);
+        padding-bottom: 12px; margin: 0 0 20px; font-weight: 700;
+        display: flex; align-items: center; gap: 10px;
+      }
+      .group > h2 span { color: var(--ui-dim); margin-left: 2px; font-weight: 500; letter-spacing: 0; text-transform: none; background: var(--ui-panel); padding: 2px 7px; border-radius: 20px; font-size: 11px; border: 1px solid var(--ui-line); }
+
+      .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; }
+      .swatch { background: var(--ui-panel); border: 1px solid var(--ui-line); border-radius: var(--r); padding: 10px; transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1); }
+      .swatch:hover { border-color: var(--ui-line-2); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+      .swatch .chip {
+        height: 72px; border-radius: var(--r-sm);
+        border: 1px solid var(--ui-line-2);
+        background-image: linear-gradient(45deg, var(--ui-check) 25%, transparent 25%, transparent 75%, var(--ui-check) 75%),
+          linear-gradient(45deg, var(--ui-check) 25%, transparent 25%, transparent 75%, var(--ui-check) 75%);
+        background-size: 12px 12px; background-position: 0 0, 6px 6px;
+        position: relative; overflow: hidden;
+        transition: transform 200ms ease, box-shadow 200ms ease;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.04);
+      }
+      .swatch .chip::after {
+        content: ""; position: absolute; inset: 0; background: var(--val);
+        box-shadow: inset 0 0 0 1px rgba(128,128,128,0.12);
+      }
+      .swatch:hover .chip { transform: scale(1.02); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+      .swatch .n { font-size: 12px; margin-top: 10px; color: var(--ui-text); font-weight: 600; word-break: break-all; letter-spacing: -0.01em; }
+      .swatch .v { font-size: 11px; color: var(--ui-dim); word-break: break-all; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; margin-top: 2px; }
+
+      .rows { display: flex; flex-direction: column; gap: 4px; }
+      .row {
+        display: grid; grid-template-columns: 240px 1fr; gap: 20px; align-items: center;
+        padding: 12px 14px; border-radius: var(--r); border: 1px solid transparent;
+        transition: all 150ms ease;
+      }
+      .row:hover { background: var(--ui-bg-2); border-color: var(--ui-line); }
+      .row .label { font-size: 12.5px; color: var(--ui-dim); word-break: break-all; line-height: 1.4; }
+      .row .label b { color: var(--ui-text); font-weight: 600; display: block; margin-bottom: 3px; font-size: 12.5px; letter-spacing: -0.01em; }
+      .bar { height: 14px; background: linear-gradient(90deg, var(--ui-accent), var(--ui-accent-2)); border-radius: 6px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.08); }
+      .radiusbox { width: 80px; height: 56px; background: var(--ui-panel-2); border: 1px solid var(--ui-line-2); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+      .shadowbox { width: 120px; height: 56px; background: var(--ui-panel); border-radius: var(--r); border: 1px solid var(--ui-line); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+      .typespec { color: var(--ui-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+      .motionbox {
+        width: 56px; height: 32px; background: linear-gradient(135deg, var(--ui-accent), var(--ui-accent-2)); border-radius: var(--r-sm);
+        transition-property: transform; transition-timing-function: ease; box-shadow: 0 2px 8px rgba(99,102,241,0.25);
+      }
+      .row:hover .motionbox { transform: translateX(180px); }
+
+      table.raw { width: 100%; border-collapse: collapse; font-size: 13px; }
+      table.raw td { border-bottom: 1px solid var(--ui-line); padding: 9px 10px; vertical-align: top; word-break: break-all; }
+      table.raw tr:last-child td { border-bottom: 0; }
+      table.raw td:first-child { color: var(--ui-text-2); width: 42%; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+      table.raw td:last-child { color: var(--ui-dim); }
+
+      .schema-view td.no { color: var(--ui-danger); }
+      .schema-view td.yes { color: var(--ui-ok); }
+
+      .contrast-demo { display: flex; align-items: center; gap: 12px; }
+      .contrast-chip {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 46px; height: 34px; border-radius: var(--r-sm);
+        border: 1px solid var(--ui-line-2); font-weight: 600; font-size: 13px;
+      }
+      .contrast-num { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px; color: var(--ui-text-2); min-width: 38px; }
+      .contrast-badge {
+        font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
+        padding: 2px 8px; border-radius: 99px; text-transform: uppercase;
+      }
+      .contrast-badge.yes { background: color-mix(in srgb, var(--ui-ok) 18%, transparent); color: var(--ui-ok); }
+      .contrast-badge.mid { background: color-mix(in srgb, var(--ui-warn) 18%, transparent); color: var(--ui-warn); }
+      .contrast-badge.no { background: color-mix(in srgb, var(--ui-danger) 15%, transparent); color: var(--ui-danger); }
+
+      .bar-track {
+        width: 148px; height: 6px; border-radius: 99px; background: var(--ui-line-2);
+        overflow: hidden; display: inline-block; vertical-align: middle;
+      }
+      .bar-fill { height: 100%; background: var(--ui-accent); border-radius: 99px; transition: width 400ms ease; }
+      .missing-row { font-size: 12px; color: var(--ui-dim); margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--ui-line-2); }
+      .missing-row code { color: var(--ui-warn); word-break: break-all; }
+
+      [data-token] { cursor: pointer; position: relative; transition: background 120ms; }
+      .swatch[data-token]:hover .n { color: var(--ui-accent); }
+      .row[data-token]:hover { background: var(--ui-bg-2); border-radius: var(--r-sm); }
+      table.raw tr[data-token]:hover td { background: var(--ui-bg-2); }
+      .swatch[data-token].copied::after, .row[data-token].copied::after {
+        content: "copied ✓"; position: absolute; top: -4px; right: 0;
+        transform: translateY(-100%);
+        background: var(--ui-ok); color: #06210f; font-size: 10.5px; font-weight: 600;
+        padding: 3px 8px; border-radius: var(--r-sm); white-space: nowrap; z-index: 2;
+        pointer-events: none;
+      }
+      table.raw tr[data-token].copied td:first-child { color: var(--ui-ok); }
+      table.raw tr[data-token].copied td:last-child::after { content: " ✓ copied"; color: var(--ui-ok); font-weight: 600; }
+
+      input.tok-edit {
+        background: var(--ui-panel); color: var(--ui-text);
+        border: 1px solid var(--ui-accent); border-radius: var(--r-sm);
+        padding: 7px 10px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px;
+        box-shadow: 0 8px 32px -8px rgba(0,0,0,0.4);
+      }
+      input.tok-edit:focus { outline: 0; }
+
+      dialog {
+        border: 1px solid var(--ui-line-2); background: var(--ui-panel);
+        color: var(--ui-text); border-radius: var(--r-lg); padding: 0;
+        width: min(640px, 92vw); max-height: calc(100vh - 32px); overflow: auto;
+        margin: auto; inset: 0; height: fit-content;
+        box-shadow: 0 24px 80px -16px rgba(0,0,0,0.5);
+      }
+      dialog::backdrop { background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); }
+      .dlg-body { padding: 24px 26px 22px; }
+      .dlg-body h2 { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
+      .dlg-body label { display: block; font-size: 12px; color: var(--ui-dim); margin: 16px 0 6px; font-weight: 500; }
+      .url-row { display: flex; gap: 8px; }
+      .url-row input { flex: 1; }
+      .dlg-tpl-bar { display: flex; align-items: flex-end; gap: 8px; margin: 16px 0 6px; }
+      .dlg-tpl-bar label { margin: 0; }
+      .dlg-tpl-bar .spacer { flex: 1; }
+      .tpl-hint { font-size: 11.5px; color: var(--ui-dim); margin-top: 5px; min-height: 15px; }
+      .tpl-hint.flash { color: var(--ui-ok); }
+      .dlg-body input[type="text"], .dlg-body input[type="url"], .dlg-body textarea {
+        width: 100%; background: var(--ui-bg); color: var(--ui-text);
+        border: 1px solid var(--ui-line-2); border-radius: var(--r-sm);
+        padding: 9px 12px; transition: border-color 120ms;
+      }
+      .dlg-body input:focus, .dlg-body textarea:focus { outline: 0; border-color: var(--ui-accent); }
+      .dlg-body textarea {
+        min-height: 200px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        font-size: 12.5px; line-height: 1.6; resize: vertical;
+      }
+      .preview-line { font-size: 12.5px; color: var(--ui-dim); margin-top: 12px; min-height: 34px; }
+      .preview-line b { color: var(--ui-text); }
+      .preview-line b.ok { color: var(--ui-ok); }
+      .preview-line .warn { color: var(--ui-warn); }
+      .preview-line .ok { color: var(--ui-ok); }
+      .miss-detail { margin-top: 10px; max-height: 190px; overflow: auto; font-size: 12px; }
+      .miss-detail summary { cursor: pointer; color: var(--ui-accent); }
+      .miss-detail .grp { margin: 10px 0 3px; color: var(--ui-text-2); }
+      .miss-detail code { color: var(--ui-dim); word-break: break-all; }
+      .dlg-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+      .err { color: var(--ui-danger); font-size: 13px; margin-top: 10px; }
+
+      .dropdown-wrap { position: relative; }
+      .dropdown-menu {
+        position: absolute; top: calc(100% + 6px); right: 0;
+        background: var(--ui-panel); border: 1px solid var(--ui-line-2);
+        border-radius: var(--r); padding: 4px; min-width: 184px;
+        box-shadow: 0 12px 48px -12px rgba(0,0,0,0.5); z-index: 20;
+      }
+      .dropdown-menu button {
+        display: block; width: 100%; text-align: left;
+        border: 0; background: none; color: var(--ui-text-2);
+        padding: 8px 12px; border-radius: var(--r-sm); font-size: 13px;
+      }
+      .dropdown-menu button:hover { background: var(--ui-bg-2); color: var(--ui-text); }
+      .dropdown-sep { height: 1px; background: var(--ui-line); margin: 4px 8px; }
+      .dropdown-menu button.danger { color: var(--ui-danger); }
+      .dropdown-menu button.danger:hover { background: color-mix(in srgb, var(--ui-danger) 10%, transparent); color: var(--ui-danger); }
+
+      .toast-wrap {
+        position: fixed; bottom: 20px; right: 20px; z-index: 100;
+        display: flex; flex-direction: column-reverse; gap: 8px; pointer-events: none;
+      }
+      .toast {
+        background: var(--ui-panel); border: 1px solid var(--ui-line-2);
+        color: var(--ui-text-2); padding: 10px 16px; border-radius: var(--r);
+        font-size: 13px; box-shadow: 0 8px 32px -8px rgba(0,0,0,0.4);
+        transform: translateY(12px); opacity: 0; transition: all 200ms ease;
+        pointer-events: auto; max-width: 320px;
+      }
+      .toast.show { transform: translateY(0); opacity: 1; }
+      .toast.toast-ok { border-left: 3px solid var(--ui-ok); }
+      .toast.toast-err { border-left: 3px solid var(--ui-danger); }
+      .toast.toast-warn { border-left: 3px solid var(--ui-warn); }
+
+      .drop-overlay {
+        position: fixed; inset: 0; z-index: 50;
+        background: color-mix(in srgb, var(--ui-bg) 88%, transparent);
+        backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center;
+      }
+      .drop-content {
+        text-align: center; padding: 48px 64px; border-radius: var(--r-lg);
+        border: 2px dashed var(--ui-accent); background: color-mix(in srgb, var(--ui-accent) 5%, transparent);
+      }
+      .drop-content svg { color: var(--ui-accent); margin-bottom: 12px; }
+      .drop-content p { color: var(--ui-text-2); font-size: 15px; margin: 0 0 4px; font-weight: 500; }
+      .drop-content span { color: var(--ui-dim); font-size: 12px; }
+
+      #kbdDlg { width: min(520px, 92vw); }
+      #manageDlg { width: min(640px, 92vw); }
+      #manageDlg .manage-grid { display: grid; grid-template-columns: 200px 1fr; gap: 0; min-height: 380px; }
+      #manageDlg .manage-nav { background: var(--ui-bg-2); border-right: 1px solid var(--ui-line); padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+      #manageDlg .manage-nav button { width: 100%; text-align: left; justify-content: flex-start; background: transparent; border-color: transparent; box-shadow: none; font-weight: 500; }
+      #manageDlg .manage-nav button.active { background: var(--ui-panel); border-color: var(--ui-line-2); color: var(--ui-text); box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+      #manageDlg .manage-main { padding: 20px 24px; overflow: auto; max-height: 70vh; }
+      @media (max-width: 560px) { #manageDlg .manage-grid { grid-template-columns: 1fr; } #manageDlg .manage-nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--ui-line); } }
+      .kbd-body { padding: 24px; }
+      .kbd-body h2 { font-size: 15px; font-weight: 600; margin-bottom: 18px; }
+      .kbd-grid {
+        display: grid; grid-template-columns: auto 1fr; gap: 10px 18px;
+        align-items: center; margin-bottom: 24px;
+      }
+      .kbd-grid kbd {
+        background: var(--ui-bg-2); border: 1px solid var(--ui-line-2);
+        border-radius: 5px; padding: 3px 8px;
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        font-size: 11.5px; text-align: center; color: var(--ui-text-2);
+      }
+      .kbd-grid span { font-size: 13px; color: var(--ui-text-2); }
+
+      .dim { color: var(--ui-dim); }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="logo">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+          <rect x="1" y="1" width="9" height="9" rx="2.5" fill="var(--ui-accent)"/>
+          <rect x="12" y="1" width="9" height="9" rx="2.5" fill="var(--ui-accent)" opacity=".5"/>
+          <rect x="1" y="12" width="9" height="9" rx="2.5" fill="var(--ui-accent)" opacity=".5"/>
+          <rect x="12" y="12" width="9" height="9" rx="2.5" fill="var(--ui-accent)" opacity=".2"/>
+        </svg>
+        <span>Design System Viewer</span>
+      </div>
+      <select id="sysPicker" hidden></select>
+      <div class="spacer"></div>
+      <button id="kbdBtn" class="icon-btn" title="How to use">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </button>
+      <button id="manageBtn" class="btn primary">Manage Systems</button>
+    </header>
+
+    <nav class="tabs">
+      <button id="tabSystem" class="active">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Tokens
+      </button>
+      <button id="tabPreview">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        Preview
+      </button>
+      <button id="tabCompare">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+        Compare
+      </button>
+    </nav>
+
+    <main id="main"></main>
+    <iframe id="previewFrame" title="Preview" allow="clipboard-write" hidden></iframe>
+
+    <div class="toast-wrap" id="toasts"></div>
+
+    <div class="drop-overlay" id="dropOverlay" hidden>
+      <div class="drop-content">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <p>Drop CSS file to import</p>
+        <span>.css files only</span>
+      </div>
+    </div>
+
+    <dialog id="kbdDlg">
+      <div class="kbd-body" style="padding: 28px; max-height: 80vh; overflow: auto;">
+        <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.02em;">How to use Design System Viewer</h2>
+        <p style="font-size: 13px; color: var(--ui-text-2); margin-bottom: 20px; line-height: 1.5;">Your tokens → categorized gallery → live preview → compare → export. All local, no build needed.</p>
+        <div style="display: flex; flex-direction: column; gap: 18px; margin-bottom: 24px;">
+          <div style="display: flex; gap: 12px; align-items: flex-start;">
+            <span style="flex:none; width: 28px; height: 28px; border-radius: 50%; background: var(--ui-accent); color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 700;">1</span>
+            <div>
+              <div style="font-size: 13px; font-weight: 600; color: var(--ui-text);">Add a system <span style="font-weight:400; color:var(--ui-dim);">— Manage Systems</span></div>
+              <div style="font-size: 12.5px; color: var(--ui-dim); line-height: 1.5;">Paste a <code style="background: var(--ui-bg-2); padding: 1px 5px; border-radius: 4px; font-size: 11px;">:root { --token: value; }</code> block, or drag & drop a .css file, or fetch from URL. Use <b>Fill template</b> for the 139-token skeleton. Last write wins.</div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 12px; align-items: flex-start;">
+            <span style="flex:none; width: 28px; height: 28px; border-radius: 50%; background: var(--ui-panel-2); border: 1px solid var(--ui-line); color: var(--ui-text-2); display: grid; place-items: center; font-size: 13px; font-weight: 700;">2</span>
+            <div>
+              <div style="font-size: 13px; font-weight: 600; color: var(--ui-text);">Inspect — Tokens tab</div>
+              <div style="font-size: 12.5px; color: var(--ui-dim); line-height: 1.5;">Swatches (color), type specimens, bars, cards. <b>Filter</b>, <b>Show missing</b>, <b>Schema</b> & <b>Contrast</b> WCAG. Click to copy, <b>Update</b> button or double-click to edit a token.</div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 12px; align-items: flex-start;">
+            <span style="flex:none; width: 28px; height: 28px; border-radius: 50%; background: var(--ui-panel-2); border: 1px solid var(--ui-line); color: var(--ui-text-2); display: grid; place-items: center; font-size: 13px; font-weight: 700;">3</span>
+            <div>
+              <div style="font-size: 13px; font-weight: 600; color: var(--ui-text);">Preview — real components</div>
+              <div style="font-size: 12.5px; color: var(--ui-dim); line-height: 1.5;">~35 Radix primitives (Forms, Overlays, Navigation…) + 15 screens (Login, Pricing, Dashboard, Chat…) render with <b>your tokens</b> via <code>var(--token)</code> + fallback. Each system shows in its own colors — no global theme switch, the system's own <code>--color-bg</code> is the background.</div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 12px; align-items: flex-start;">
+            <span style="flex:none; width: 28px; height: 28px; border-radius: 50%; background: var(--ui-panel-2); border: 1px solid var(--ui-line); color: var(--ui-text-2); display: grid; place-items: center; font-size: 13px; font-weight: 700;">4</span>
+            <div>
+              <div style="font-size: 13px; font-weight: 600; color: var(--ui-text);">Compare — side-by-side or diff</div>
+              <div style="font-size: 12.5px; color: var(--ui-dim); line-height: 1.5;"><b>Component</b>: same component in 2–4 systems, each column isolated. <b>Token diff</b>: table grouped by category, colour chips, <b>only differences</b> toggle. For updates, use <b>Tokens → Update</b> on the selected system.</div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 12px; align-items: flex-start;">
+            <span style="flex:none; width: 28px; height: 28px; border-radius: 50%; background: var(--ui-panel-2); border: 1px solid var(--ui-line); color: var(--ui-text-2); display: grid; place-items: center; font-size: 13px; font-weight: 700;">5</span>
+            <div>
+              <div style="font-size: 13px; font-weight: 600; color: var(--ui-text);">Manage & export — single place</div>
+              <div style="font-size: 12.5px; color: var(--ui-dim); line-height: 1.5;"><b>Manage Systems</b> holds everything: create, add tokens (missing template), schema coverage, export CSS/JSON, delete. No split between “Add System” and “⋯”.</div>
+            </div>
+          </div>
+        </div>
+        <div style="background: var(--ui-bg-2); border: 1px solid var(--ui-line); border-radius: var(--r); padding: 12px 14px; margin-bottom: 20px;">
+          <div style="font-size: 12px; font-weight: 600; color: var(--ui-text); margin-bottom: 4px;">Tips</div>
+          <div style="font-size: 12px; color: var(--ui-dim); line-height: 1.6;">• Value warnings (unitless, bad hex, unknown colour, undefined var) never block save.<br/>• Coverage bar shows <b>present/expected</b> vs 139-token reference.<br/>• All data lives in <code>systems/*.json</code> on disk — reload after restart.</div>
+        </div>
+        <div class="dlg-actions">
+          <button type="button" onclick="this.closest('dialog').close()" class="btn primary" style="width:100%">Got it</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="dlg">
+      <form method="dialog" class="dlg-body" id="dlgForm">
+        <h2 id="dlgTitle">Add System</h2>
+        <div id="dlgNameWrap">
+          <label for="dlgName">Name</label>
+          <input type="text" id="dlgName" placeholder="e.g. Aurora v2" autocomplete="off" />
+        </div>
+        <div id="dlgUrlWrap">
+          <label>Import from URL</label>
+          <div class="url-row">
+            <input type="url" id="dlgUrl" placeholder="https://example.com/tokens.css" />
+            <button type="button" id="dlgFetch" class="tiny">Fetch</button>
+          </div>
+        </div>
+        <div class="dlg-tpl-bar">
+          <label for="dlgCss">CSS token block</label>
+          <span class="spacer"></span>
+          <button type="button" id="dlgTplFill" class="tiny">Fill template</button>
+          <button type="button" id="dlgTplCopy" class="tiny">Copy template</button>
+        </div>
+        <textarea id="dlgCss" placeholder="/* Surface */&#10;--color-bg: #fff;&#10;--space-4: 16px;&#10;&#10;/* Spacing */&#10;--space-4: 16px;"></textarea>
+        <div class="tpl-hint" id="dlgTplHint"></div>
+        <div class="preview-line" id="dlgPreview"></div>
+        <div class="err" id="dlgErr" hidden></div>
+        <div class="dlg-actions">
+          <button type="button" id="dlgCancel">Cancel</button>
+          <button type="submit" class="btn primary" id="dlgSave">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="manageDlg">
+      <form method="dialog" class="dlg-body" style="padding: 24px 26px 22px;">
+        <h2 style="font-size: 16px; font-weight: 600; margin-bottom: 4px;">Add new system</h2>
+        <p style="font-size: 12.5px; color: var(--ui-dim); margin-bottom: 16px;">Paste a <code>:root</code> block — preview shows coverage for what you paste. Use <b>Fill template</b> for the 139-token skeleton.</p>
+        <label style="display:block; font-size: 12px; color: var(--ui-dim); margin: 12px 0 6px; font-weight: 500;">Name</label>
+        <input type="text" id="manageName" placeholder="e.g. Aurora v2" style="width:100%; background: var(--ui-bg); color: var(--ui-text); border:1px solid var(--ui-line-2); border-radius: var(--r-sm); padding: 9px 12px;" />
+        <label style="display:block; font-size: 12px; color: var(--ui-dim); margin: 12px 0 6px; font-weight: 500;">CSS</label>
+        <textarea id="manageCss" placeholder="/* Surface */&#10;--color-bg: #fff;&#10;--color-surface: #fff;&#10;&#10;/* Spacing */&#10;--space-4: 16px;" style="width:100%; min-height:160px; background: var(--ui-bg); color: var(--ui-text); border:1px solid var(--ui-line-2); border-radius: var(--r-sm); padding: 9px 12px; font-family: ui-monospace, monospace; font-size: 12.5px;"></textarea>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button type="button" id="manageTplFill" class="tiny">Fill template</button>
+          <button type="button" id="manageTplCopy" class="tiny">Copy template</button>
+        </div>
+        <div id="manageCreatePreview" class="preview-line" style="margin-top:10px;"></div>
+        <div id="manageCreateErr" class="err" hidden></div>
+        <div style="display:flex; justify-content: flex-end; gap:10px; margin-top:16px;">
+          <button type="button" id="manageCreateCancel">Cancel</button>
+          <button type="button" id="manageCreateSave" class="btn primary">Create</button>
+        </div>
+      </form>
+    </dialog>
+
+    <input type="file" id="fileInput" accept=".css" hidden />
+    <script type="module" src="./src/viewer/app.js"></script>
+  </body>
+</html>
