@@ -58,24 +58,33 @@ function saveToLS(list) {
   try { localStorage.setItem(LS_KEY, JSON.stringify(list)); } catch {}
 }
 async function load() {
-  try {
-    const res = await fetch("/api/systems");
-    if (!res.ok) throw new Error("no api");
-    systems = await res.json();
-    // sync LS for static fallback
-    saveToLS(systems);
-  } catch {
-    // static / GitHub Pages fallback — use localStorage
+  if (isStaticHost()) {
     try {
       const cached = loadFromLS();
       if (cached.length) systems = cached;
       else {
-        // try static bundled systems
-        try {
-          const r = await fetch("./systems/index.json");
-          if (r.ok) systems = await r.json();
-          else systems = [];
-        } catch { systems = []; }
+        const r = await fetch("./systems/index.json");
+        systems = r.ok ? await r.json() : [];
+      }
+    } catch { systems = []; }
+    if (!systems.some((s) => s.slug === active)) active = systems[0]?.slug ?? null;
+    render();
+    syncPreview();
+    syncUrl();
+    return;
+  }
+  try {
+    const res = await fetch("/api/systems");
+    if (!res.ok) throw new Error("no api");
+    systems = await res.json();
+    saveToLS(systems);
+  } catch {
+    try {
+      const cached = loadFromLS();
+      if (cached.length) systems = cached;
+      else {
+        const r = await fetch("./systems/index.json");
+        systems = r.ok ? await r.json() : [];
       }
     } catch { systems = []; }
   }
@@ -135,21 +144,52 @@ window.addEventListener("message", (e) => {
   }
 });
 
+const isStaticHost = () => location.hostname.includes("github.io") || location.protocol === "file:" || !navigator.onLine;
 async function postSystem(body) {
+  // On Pages, don't even try the API — go straight to localStorage to avoid 405 console noise
+  if (isStaticHost()) {
+    const { buildSystem: bs, mergeSystem: ms } = await import("../core/parse.js");
+    let list = loadFromLS();
+    if (!list.length) {
+      try { const r = await fetch("./systems/index.json"); if (r.ok) list = await r.json(); } catch {}
+    }
+    let system;
+    if (body.mode === "merge") {
+      const existing = list.find(s => s.slug === body.slug) || systems.find(s => s.slug === body.slug);
+      if (!existing) throw new Error("system to merge not found");
+      system = ms(existing, body.css);
+      list = list.map(s => s.slug === system.slug ? system : s);
+    } else {
+      system = bs({ name: body.name, css: body.css });
+      if (list.some(s => s.slug === system.slug)) throw new Error(`"${system.slug}" already exists — use Add Tokens to merge`);
+      list.push(system);
+    }
+    saveToLS(list);
+    systems = list;
+    active = system.slug;
+    render();
+    syncPreview();
+    syncUrl();
+    return;
+  }
   try {
     const res = await fetch("/api/systems", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(txt || `HTTP ${res.status}`);
+    }
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "save failed");
     active = data.slug;
     await load();
     return;
   } catch (e) {
-    // static fallback — use localStorage + local buildSystem
-    if (String(e.message).includes("Failed to fetch") || String(e.message).includes("no api")) {
+    const msg = String(e.message || e);
+    const isStatic = msg.includes("Failed to fetch") || msg.includes("404") || msg.includes("405") || msg.includes("HTTP 4");
+    if (isStatic) {
       const { buildSystem: bs, mergeSystem: ms } = await import("../core/parse.js");
       let list = loadFromLS();
       // try to populate from static if LS empty
@@ -183,10 +223,19 @@ async function postSystem(body) {
 }
 
 async function remove(slug) {
+  if (isStaticHost()) {
+    let list = loadFromLS();
+    list = list.filter(s => s.slug !== slug);
+    saveToLS(list);
+    systems = list;
+    active = null;
+    await load();
+    showToast("System deleted", "ok");
+    return;
+  }
   try {
     await fetch(`/api/systems/${encodeURIComponent(slug)}`, { method: "DELETE" });
   } catch {
-    // static fallback
     let list = loadFromLS();
     list = list.filter(s => s.slug !== slug);
     saveToLS(list);

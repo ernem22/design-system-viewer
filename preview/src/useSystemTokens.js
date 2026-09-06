@@ -23,16 +23,19 @@ function injectCss(system) {
   el.textContent = css;
 }
 
+const isStaticHost = () => location.hostname.includes("github.io") || location.protocol === "file:";
+
 async function fetchSystem(slug) {
-  try {
-    const res = await fetch("/api/systems");
-    if (res.ok) {
-      const all = await res.json();
-      if (!all.length) throw new Error("no-systems");
-      return all.find((s) => s.slug === slug) || all[0];
-    }
-  } catch {}
-  // static fallback — localStorage or bundled index.json
+  if (!isStaticHost()) {
+    try {
+      const res = await fetch("/api/systems");
+      if (res.ok) {
+        const all = await res.json();
+        if (!all.length) throw new Error("no-systems");
+        return all.find((s) => s.slug === slug) || all[0];
+      }
+    } catch {}
+  }
   try {
     const ls = JSON.parse(localStorage.getItem("dsv.systems") || "[]");
     if (ls.length) {
@@ -59,10 +62,12 @@ async function fetchSystem(slug) {
   throw new Error("no-systems");
 }
 async function fetchAllSystems() {
-  try {
-    const res = await fetch("/api/systems");
-    if (res.ok) return res.json();
-  } catch {}
+  if (!isStaticHost()) {
+    try {
+      const res = await fetch("/api/systems");
+      if (res.ok) return res.json();
+    } catch {}
+  }
   try {
     const ls = JSON.parse(localStorage.getItem("dsv.systems") || "[]");
     if (ls.length) return ls;

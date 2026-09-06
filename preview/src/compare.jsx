@@ -175,11 +175,14 @@ export const REGISTRY = [
 ];
 
 // ── data ──
+const isStaticHost = () => location.hostname.includes("github.io") || location.protocol === "file:";
 async function fetchSystems() {
-  try {
-    const res = await fetch("/api/systems");
-    if (res.ok) return res.json();
-  } catch {}
+  if (!isStaticHost()) {
+    try {
+      const res = await fetch("/api/systems");
+      if (res.ok) return res.json();
+    } catch {}
+  }
   try { const ls = JSON.parse(localStorage.getItem("dsv.systems") || "[]"); if (ls.length) return ls; } catch {}
   try { const r = await fetch("../systems/index.json"); if (r.ok) return r.json(); } catch {}
   try { const r = await fetch("./systems/index.json"); if (r.ok) return r.json(); } catch {}
