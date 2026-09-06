@@ -34,11 +34,11 @@ jobs:
         run: |
           rm -rf _site
           mkdir -p _site/preview
-          mkdir -p _site/src/core _site/src/viewer _site/src/server
           cp index.html _site/
           cp -r src _site/src
           cp -r systems _site/systems
           cp -r preview/dist/* _site/preview/
+          ls -R _site | head -n 50
           # Ensure preview base is correct for Pages (already built with GITHUB_PAGES)
           # Add .nojekyll
           touch _site/.nojekyll
