@@ -27,10 +27,13 @@ async function main() {
   for (const s of systems) {
     await writeFile(join(OUT_DIR, "systems", `${s.slug}.json`), JSON.stringify(s, null, 2));
   }
-  // also write to source for local static dev
-  await writeFile(join(SYSTEMS_DIR, "index.json"), JSON.stringify(systems, null, 2));
+  // also write to source for local static dev — only if systems dir exists (ignored in git)
+  try {
+    await mkdir(SYSTEMS_DIR, { recursive: true });
+    await writeFile(join(SYSTEMS_DIR, "index.json"), JSON.stringify(systems, null, 2));
+  } catch {}
 
-  console.log(`Generated ${systems.length} systems to ${OUT_DIR}/systems and ${SYSTEMS_DIR}/index.json`);
+  console.log(`Generated ${systems.length} systems to ${OUT_DIR}/systems` + (existsSync(SYSTEMS_DIR) ? ` and ${SYSTEMS_DIR}/index.json` : ""));
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
