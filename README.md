@@ -29,7 +29,7 @@ tab shows a "run npm run build" message.
 
 ## Use
 
-1. **Add System** → paste a `:root { --token: value; … }` block, name it, **Save**.
+1. **Add System** → paste bare `--token: value;` lines (no `:root` needed), name it, **Save**.
 2. The parser is selector-agnostic: it collects every `--name: value;` pair in
    the blob (comments stripped, last write wins).
 3. Tokens are bucketed by name against the rules in `taxonomy.js`; anything
@@ -60,8 +60,7 @@ lists its **missing** tokens. Partial systems are fine — nothing is enforced.
 - **CSS / JSON** — download the active system as a clean `:root { … }` stylesheet
   or its raw JSON.
 
-Both dialogs carry **Fill template** / **Copy template**: a grouped
-`:root { … }` skeleton with one `--token: ;` line per expected token — the full
+Both dialogs carry **Fill template** / **Copy template**: a grouped bare skeleton with one `--token: ;` line per expected token — the full
 139 for a new system, only the missing ones when adding to an existing one.
 Fill in values, delete lines you don't need, save. Blank `--x: ;` lines are
 ignored by the parser.

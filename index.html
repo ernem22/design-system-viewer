@@ -477,7 +477,7 @@
             <span style="flex:none; width: 28px; height: 28px; border-radius: 50%; background: var(--ui-accent); color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 700;">1</span>
             <div>
               <div style="font-size: 13px; font-weight: 600; color: var(--ui-text);">Add a system <span style="font-weight:400; color:var(--ui-dim);">— Manage Systems</span></div>
-              <div style="font-size: 12.5px; color: var(--ui-dim); line-height: 1.5;">Paste a <code style="background: var(--ui-bg-2); padding: 1px 5px; border-radius: 4px; font-size: 11px;">:root { --token: value; }</code> block, or drag & drop a .css file, or fetch from URL. Use <b>Fill template</b> for the 139-token skeleton. Last write wins.</div>
+              <div style="font-size: 12.5px; color: var(--ui-dim); line-height: 1.5;">Paste bare <code style="background: var(--ui-bg-2); padding: 1px 5px; border-radius: 4px; font-size: 11px;">--token: value;</code> lines (no <code>:root</code> needed). Or drag & drop a .css file, or fetch from URL. Use <b>Fill template</b> for the 139-token skeleton. Last write wins.</div>
             </div>
           </div>
           <div style="display: flex; gap: 12px; align-items: flex-start;">
@@ -553,7 +553,7 @@
     <dialog id="manageDlg">
       <form method="dialog" class="dlg-body" style="padding: 24px 26px 22px;">
         <h2 style="font-size: 16px; font-weight: 600; margin-bottom: 4px;">Add new system</h2>
-        <p style="font-size: 12.5px; color: var(--ui-dim); margin-bottom: 16px;">Paste a <code>:root</code> block — preview shows coverage for what you paste. Use <b>Fill template</b> for the 139-token skeleton.</p>
+        <p style="font-size: 12.5px; color: var(--ui-dim); margin-bottom: 16px;">Paste bare <code>--token: value;</code> lines — no <code>:root</code> needed. Preview shows coverage for what you paste. Use <b>Fill template</b>.</p>
         <label style="display:block; font-size: 12px; color: var(--ui-dim); margin: 12px 0 6px; font-weight: 500;">Name</label>
         <input type="text" id="manageName" placeholder="e.g. Aurora v2" style="width:100%; background: var(--ui-bg); color: var(--ui-text); border:1px solid var(--ui-line-2); border-radius: var(--r-sm); padding: 9px 12px;" />
         <label style="display:block; font-size: 12px; color: var(--ui-dim); margin: 12px 0 6px; font-weight: 500;">CSS</label>

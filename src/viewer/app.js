@@ -592,10 +592,10 @@ main.addEventListener("dblclick", (e) => {
   inp.addEventListener("blur", () => close(true));
 });
 
-// Reuse the merge endpoint: a one-line :root block, last-write-wins.
+// Reuse the merge endpoint: a one-line bare block, last-write-wins (no :root needed, wrapped on server).
 async function patchToken(name, value) {
   try {
-    await postSystem({ mode: "merge", slug: active, css: `:root { ${name}: ${value}; }` });
+    await postSystem({ mode: "merge", slug: active, css: `${name}: ${value};` });
     showToast(`${name} updated`, "ok");
   } catch (err) {
     showToast(`Save failed: ${err.message || err}`, "err");
