@@ -26,6 +26,9 @@ in that browser's localStorage.
   contrast (WCAG), copy/edit/export.
 - **Preview** — ~35 Radix primitives, extras Radix doesn't ship, and 15
   composite screens, all rendered with the active system's tokens live.
+  This only reads the schema's exact names (`--color-accent`, `--space-4`, …) —
+  the Tokens gallery groups any name by pattern, but a token named anything
+  else renders there and nowhere else.
 - **Compare** — one component across 2–4 systems side by side, or a full
   token diff table.
 

@@ -60,6 +60,25 @@ function FontNote({ css }) {
   );
 }
 
+// This page only ever reads the schema's canonical token names (var(--color-accent),
+// var(--space-4), …) — that's the whole contract. Anything a system names
+// differently (--primary-color instead of --color-accent) parses fine and even
+// shows up correctly grouped in the Tokens tab gallery (name-pattern matching
+// there is fuzzy), but is invisible here: nothing in this page's CSS ever
+// references it, so it silently falls back instead of rendering.
+function SchemaNote({ coverage }) {
+  if (!coverage?.extraCount) return null;
+  const shown = coverage.extra.slice(0, 12);
+  const more = coverage.extra.length - shown.length;
+  const list = shown.join(", ") + (more > 0 ? `, +${more} more` : "");
+  return (
+    <div className="dsv-font-note">
+      <b>{coverage.extraCount} token{coverage.extraCount === 1 ? "" : "s"} not used here:</b> {list}.
+      This page only renders the schema's own names — rename these to match (Tokens tab → Schema) to see them.
+    </div>
+  );
+}
+
 function Gallery() {
   const { system, error, loading } = useSystemTokens();
 
@@ -90,6 +109,7 @@ function Gallery() {
           <div className="dsv-err">Failed to load system ({error}). Components shown with fallback tokens.</div>
         )}
 
+        {!loading && system && <SchemaNote coverage={system.coverage} />}
         {!loading && system && <FontNote css={system.css} />}
         {!loading && GROUPS.flatMap(([, sections]) => sections).map(({ id, Comp }) => <Comp key={id} />)}
       </main>

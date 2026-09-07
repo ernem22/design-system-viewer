@@ -309,6 +309,7 @@ function render() {
         <span class="bar-track"><span class="bar-fill" style="width:${pct}%"></span></span>
         <b>${cov.present}/${cov.expected}</b> schema tokens (${pct}%) ·
         <b>${cov.missing}</b> missing · <b>${cov.extraCount}</b> extra
+        ${cov.extraCount ? `<span class="dim" title="Preview only reads the ${cov.expected} schema names shown in the Schema view — a differently-named token renders here but not there.">(extra ≠ rendered in Preview)</span>` : ""}
       </span>
       <input type="search" id="tokenFilter" class="tok-filter" placeholder="Filter tokens…" value="${esc(filter)}" autocomplete="off" />
       ${
@@ -460,6 +461,7 @@ function schemaView(sys, cov) {
     sec.className = "group";
     sec.innerHTML =
       `<h2>Outside Schema<span>${cov.extra.length}</span></h2>` +
+      `<div class="missing-row">Preview only ever reads the ${cov.expected} names on this page — these render in the gallery above but not there. Rename to the matching schema name to make them count.</div>` +
       `<div class="missing-row">${extra.map((n) => `<code>${esc(n)}</code>`).join(" ")}</div>`;
     wrap.appendChild(sec);
   }
@@ -762,6 +764,11 @@ function updatePreview() {
     (cov.missing ? ` · <span class="warn">${cov.missing} missing</span>` : ' · <span class="ok">complete</span>') +
     (cov.extraCount ? ` · <span class="warn">${cov.extraCount} extra</span>` : "") +
     (lint.length ? ` · <span class="warn">${lint.length} value warnings</span>` : "") +
+    (cov.extraCount
+      ? `<details class="miss-detail"><summary class="warn">extra — won't render in Preview</summary><div>Preview only reads the ${cov.expected} schema names (see Schema view). Rename these to match, or they'll just sit unused:</div>${cov.extra
+          .map((n) => `<code>${esc(n)}</code>`)
+          .join("  ")}</details>`
+      : "") +
     (lint.length
       ? `<details class="miss-detail" open><summary class="warn">value warnings</summary>${lint
           .map((w) => `<div><code>${esc(w.name)}: ${esc(w.value)}</code> — ${esc(w.msg)}</div>`)

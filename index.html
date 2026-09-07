@@ -545,7 +545,7 @@
             <span style="flex:none; width: 28px; height: 28px; border-radius: 50%; background: var(--ui-panel-2); border: 1px solid var(--ui-line); color: var(--ui-text-2); display: grid; place-items: center; font-size: 13px; font-weight: 700;">3</span>
             <div>
               <div style="font-size: 13px; font-weight: 600; color: var(--ui-text);">Preview — real components</div>
-              <div style="font-size: 12.5px; color: var(--ui-dim); line-height: 1.5;">~35 Radix primitives (Forms, Overlays, Navigation…) + 15 screens (Login, Pricing, Dashboard, Chat…) render with <b>your tokens</b> via <code>var(--token)</code> + fallback. Each system shows in its own colors — no global theme switch, the system's own <code>--color-bg</code> is the background.</div>
+              <div style="font-size: 12.5px; color: var(--ui-dim); line-height: 1.5;">~35 Radix primitives (Forms, Overlays, Navigation…) + 15 screens (Login, Pricing, Dashboard, Chat…) render with <b>your tokens</b> via <code>var(--token)</code> + fallback. Each system shows in its own colors — no global theme switch, the system's own <code>--color-bg</code> is the background.<br/><b>Your token names must match the schema exactly</b> (<code>--color-accent</code>, <code>--space-4</code>, …) — the Tokens gallery groups any name by pattern, but Preview only ever reads the 141 canonical ones. A differently-named token shows fine in the gallery and does nothing here.</div>
             </div>
           </div>
           <div style="display: flex; gap: 12px; align-items: flex-start;">
