@@ -8,6 +8,7 @@
 import cssText from "./styles/components.css?raw";
 import componentsSrc from "./components.jsx?raw";
 import extrasSrc from "./extras.jsx?raw";
+import screensSrc from "./screens.jsx?raw";
 
 // className -> Set<tokenName>, from every rule in the stylesheet. Pseudo
 // classes / attribute selectors (:hover, [data-state="open"], …) collapse to
@@ -113,7 +114,7 @@ function tokensForSlice(slice, localFns, classTokenMap) {
 function buildDemoTokenMap() {
   const classTokenMap = buildClassTokenMap(cssText);
   const map = new Map();
-  for (const src of [componentsSrc, extrasSrc]) {
+  for (const src of [componentsSrc, extrasSrc, screensSrc]) {
     const localFns = extractFunctionBodies(src);
     for (const { title, slice } of extractDemoBlocks(src)) {
       map.set(title, tokensForSlice(slice, localFns, classTokenMap));

@@ -80,7 +80,7 @@ function SchemaNote({ coverage }) {
 }
 
 function Gallery() {
-  const { system, error, loading } = useSystemTokens();
+  const { system, error, loading, dark, setDark, hasDark } = useSystemTokens();
 
   // content mounts after the browser's initial hash jump — redo it once ready
   useEffect(() => {
@@ -92,6 +92,11 @@ function Gallery() {
     <div className="dsv-app">
       <nav className="dsv-rail">
         <h1>{system ? system.name : "Preview"}</h1>
+        {hasDark && (
+          <label className="dsv-dark-toggle" style={{ padding: "0 var(--space-2)", marginBottom: "var(--space-2)" }}>
+            <input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} /> dark variant
+          </label>
+        )}
         {GROUPS.map(([label, sections]) => (
           <div key={label}>
             <div className="group-label">{label}</div>

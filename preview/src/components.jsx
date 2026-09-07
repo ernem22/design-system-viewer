@@ -67,6 +67,12 @@ export function FormsSection() {
         <Button size="lg">Large</Button>
         <Button className="dsv-icon-btn" aria-label="Add"><Icon name="plus" /></Button>
       </Demo>
+      <Demo title="Button — icons & loading">
+        <Button><Icon name="plus" size={14} /> New project</Button>
+        <Button variant="outline">Next <Icon name="chevronRight" size={14} /></Button>
+        <Button disabled><span className="dsv-spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> Saving…</Button>
+        <Button variant="soft" disabled><span className="dsv-spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> Loading</Button>
+      </Demo>
 
       <Demo title="Input / Textarea (Label primitive)">
         <Field label="Email" id="f-email" hint="Use work address">
@@ -80,6 +86,34 @@ export function FormsSection() {
         </Field>
         <Field label="Disabled" id="f-dis">
           <input id="f-dis" className="dsv-input" disabled defaultValue="read-only" />
+        </Field>
+      </Demo>
+      <Demo title="Input — adornments & counter">
+        <Field label="Amount" id="f-amt">
+          <div className="dsv-input-wrap dsv-input-wrap--prefix">
+            <span className="dsv-adorn dsv-adorn--prefix">₺</span>
+            <input id="f-amt" className="dsv-input" inputMode="decimal" placeholder="0.00" />
+          </div>
+        </Field>
+        <Field label="Search" id="f-search">
+          <div className="dsv-input-wrap dsv-input-wrap--prefix">
+            <span className="dsv-adorn dsv-adorn--prefix"><Icon name="search" size={14} /></span>
+            <input id="f-search" className="dsv-input" placeholder="Search…" />
+          </div>
+        </Field>
+        <Field label="Domain" id="f-dom" hint="18 / 30">
+          <div className="dsv-input-wrap dsv-input-wrap--suffix">
+            <input id="f-dom" className="dsv-input" defaultValue="acme-design-system" maxLength={30} />
+            <span className="dsv-adorn dsv-adorn--suffix dsv-counter">18/30</span>
+          </div>
+        </Field>
+      </Demo>
+      <Demo title="Input — inset & success">
+        <Field label="Inset (sunken well)" id="f-inset">
+          <input id="f-inset" className="dsv-input dsv-input--inset" placeholder="Inset variant" />
+        </Field>
+        <Field label="Username" id="f-ok" hint="Available">
+          <input id="f-ok" className="dsv-input dsv-input--success" defaultValue="ada_lovelace" aria-invalid="false" />
         </Field>
       </Demo>
 
@@ -237,7 +271,7 @@ export function OverlaysSection() {
                 <Field label="Width" id="p-w"><input id="p-w" className="dsv-input" defaultValue="240px" /></Field>
                 <Field label="Height" id="p-h"><input id="p-h" className="dsv-input" defaultValue="auto" /></Field>
               </div>
-              <Popover.Arrow style={{ fill: "var(--color-surface-overlay)" }} />
+              <Popover.Arrow style={{ fill: "var(--color-surface-raised)" }} />
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
@@ -304,7 +338,7 @@ export function OverlaysSection() {
 
       <Demo title="Hover Card">
         <HoverCard.Root openDelay={150}>
-          <HoverCard.Trigger asChild><a className="dsv-nav-link" href="#forms">@ada</a></HoverCard.Trigger>
+          <HoverCard.Trigger asChild><a className="dsv-link" href="#forms">@ada</a></HoverCard.Trigger>
           <HoverCard.Portal>
             <HoverCard.Content className="dsv-pop" sideOffset={6}>
               <div className="dsv-hovercard">
@@ -314,10 +348,28 @@ export function OverlaysSection() {
                   <div className="bio">The first programmer. Analytical Engine notes, 1843.</div>
                 </div>
               </div>
-              <HoverCard.Arrow style={{ fill: "var(--color-surface-overlay)" }} />
+              <HoverCard.Arrow style={{ fill: "var(--color-surface-raised)" }} />
             </HoverCard.Content>
           </HoverCard.Portal>
         </HoverCard.Root>
+      </Demo>
+      <Demo title="Popover — large (shadow-xl)">
+        <Popover.Root>
+          <Popover.Trigger asChild><Button variant="outline">Mega menu</Button></Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Content className="dsv-pop dsv-pop--lg" sideOffset={6}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "var(--space-4)" }}>
+                {[["Product", ["Analytics", "Dashboard", "Automation"]], ["Company", ["About", "Careers", "Press"]], ["Resources", ["Docs", "API", "Status"]]].map(([h, items]) => (
+                  <div key={h}>
+                    <div className="dsv-menu-label">{h}</div>
+                    {items.map((it) => <a key={it} className="dsv-link" href="#navigation" style={{ display: "block", padding: "var(--space-1) 0", textDecoration: "none" }}>{it}</a>)}
+                  </div>
+                ))}
+              </div>
+              <Popover.Arrow style={{ fill: "var(--color-surface-raised)" }} />
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
       </Demo>
     </Section>
   );
@@ -528,6 +580,22 @@ export function FeedbackSection() {
       <Demo title="Kbd">
         <span>Save: <kbd className="dsv-kbd">⌘</kbd> <kbd className="dsv-kbd">S</kbd></span>
       </Demo>
+      <Demo title="State trio — empty / loading / error">
+        <div className="dsv-card" style={{ minWidth: 200 }}>
+          <div className="dsv-empty" style={{ padding: "var(--space-6)" }}>
+            <span className="glyph"><Icon name="search" size={20} /></span>
+            <h4>No projects</h4>
+            <p>Create one to get started.</p>
+          </div>
+        </div>
+        <div className="dsv-card dsv-inline" style={{ minWidth: 200, justifyContent: "center" }}>
+          <span className="dsv-spinner" /> <span className="dsv-muted" style={{ fontSize: "var(--font-size-sm)" }}>Loading…</span>
+        </div>
+        <div className="dsv-callout dsv-callout--danger" style={{ minWidth: 200 }}>
+          <span className="ico"><Icon name="x" size={16} /></span>
+          <div>Sync failed. <a className="dsv-link" href="#feedback">Retry</a></div>
+        </div>
+      </Demo>
     </Section>
   );
 }
@@ -584,6 +652,18 @@ export function LayoutSection() {
             <Avatar.Fallback className="dsv-avatar-fallback">GK</Avatar.Fallback>
           </Avatar.Root>
         </span>
+      </Demo>
+
+      <Demo title="Avatar — sizes & presence">
+        <span className="dsv-inline" style={{ gap: "var(--space-3)" }}>
+          {[["var(--size-icon-sm)", "var(--font-size-xs)"], ["var(--size-icon-md)", "var(--font-size-sm)"], ["var(--size-icon-lg)", "var(--font-size-base)"]].map(([sz, fs], i) => (
+            <span key={sz} className="dsv-avatar" style={{ width: sz, height: sz, position: "relative" }}>
+              <span className="dsv-avatar-fallback" style={{ fontSize: fs }}>AL</span>
+              <span style={{ position: "absolute", right: 0, bottom: 0, width: "var(--space-2-5)", height: "var(--space-2-5)", borderRadius: "var(--radius-full)", background: i === 2 ? "var(--color-warning)" : "var(--color-success)", border: "var(--border-width-thick) solid var(--color-surface)" }} />
+            </span>
+          ))}
+        </span>
+        <span className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>online / busy presence via semantic fills</span>
       </Demo>
 
       <Demo title="Scroll Area">

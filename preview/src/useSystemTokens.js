@@ -27,7 +27,7 @@ export function loadGoogleFonts(css) {
   link.href = href;
 }
 
-function injectCss(system) {
+function injectCss(system, dark) {
   let el = document.getElementById(STYLE_ID);
   if (!el) {
     el = document.createElement("style");
@@ -44,6 +44,15 @@ function injectCss(system) {
     css = system?.css || "";
     // strip any @media dark block to keep base only
     css = css.replace(/@media[^{]*prefers-color-scheme\s*:\s*dark[^{]*\{[\s\S]*?\}\s*\}/gi, "");
+  }
+  // Optional dark variant: appended later in the same stylesheet so it wins.
+  // system.themes.dark is [{name, value}] (minimax today, others later).
+  const darkTokens = system?.themes?.dark;
+  if (dark && darkTokens?.length) {
+    css += `:root{${darkTokens.map(t => `${t.name}:${t.value}`).join(";")}}`;
+    document.documentElement.dataset.theme = "dark";
+  } else {
+    delete document.documentElement.dataset.theme;
   }
   el.textContent = css;
 }
@@ -118,7 +127,9 @@ async function fetchAllSystems() {
  */
 export function useSystemTokens() {
   const [state, setState] = useState({ system: null, error: null, loading: true });
+  const [dark, setDark] = useState(false);
   const systemRef = useRef(null);
+  const darkRef = useRef(false);
 
   useEffect(() => {
     let alive = true;
@@ -129,7 +140,7 @@ export function useSystemTokens() {
         const system = await fetchSystem(slug);
         if (!alive) return;
         systemRef.current = system;
-        injectCss(system);
+        injectCss(system, darkRef.current);
         loadGoogleFonts(system.css);
         document.title = `${system.name} — Preview`;
         setState({ system, error: null, loading: false });
@@ -157,7 +168,15 @@ export function useSystemTokens() {
     };
   }, []);
 
+  useEffect(() => {
+    darkRef.current = dark;
+    if (systemRef.current) injectCss(systemRef.current, dark);
+  }, [dark]);
+
+  const hasDark = !!(state.system?.themes?.dark?.length);
+
   return {
     ...state,
+    dark, setDark, hasDark,
   };
 }
