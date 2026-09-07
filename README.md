@@ -44,5 +44,6 @@ shareable link.
 
 ## Limits
 
-Only a `dark` theme variant is parsed, and it's stored but not yet rendered.
-Schema isn't editable from the UI. Nothing about a system is required.
+Only a `dark` theme variant is parsed (light is the default; the Preview
+tab shows a dark toggle when a system ships one). Schema isn't editable
+from the UI. Nothing about a system is required.

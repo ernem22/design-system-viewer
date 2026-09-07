@@ -8,7 +8,7 @@ import * as Tabs from "@radix-ui/react-tabs";
 import * as Accordion from "@radix-ui/react-accordion";
 import * as Progress from "@radix-ui/react-progress";
 import { Button, Field, Icon } from "./ui.jsx";
-import { loadGoogleFonts } from "./useSystemTokens.js";
+import { loadGoogleFonts, fetchSystems } from "./useSystemTokens.js";
 
 // ── comparable component renderers (stateless-ish; local state is per column) ──
 const Buttons = () => (
@@ -176,19 +176,6 @@ export const REGISTRY = [
 ];
 
 // ── data ──
-const isStaticHost = () => location.hostname.includes("github.io") || location.protocol === "file:";
-async function fetchSystems() {
-  if (!isStaticHost()) {
-    try {
-      const res = await fetch("/api/systems");
-      if (res.ok) return res.json();
-    } catch {}
-  }
-  try { const raw = localStorage.getItem("dsv.systems"); if (raw !== null) return JSON.parse(raw); } catch {}
-  try { const r = await fetch("../systems/index.json"); if (r.ok) return r.json(); } catch {}
-  try { const r = await fetch("./systems/index.json"); if (r.ok) return r.json(); } catch {}
-  return [];
-}
 const tokenStyle = (system) =>
   Object.fromEntries((system.groups || []).flatMap((g) => g.tokens).map((t) => [t.name, t.value]));
 const isColor = (v) => /^(#|rgb|hsl|oklch|color\()/i.test(String(v).trim()) || /^[a-z]+$/i.test(String(v).trim());

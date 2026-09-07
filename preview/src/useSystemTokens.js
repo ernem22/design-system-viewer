@@ -59,44 +59,10 @@ function injectCss(system, dark) {
 
 const isStaticHost = () => location.hostname.includes("github.io") || location.protocol === "file:";
 
-async function fetchSystem(slug) {
-  if (!isStaticHost()) {
-    try {
-      const res = await fetch("/api/systems");
-      if (res.ok) {
-        const all = await res.json();
-        if (!all.length) throw new Error("no-systems");
-        return all.find((s) => s.slug === slug) || all[0];
-      }
-    } catch {}
-  }
-  try {
-    const raw = localStorage.getItem("dsv.systems");
-    if (raw !== null) {
-      const ls = JSON.parse(raw);
-      if (!ls.length) throw new Error("no-systems");
-      return ls.find((s) => s.slug === slug) || ls[0];
-    }
-  } catch {}
-  try {
-    const r = await fetch("../systems/index.json");
-    if (r.ok) {
-      const all = await r.json();
-      if (!all.length) throw new Error("no-systems");
-      return all.find((s) => s.slug === slug) || all[0];
-    }
-  } catch {}
-  try {
-    const r2 = await fetch("./systems/index.json");
-    if (r2.ok) {
-      const all = await r2.json();
-      if (!all.length) throw new Error("no-systems");
-      return all.find((s) => s.slug === slug) || all[0];
-    }
-  } catch {}
-  throw new Error("no-systems");
-}
-async function fetchAllSystems() {
+// Ordered source fallback: dev API → this browser's localStorage → the static
+// bundle (relative path, then root-based for the Pages sub-path base). Returns
+// [] when nothing resolves; callers decide whether empty is an error.
+export async function fetchSystems() {
   if (!isStaticHost()) {
     try {
       const res = await fetch("/api/systems");
@@ -107,14 +73,12 @@ async function fetchAllSystems() {
     const raw = localStorage.getItem("dsv.systems");
     if (raw !== null) return JSON.parse(raw);
   } catch {}
-  try {
-    const r = await fetch("../systems/index.json");
-    if (r.ok) return r.json();
-  } catch {}
-  try {
-    const r2 = await fetch("./systems/index.json");
-    if (r2.ok) return r2.json();
-  } catch {}
+  for (const url of ["../systems/index.json", "./systems/index.json"]) {
+    try {
+      const r = await fetch(url);
+      if (r.ok) return r.json();
+    } catch {}
+  }
   return [];
 }
 
@@ -137,8 +101,10 @@ export function useSystemTokens() {
 
     const apply = async (slug) => {
       try {
-        const system = await fetchSystem(slug);
+        const all = await fetchSystems();
         if (!alive) return;
+        if (!all.length) throw new Error("no-systems");
+        const system = all.find((s) => s.slug === slug) || all[0];
         systemRef.current = system;
         injectCss(system, darkRef.current);
         loadGoogleFonts(system.css);
