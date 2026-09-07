@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSystemTokens } from "./useSystemTokens.js";
+import { fontFamiliesIn } from "./fonts.js";
 import { COMPONENT_SECTIONS } from "./components.jsx";
 import { EXTRA_SECTIONS } from "./extras.jsx";
 import { SCREEN_SECTIONS } from "./screens.jsx";
@@ -16,27 +17,45 @@ export default function App() {
   return isCompare ? <Compare /> : <Gallery />;
 }
 
-// Fonts a system names but does not ship a matching @font-face for: the preview
-// only renders them if the viewer already has them installed, else it falls back.
+// Whether a font is actually usable right now — not whether the system ships
+// an @font-face for it. That check was always true for every seed system (none
+// self-host a font) and never went false once useSystemTokens.js started
+// fetching from Google Fonts, so it just alarmed on fonts that were working
+// fine. document.fonts.check() reports what the browser can really render:
+// true for an OS-installed font (Georgia, SFMono-Regular, …) and true for a
+// webfont once its Google Fonts request lands — only a genuine miss is left.
 function FontNote({ css }) {
-  if (!css) return null;
-  const generic = /^(sans-serif|serif|monospace|system-ui|ui-sans-serif|ui-serif|ui-monospace|ui-rounded|-apple-system|blinkmacsystemfont|inherit|initial|cursive|fantasy|math|emoji)$/i;
-  const families = [...css.matchAll(/--font-[\w-]*(?:sans|serif|mono|family|body|heading|display|ui)[\w-]*\s*:\s*([^;{}]+)/gi)]
-    .map((m) => m[1].split(",")[0].trim().replace(/^["']|["']$/g, ""))
-    .filter((f, i, a) => f && !generic.test(f) && a.indexOf(f.toLowerCase()) === a.findIndex((x) => x.toLowerCase() === f.toLowerCase()));
-  if (!families.length) return null;
+  const families = fontFamiliesIn(css);
+  const key = families.join(",");
+  const [missing, setMissing] = useState([]);
 
-  const bundled = new Set(
-    [...css.matchAll(/@font-face[^}]*font-family\s*:\s*([^;}]+)/gi)]
-      .map((m) => m[1].trim().replace(/^["']|["']$/g, "").toLowerCase()),
-  );
-  const unbundled = families.filter((f) => !bundled.has(f.toLowerCase()));
-  if (!unbundled.length) return null;
+  useEffect(() => {
+    if (!families.length || !document.fonts) { setMissing([]); return; }
+    let alive = true;
+    const check = () => families.filter((f) => !document.fonts.check(`16px "${f}"`));
 
+    // document.fonts.load() triggers the fetch for a matching @font-face (a
+    // no-op if the family is already local, e.g. Georgia); .ready then waits
+    // for whatever's in flight — but the Google Fonts <link> is a separate
+    // network round trip, so its @font-face rules may not exist yet on this
+    // first pass. A second pass after they've had time to register catches it.
+    Promise.allSettled(families.map((f) => document.fonts.load(`16px "${f}"`)))
+      .then(() => document.fonts.ready)
+      .then(() => { if (alive) setMissing(check()); });
+
+    const retry = setTimeout(() => {
+      Promise.allSettled(families.map((f) => document.fonts.load(`16px "${f}"`))).then(() => {
+        if (alive) setMissing(check());
+      });
+    }, 1000);
+
+    return () => { alive = false; clearTimeout(retry); };
+  }, [key]);
+
+  if (!missing.length) return null;
   return (
-    <div className="dsv-err" style={{ borderColor: "var(--color-warning, #b7791f)" }}>
-      <b>Fonts not bundled:</b> {unbundled.join(", ")} — no <code>@font-face</code> definition in system.
-      Falls back to system font if not installed in this browser.
+    <div className="dsv-font-note">
+      <b>Not available in this browser:</b> {missing.join(", ")}. Falls back to a default font.
     </div>
   );
 }

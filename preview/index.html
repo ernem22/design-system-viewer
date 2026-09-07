@@ -4,6 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Preview — Design System Viewer</title>
+    <!-- Systems name real webfonts but ship no @font-face. Rather than a fixed
+         list, useSystemTokens.js reads whichever families the active system
+         actually references and requests those from Google Fonts at runtime —
+         see loadGoogleFonts(). Just the preconnect belongs here, statically. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   </head>
   <body>
     <div id="root"></div>

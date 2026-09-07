@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseTokens, parseThemes, lintTokens, buildSystem, slugify } from "./parse.js";
+import { parseTokens, parseThemes, lintTokens, buildSystem, mergeSystem, slugify } from "./parse.js";
 import { categorize } from "./taxonomy.js";
 
 const SAMPLE = `
@@ -161,4 +161,18 @@ test("buildSystem: carries dark theme + warnings", () => {
 test("slugify: turkish + junk collapses", () => {
   assert.equal(slugify("Company Theme 2026"), "company-theme-2026");
   assert.equal(slugify("   "), "system");
+});
+
+test("mergeSystem overrides an existing value (the appended block wins)", () => {
+  const val = (s, n) => s.groups.flatMap((g) => g.tokens).find((t) => t.name === n)?.value;
+  const sys = buildSystem({ name: "X", css: "--color-bg: #101014;\n--space-4: 16px;" });
+
+  const merged = mergeSystem(sys, "--color-bg: #000;");
+  assert.equal(val(merged, "--color-bg"), "#000");
+  assert.equal(val(merged, "--space-4"), "16px");
+
+  // ...and survives a further merge that touches something else
+  const again = mergeSystem(merged, "--radius-md: 6px;");
+  assert.equal(val(again, "--color-bg"), "#000");
+  assert.equal(val(again, "--radius-md"), "6px");
 });

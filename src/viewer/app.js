@@ -51,8 +51,13 @@ function cmpQuery() {
 
 // ─────────────────────────────────────────────── data
 const LS_KEY = "dsv.systems";
+// null = never saved here (fall back to the shipped systems/index.json);
+// [] = the user deleted everything, which must survive a reload.
 function loadFromLS() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch { return []; }
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    return raw === null ? null : JSON.parse(raw);
+  } catch { return null; }
 }
 function saveToLS(list) {
   try { localStorage.setItem(LS_KEY, JSON.stringify(list)); } catch {}
@@ -61,7 +66,7 @@ async function load() {
   if (isStaticHost()) {
     try {
       const cached = loadFromLS();
-      if (cached.length) systems = cached;
+      if (cached) systems = cached;
       else {
         const r = await fetch("./systems/index.json");
         systems = r.ok ? await r.json() : [];
@@ -81,7 +86,7 @@ async function load() {
   } catch {
     try {
       const cached = loadFromLS();
-      if (cached.length) systems = cached;
+      if (cached) systems = cached;
       else {
         const r = await fetch("./systems/index.json");
         systems = r.ok ? await r.json() : [];
@@ -104,21 +109,15 @@ function activateTab(next) {
   $("tabCompare").classList.toggle("active", tab === "compare");
   main.hidden = inFrame;
   $("previewFrame").hidden = !inFrame;
-  // keep system actions visible on all tabs — no friction
-  const wrap = $("sysActionsWrap");
-  if (wrap) wrap.hidden = !activeSystem();
-  closeMenu();
   if (inFrame) syncPreview();
   syncUrl();
 }
 
 // The single iframe serves both the preview gallery and compare mode. Load the
 // right URL when its mode changes; otherwise just message it the active slug.
-function getPreviewBase() {
-  // GitHub Pages serves at /design-system-viewer/, locally at /
-  const base = document.baseURI.includes("/design-system-viewer/") ? "/design-system-viewer/preview/" : "/preview/";
-  return base;
-}
+// Relative to wherever index.html sits — works on /, on /design-system-viewer/,
+// and from file:// without a special case per host.
+const getPreviewBase = () => new URL("preview/", document.baseURI).href;
 function syncPreview() {
   if (tab !== "preview" && tab !== "compare") return;
   const frame = $("previewFrame");
@@ -129,14 +128,16 @@ function syncPreview() {
       : active ? `${base}?sys=${encodeURIComponent(active)}` : base;
     frameMode = tab;
   } else if (tab === "preview") {
-    frame.contentWindow?.postMessage({ type: "dsv:system", slug: active || "" }, location.origin);
+    frame.contentWindow?.postMessage({ type: "dsv:system", slug: active || "" }, MSG_ORIGIN);
   }
 }
 
+const MSG_ORIGIN = location.origin === "null" ? "*" : location.origin;
+
 window.addEventListener("message", (e) => {
-  if (e.origin !== location.origin) return;
+  if (e.origin !== location.origin && e.origin !== "null") return;
   if (e.data?.type === "dsv:preview-ready" && tab === "preview") {
-    $("previewFrame").contentWindow?.postMessage({ type: "dsv:system", slug: active || "" }, location.origin);
+    $("previewFrame").contentWindow?.postMessage({ type: "dsv:system", slug: active || "" }, MSG_ORIGIN);
   }
   if (e.data?.type === "dsv:compare-state") {
     cmpState = e.data;
@@ -144,13 +145,14 @@ window.addEventListener("message", (e) => {
   }
 });
 
-const isStaticHost = () => location.hostname.includes("github.io") || location.protocol === "file:" || !navigator.onLine;
+const isStaticHost = () => location.hostname.includes("github.io") || location.protocol === "file:";
 async function postSystem(body) {
   // On Pages, don't even try the API — go straight to localStorage to avoid 405 console noise
   if (isStaticHost()) {
     const { buildSystem: bs, mergeSystem: ms } = await import("../core/parse.js");
     let list = loadFromLS();
-    if (!list.length) {
+    if (!list) {
+      list = [];
       try { const r = await fetch("./systems/index.json"); if (r.ok) list = await r.json(); } catch {}
     }
     let system;
@@ -192,8 +194,9 @@ async function postSystem(body) {
     if (isStatic) {
       const { buildSystem: bs, mergeSystem: ms } = await import("../core/parse.js");
       let list = loadFromLS();
-      // try to populate from static if LS empty
-      if (!list.length) {
+      // seed from the shipped systems the first time only
+      if (!list) {
+        list = [];
         try {
           const r = await fetch("./systems/index.json");
           if (r.ok) list = await r.json();
@@ -224,8 +227,7 @@ async function postSystem(body) {
 
 async function remove(slug) {
   if (isStaticHost()) {
-    let list = loadFromLS();
-    list = list.filter(s => s.slug !== slug);
+    let list = (loadFromLS() ?? systems).filter(s => s.slug !== slug);
     saveToLS(list);
     systems = list;
     active = null;
@@ -236,8 +238,7 @@ async function remove(slug) {
   try {
     await fetch(`/api/systems/${encodeURIComponent(slug)}`, { method: "DELETE" });
   } catch {
-    let list = loadFromLS();
-    list = list.filter(s => s.slug !== slug);
+    const list = (loadFromLS() ?? systems).filter(s => s.slug !== slug);
     saveToLS(list);
     systems = list;
   }
@@ -253,18 +254,36 @@ function render() {
   const sys = activeSystem();
 
   picker.hidden = systems.length < 2;
-  const wrap = $("sysActionsWrap");
-  if (wrap) wrap.hidden = !sys;
-  const _mb = $("mergeBtn"); if (_mb) _mb.hidden = !sys;
-  const _sb = $("schemaBtn"); if (_sb) { _sb.hidden = !sys; _sb.textContent = schemaMode ? "Gallery" : "Schema"; }
-  const _db = $("deleteBtn"); if (_db) _db.hidden = !sys;
   if (!picker.hidden) {
     picker.innerHTML = systems.map((s) => `<option value="${s.slug}">${esc(s.name)}</option>`).join("");
     picker.value = active;
   }
 
   if (!sys) {
-    main.innerHTML = `<div class="empty">No systems yet.<br />Use <b>Add System</b> at top right to paste a CSS token block.</div>`;
+    main.innerHTML = `
+      <div class="welcome">
+        <svg class="welcome-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        <h2>No systems yet</h2>
+        <p>Paste a block of <code>--token: value;</code> lines and get a categorized gallery, a live component preview, and a side-by-side diff.</p>
+        <div class="welcome-actions">
+          <div class="welcome-card" id="welcomePaste" role="button" tabindex="0">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+            <b>Paste CSS</b><span>Or fetch a stylesheet from a URL</span>
+          </div>
+          <div class="welcome-card" id="welcomeUpload" role="button" tabindex="0">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <b>Upload a file</b><span>Pick a .css file, or drop one anywhere</span>
+          </div>
+        </div>
+        <p class="welcome-hint">Nothing is uploaded — systems stay in this browser (or in <code>systems/</code> when the local server runs).</p>
+      </div>`;
+    const openPaste = () => openDialog("add");
+    const openUpload = () => $("fileInput")?.click();
+    for (const [id, fn] of [["welcomePaste", openPaste], ["welcomeUpload", openUpload]]) {
+      const el = $(id);
+      el?.addEventListener("click", fn);
+      el?.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); } });
+    }
     return;
   }
 
@@ -392,7 +411,7 @@ function renderGroup(g, missing = []) {
   else if (g.id === "opacity") el.appendChild(rows(g.tokens, opacityRow));
   else if (g.id === "z-index") el.appendChild(rows(g.tokens, numberRow));
   else if (g.id === "breakpoint") el.appendChild(rows(g.tokens, breakpointRow));
-  else el.appendChild(rawTable(g.tokens));
+  else el.appendChild(scrollWrap(rawTable(g.tokens)));
 
   if (showMissing && missing.length) {
     const m = document.createElement("div");
@@ -432,7 +451,7 @@ function schemaView(sys, cov) {
         return `<tr data-token="${esc(name)}" data-value="${esc(val)}" title="${hit ? "copy" : "missing"}"><td class="${hit ? "yes" : "no"}">${hit ? "✓" : "✗"} ${esc(name)}</td><td>${esc(val)}${hit ? "" : '<span style="color:var(--ui-dim); font-size:11px; margin-left:6px;">— missing</span>'}</td></tr>`;
       })
       .join("");
-    sec.appendChild(table);
+    sec.appendChild(scrollWrap(table));
     wrap.appendChild(sec);
   }
   const extra = cov.extra.filter(matchTok);
@@ -518,6 +537,12 @@ const numberRow = (t) =>
   baseRow(t, `<span class="contrast-num" style="background: var(--ui-panel); padding: 4px 8px; border-radius: var(--r-sm)">${esc(t.value)}</span>`);
 const breakpointRow = (t) =>
   baseRow(t, `<span class="contrast-num" style="background: var(--ui-panel); padding: 4px 8px; border-radius: var(--r-sm)">${esc(t.value)}</span>`);
+function scrollWrap(node) {
+  const d = document.createElement("div");
+  d.className = "table-wrap";
+  d.appendChild(node);
+  return d;
+}
 function rawTable(tokens) {
   const table = document.createElement("table");
   table.className = "raw";
@@ -707,94 +732,6 @@ $("dlgTplCopy")?.addEventListener("click", async () => {
 $("dlgCancel")?.addEventListener("click", () => dlg.close());
 $("dlgCss").addEventListener("input", updatePreview);
 
-// ── unified manage dialog
-const manageDlg = $("manageDlg");
-function openManage(tab = "create") {
-  if (!manageDlg) return openDialog("add");
-  // update dynamic parts
-  const sys = activeSystem();
-  $("manageTokensName") && ($("manageTokensName").textContent = sys ? sys.name : "—");
-  $("manageDeleteSlug") && ($("manageDeleteSlug").textContent = sys ? sys.slug : "—");
-  $("manageExportName") && ($("manageExportName").textContent = sys ? sys.name : "No system");
-  $("manageExportMeta") && ($("manageExportMeta").textContent = sys ? `${sys.tokenCount} tokens · ${sys.coverage.present}/${sys.coverage.expected} coverage` : "");
-  // schema body
-  if (sys) {
-    const cov = sys.coverage;
-    const have = valueMap(sys);
-    let html = "";
-    for (const g of cov.groups) {
-      const names = REFERENCE.find(r=>r.id===g.id).tokens;
-      html += `<div style="margin:12px 0 6px; font-size:12px; font-weight:600; color:var(--ui-text);">${esc(g.label)} <span style="font-weight:400; color:var(--ui-dim);">${g.present.length}/${g.expected}</span></div>`;
-      html += `<div style="display:flex; flex-wrap:wrap; gap:6px;">` + names.map(n=> have.has(n) ? `<span style="font-family: ui-monospace, monospace; font-size:11px; background: color-mix(in srgb, var(--ui-ok) 12%, transparent); color: var(--ui-ok); border:1px solid color-mix(in srgb, var(--ui-ok) 20%, transparent); padding:2px 6px; border-radius:4px;">✓ ${esc(n)}</span>` : `<span style="font-family: ui-monospace, monospace; font-size:11px; background: var(--ui-bg-2); color: var(--ui-dim); border:1px solid var(--ui-line); padding:2px 6px; border-radius:4px;">✗ ${esc(n)}</span>`).join("") + `</div>`;
-    }
-    if (cov.extra.length) html += `<div style="margin:12px 0 6px; font-size:12px; font-weight:600;">Outside Schema <span style="font-weight:400; color:var(--ui-dim);">${cov.extra.length}</span></div><div style="display:flex; flex-wrap:wrap; gap:6px;">${cov.extra.map(n=>`<span style="font-family: ui-monospace, monospace; font-size:11px; background: var(--ui-bg-2); padding:2px 6px; border-radius:4px; border:1px solid var(--ui-line);">${esc(n)}</span>`).join("")}</div>`;
-    $("manageSchemaBody") && ($("manageSchemaBody").innerHTML = html);
-  }
-  // switch tab
-  switchManageTab(tab);
-  manageDlg.showModal();
-}
-function switchManageTab(tab) {
-  for (const id of ["manageCreate","manageTokens","manageSchema","manageExport","manageDanger"]) {
-    const el = $(id);
-    if (el) el.hidden = !id.toLowerCase().includes(tab);
-  }
-  for (const b of document.querySelectorAll("[data-manage-tab]")) {
-    b.classList.toggle("active", b.dataset.manageTab === tab);
-  }
-}
-document.querySelectorAll("[data-manage-tab]").forEach(b=> b.addEventListener("click", ()=> switchManageTab(b.dataset.manageTab)));
-$("manageBtn")?.addEventListener("click", ()=> openManage(activeSystem() ? "tokens" : "create"));
-// keep old buttons as aliases to unified flow (for backward compat, hidden in DOM but still work if present)
-$("addBtn")?.addEventListener("click", ()=> openManage("create"));
-$("mergeBtn")?.addEventListener("click", ()=> openManage("tokens"));
-$("schemaBtn")?.addEventListener("click", ()=> openManage("schema"));
-$("expCss")?.addEventListener("click", ()=> openManage("export"));
-$("expJson")?.addEventListener("click", ()=> openManage("export"));
-$("deleteBtn")?.addEventListener("click", ()=> openManage("danger"));
-
-// ── manage dialog inner wiring
-$("manageTplFill")?.addEventListener("click", ()=> { $("manageCss").value = templateCss(); updateManagePreview("create"); });
-$("manageTplCopy")?.addEventListener("click", async ()=> {
-  try { await navigator.clipboard.writeText(templateCss()); showToast("Template copied", "ok"); } catch { showToast("Copy failed", "err"); }
-});
-$("manageCreateCancel")?.addEventListener("click", ()=> $("manageDlg")?.close());
-$("manageTokensTplFill")?.addEventListener("click", ()=> {
-  const names = templateNames();
-  $("manageTokensCss").value = templateCss(names);
-  updateManagePreview("tokens");
-});
-$("manageTokensTplCopy")?.addEventListener("click", async ()=> {
-  try { await navigator.clipboard.writeText(templateCss(templateNames())); showToast("Template copied", "ok"); } catch { showToast("Copy failed", "err"); }
-});
-$("manageTokensCancel")?.addEventListener("click", ()=> $("manageDlg")?.close());
-$("manageCss")?.addEventListener("input", ()=> updateManagePreview("create"));
-$("manageTokensCss")?.addEventListener("input", ()=> updateManagePreview("tokens"));
-
-$("manageCreateSave")?.addEventListener("click", async ()=> {
-  const css = $("manageCss").value;
-  const name = $("manageName").value.trim() || "Untitled";
-  const err = $("manageCreateErr");
-  if (!css.trim()) { err.textContent = "CSS block is empty."; err.hidden = false; return; }
-  err.hidden = true;
-  $("manageCreateSave").disabled = true;
-  try { await postSystem({ name, css }); showToast("System added", "ok"); $("manageDlg")?.close(); } catch(ex){ err.textContent = String(ex.message||ex); err.hidden=false; showToast(String(ex.message||ex),"err"); } finally { $("manageCreateSave").disabled = false; }
-});
-$("manageTokensSave")?.addEventListener("click", async ()=> {
-  const css = $("manageTokensCss").value;
-  const err = $("manageTokensErr");
-  if (!css.trim()) { err.textContent = "CSS block is empty."; err.hidden = false; return; }
-  err.hidden = true;
-  $("manageTokensSave").disabled = true;
-  try { await postSystem({ mode:"merge", slug:active, css }); showToast("Tokens added","ok"); $("manageDlg")?.close(); } catch(ex){ err.textContent = String(ex.message||ex); err.hidden=false; showToast(String(ex.message||ex),"err"); } finally { $("manageTokensSave").disabled = false; }
-});
-$("manageExpCss")?.addEventListener("click", ()=> { const sys=activeSystem(); if(sys) { download(`${sys.slug}.css`, systemToCss(sys), "text/css"); showToast("CSS downloaded","ok"); }});
-$("manageExpJson")?.addEventListener("click", ()=> { const sys=activeSystem(); if(sys) { download(`${sys.slug}.json`, JSON.stringify(sys,null,2), "application/json"); showToast("JSON downloaded","ok"); }});
-$("manageDeleteBtn")?.addEventListener("click", ()=> {
-  const sys = activeSystem();
-  if (sys && confirm(`Delete "${sys.name}"? This cannot be undone.`)) { $("manageDlg")?.close(); remove(sys.slug); }
-});
-
 function updatePreview() {
   const css = $("dlgCss").value;
   const line = $("dlgPreview");
@@ -833,20 +770,6 @@ function updatePreview() {
     (missGroups
       ? `<details class="miss-detail"><summary>missing token list</summary>${missGroups}</details>`
       : "");
-}
-function updateManagePreview(which) {
-  const isCreate = which === "create";
-  const cssEl = isCreate ? $("manageCss") : $("manageTokensCss");
-  const previewEl = isCreate ? $("manageCreatePreview") : $("manageTokensPreview");
-  if (!cssEl || !previewEl) return;
-  const css = cssEl.value;
-  if (!css.trim()) { previewEl.textContent = "Awaiting CSS block…"; return; }
-  const base = !isCreate ? parseTokens(activeSystem()?.css ?? "") : [];
-  const names = new Set([...base, ...parseTokens(css)].map(t=>t.name));
-  const cov = coverage([...names]);
-  const added = parseTokens(css).length;
-  const lint = lintTokens(parseTokens(css));
-  previewEl.innerHTML = `<b>${added}</b> tokens pasted · coverage <b class="${cov.missing ? "" : "ok"}">${cov.present}/${cov.expected}</b>` + (cov.missing ? ` · <span class="warn">${cov.missing} missing</span>` : ' · <span class="ok">complete</span>') + (lint.length ? ` · <span class="warn">${lint.length} warnings</span>` : "");
 }
 
 $("dlgForm").addEventListener("submit", async (e) => {
@@ -904,47 +827,21 @@ picker.addEventListener("change", () => {
 $("tabSystem")?.addEventListener("click", () => activateTab("system"));
 $("tabPreview")?.addEventListener("click", () => activateTab("preview"));
 $("tabCompare")?.addEventListener("click", () => activateTab("compare"));
-$("schemaBtn")?.addEventListener("click", () => {
-  schemaMode = !schemaMode;
-  render();
-  closeMenu();
-});
-$("deleteBtn")?.addEventListener("click", () => {
-  const sys = activeSystem();
-  closeMenu();
-  if (sys && confirm(`"${sys.name}" delete?`)) remove(sys.slug);
-});
-$("expCss")?.addEventListener("click", () => {
-  const sys = activeSystem();
-  if (sys) download(`${sys.slug}.css`, systemToCss(sys), "text/css");
-});
-$("expJson")?.addEventListener("click", () => {
-  const sys = activeSystem();
-  if (sys) download(`${sys.slug}.json`, JSON.stringify(sys, null, 2), "application/json");
-});
+$("addBtn")?.addEventListener("click", () => openDialog("add"));
 
-// theme toggle removed — viewer stays in default dark, systems use their own --color-bg
-
-// ── system actions dropdown
-function closeMenu() {
-  const m = $("actionsMenu");
-  if (m) m.hidden = true;
-}
-$("menuBtn")?.addEventListener("click", (e) => {
-  e.stopPropagation();
-  const m = $("actionsMenu");
-  if (!m) return;
-  m.hidden = !m.hidden;
-});
-document.addEventListener("click", (e) => {
-  const wrap = $("sysActionsWrap");
-  const menu = $("actionsMenu");
-  if (!wrap || !menu || menu.hidden) return;
-  if (!wrap.contains(e.target)) menu.hidden = true;
-});
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeMenu();
-});
+// ── theme (the light palette lives in index.html; this is what switches it)
+const THEME_KEY = "dsv.theme";
+const applyTheme = (t) => {
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem(THEME_KEY, t); } catch {}
+};
+applyTheme(
+  localStorage.getItem(THEME_KEY) ||
+    (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"),
+);
+$("themeBtn")?.addEventListener("click", () =>
+  applyTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light"),
+);
 
 // ── dlg: import from URL
 $("dlgFetch")?.addEventListener("click", async () => {
@@ -973,11 +870,12 @@ $("dlgFetch")?.addEventListener("click", async () => {
 const dropOverlay = $("dropOverlay");
 let dragDepth = 0;
 function showDrop(v) { if (dropOverlay) dropOverlay.hidden = !v; }
+const hasFiles = (e) => !!e.dataTransfer && [...e.dataTransfer.types].includes("Files");
 document.addEventListener("dragenter", (e) => {
-  if ([...e.dataTransfer.types].includes("Files")) { dragDepth++; showDrop(true); }
+  if (hasFiles(e)) { dragDepth++; showDrop(true); }
 });
 document.addEventListener("dragleave", (e) => {
-  if ([...e.dataTransfer.types].includes("Files")) { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) showDrop(false); }
+  if (hasFiles(e)) { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) showDrop(false); }
 });
 document.addEventListener("dragover", (e) => e.preventDefault());
 document.addEventListener("drop", async (e) => {

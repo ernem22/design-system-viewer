@@ -41,8 +41,26 @@ before(async () => {
 });
 
 after(async () => {
-  proc?.kill();
-  if (dir) await rm(dir, { recursive: true, force: true });
+  // Windows keeps the cwd handle until the child is really gone — removing the
+  // temp dir before that races into EBUSY.
+  if (proc && proc.exitCode === null) {
+    await new Promise((resolve) => { proc.once("exit", resolve); proc.kill(); });
+  }
+  if (dir) await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+});
+
+test("systems/index.json is a build artifact, not a system", async () => {
+  await fetch(`${base}/api/systems`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Real", css: "--color-bg: #fff;" }),
+  });
+  const all = await (await fetch(`${base}/api/systems`)).json();
+  // build-static.mjs drops the bundle next to the per-system files
+  await writeFile(join(dir, "systems", "index.json"), JSON.stringify(all, null, 2));
+
+  const after = await (await fetch(`${base}/api/systems`)).json();
+  assert.deepEqual(after.map((s) => s.slug), ["real"]);
 });
 
 test("/preview/ returns 503 when preview/dist is missing", async () => {

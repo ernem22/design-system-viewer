@@ -75,32 +75,26 @@ export function parseThemes(css) {
     }
   }
 
+  // Rebuild the light side in *document order*: bare `--x: y;` declarations that
+  // sit outside any rule, interleaved with the bodies of non-dark rules exactly
+  // as they appear. Order is the whole contract — mergeSystem appends new
+  // declarations after the stored `:root { … }`, so bucketing bare and rule
+  // declarations separately let the original always win and made every merge a
+  // silent no-op.
   let baseCss = "";
-  // Use a selector regex that excludes ';' so bare --x: y; outside {} isn't eaten as selector
+  // Selector regex excludes ';' so a bare `--x: y;` outside {} isn't eaten as a selector.
   const ruleRe = /([^{};]+)\{([^{}]*)\}/g;
   let m;
+  let lastIdx = 0;
   while ((m = ruleRe.exec(withoutMedia)) !== null) {
+    baseCss += "\n" + withoutMedia.slice(lastIdx, m.index) + ";";
     // re-terminate: a rule's last declaration may have dropped its semicolon
     if (DARK_SEL.test(m[1])) darkCss += "\n" + m[2] + ";";
     else baseCss += "\n" + m[2] + ";";
+    lastIdx = ruleRe.lastIndex;
   }
-
-  // :root-less imports (bare --x: y; outside any {} ) would be lost if we only used baseCss
-  let bareText = "";
-  let lastIdx = 0;
-  const ruleRe2 = /([^{};]+)\{([^{}]*)\}/g;
-  let mm;
-  while ((mm = ruleRe2.exec(withoutMedia)) !== null) {
-    bareText += " " + withoutMedia.slice(lastIdx, mm.index);
-    lastIdx = ruleRe2.lastIndex;
-  }
-  bareText += " " + withoutMedia.slice(lastIdx);
-  const bareTokens = parseTokens(bareText);
-  const ruleTokens = parseTokens(baseCss);
-  const seen = new Map();
-  for (const t of bareTokens) seen.set(t.name, t.value);
-  for (const t of ruleTokens) seen.set(t.name, t.value);
-  const base = [...seen].map(([name, value]) => ({ name, value }));
+  baseCss += "\n" + withoutMedia.slice(lastIdx) + ";";
+  const base = parseTokens(baseCss);
   const baseMap = new Map(base.map((t) => [t.name, t.value]));
   const dark = parseTokens(darkCss).filter((t) => baseMap.get(t.name) !== t.value);
   return { base, dark };

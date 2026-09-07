@@ -1,5 +1,6 @@
 // Shared bits used across component demos and screens.
 import { forwardRef } from "react";
+import { tokensForDemo } from "./tokenUsage.js";
 
 export function Icon({ name, size = 16, ...rest }) {
   const p = {
@@ -54,10 +55,19 @@ export function Field({ label, hint, error, id, children }) {
 }
 
 export function Demo({ title, children }) {
+  const tokens = tokensForDemo(title);
   return (
     <div className="dsv-block">
       <h3>{title}</h3>
       <div className="dsv-row">{children}</div>
+      {tokens.length > 0 && (
+        <details className="dsv-demo-tokens">
+          <summary>{tokens.length} token{tokens.length === 1 ? "" : "s"}</summary>
+          <div className="dsv-demo-tokens-list">
+            {tokens.map((t) => <code key={t} className="dsv-code-inline">{t}</code>)}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

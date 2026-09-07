@@ -309,6 +309,7 @@ function AnalyticsScreen() {
           <dt>Bounce rate</dt><dd>38%</dd>
         </dl>
       </div>
+      <div className="dsv-table-wrap">
       <table className="dsv-table dsv-table--zebra">
         <thead><tr><th>Page</th><th>Views</th><th>Change</th></tr></thead>
         <tbody>
@@ -317,6 +318,7 @@ function AnalyticsScreen() {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
@@ -333,7 +335,7 @@ function TableScreen() {
   return (
     <div className="dsv-card" style={{ padding: 0, overflow: "hidden" }}>
       <div className="dsv-toolbar" style={{ border: "none", borderBottom: "var(--border-width-thin) solid var(--color-divider)", borderRadius: 0, padding: "var(--space-3)" }}>
-        <div className="dsv-select-trigger" style={{ cursor: "text", minWidth: 220 }}>
+        <div className="dsv-select-trigger" style={{ cursor: "text", minWidth: "min(220px, 100%)" }}>
           <span className="dsv-inline dsv-muted"><Icon name="search" size={14} /> Search invoices…</span>
         </div>
         <div style={{ flex: 1 }} />
@@ -356,6 +358,7 @@ function TableScreen() {
           </Dialog.Portal>
         </Dialog.Root>
       </div>
+      <div className="dsv-table-wrap">
       <table className="dsv-table">
         <thead><tr>{["Invoice", "Customer", "Status", "Amount", ""].map((h) => <th key={h}>{h}</th>)}</tr></thead>
         <tbody>
@@ -381,6 +384,7 @@ function TableScreen() {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
@@ -540,7 +544,7 @@ function CommandPaletteScreen() {
           <input className="dsv-input" placeholder="Search commands or pages…" style={{ border: "none", padding: 0, height: "auto", background: "transparent", flex: 1 }} autoFocus={false} />
           <kbd className="dsv-kbd">Esc</kbd>
         </div>
-        <div style={{ padding: "var(--space-1-5, 6px)" }}>
+        <div style={{ padding: "var(--space-1-5)" }}>
           {groups.map(([g, items], gi) => (
             <div key={g}>
               <div className="dsv-menu-label">{g}</div>

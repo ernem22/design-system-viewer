@@ -8,6 +8,7 @@ import * as Tabs from "@radix-ui/react-tabs";
 import * as Accordion from "@radix-ui/react-accordion";
 import * as Progress from "@radix-ui/react-progress";
 import { Button, Field, Icon } from "./ui.jsx";
+import { loadGoogleFonts } from "./useSystemTokens.js";
 
 // ── comparable component renderers (stateless-ish; local state is per column) ──
 const Buttons = () => (
@@ -183,7 +184,7 @@ async function fetchSystems() {
       if (res.ok) return res.json();
     } catch {}
   }
-  try { const ls = JSON.parse(localStorage.getItem("dsv.systems") || "[]"); if (ls.length) return ls; } catch {}
+  try { const raw = localStorage.getItem("dsv.systems"); if (raw !== null) return JSON.parse(raw); } catch {}
   try { const r = await fetch("../systems/index.json"); if (r.ok) return r.json(); } catch {}
   try { const r = await fetch("./systems/index.json"); if (r.ok) return r.json(); } catch {}
   return [];
@@ -305,7 +306,7 @@ export default function Compare() {
     try {
       parent.postMessage(
         { type: "dsv:compare-state", cmp: picked.join(","), v: view, c: componentId },
-        location.origin,
+        location.origin === "null" ? "*" : location.origin,
       );
     } catch {}
   }, [systems, picked, view, componentId]);
@@ -318,6 +319,11 @@ export default function Compare() {
     }
     return map;
   }, [systems]);
+
+  useEffect(() => {
+    const cols = (systems || []).filter((s) => picked.includes(s.slug));
+    loadGoogleFonts(cols.map((s) => s.css).join("\n"));
+  }, [systems, picked]);
 
   if (error) return <div className="dsv-main"><div className="dsv-err">Failed to load systems ({error}).</div></div>;
   if (!systems) return <div className="dsv-main"><p className="dsv-muted">Loading…</p></div>;

@@ -1,6 +1,31 @@
 import { useEffect, useRef, useState } from "react";
+import { fontFamiliesIn } from "./fonts.js";
 
 const STYLE_ID = "dsv-tokens";
+const FONT_LINK_ID = "dsv-google-fonts";
+
+// Systems name real webfonts but ship no @font-face — pull whatever families
+// the active system actually references from Google Fonts. Unknown/self-hosted
+// names are silently dropped by the API (no 400s), so this is safe to try for
+// every system, not just a hardcoded few.
+export function loadGoogleFonts(css) {
+  const families = fontFamiliesIn(css);
+
+  let link = document.getElementById(FONT_LINK_ID);
+  if (!families.length) { link?.remove(); return; }
+
+  const href = "https://fonts.googleapis.com/css2?" +
+    families.map((f) => `family=${encodeURIComponent(f).replace(/%20/g, "+")}:wght@400;500;600;700`).join("&") +
+    "&display=swap";
+  if (link?.href === href) return;
+  if (!link) {
+    link = document.createElement("link");
+    link.id = FONT_LINK_ID;
+    link.rel = "stylesheet";
+    document.head.appendChild(link);
+  }
+  link.href = href;
+}
 
 function injectCss(system) {
   let el = document.getElementById(STYLE_ID);
@@ -37,8 +62,9 @@ async function fetchSystem(slug) {
     } catch {}
   }
   try {
-    const ls = JSON.parse(localStorage.getItem("dsv.systems") || "[]");
-    if (ls.length) {
+    const raw = localStorage.getItem("dsv.systems");
+    if (raw !== null) {
+      const ls = JSON.parse(raw);
       if (!ls.length) throw new Error("no-systems");
       return ls.find((s) => s.slug === slug) || ls[0];
     }
@@ -69,8 +95,8 @@ async function fetchAllSystems() {
     } catch {}
   }
   try {
-    const ls = JSON.parse(localStorage.getItem("dsv.systems") || "[]");
-    if (ls.length) return ls;
+    const raw = localStorage.getItem("dsv.systems");
+    if (raw !== null) return JSON.parse(raw);
   } catch {}
   try {
     const r = await fetch("../systems/index.json");
@@ -104,6 +130,7 @@ export function useSystemTokens() {
         if (!alive) return;
         systemRef.current = system;
         injectCss(system);
+        loadGoogleFonts(system.css);
         document.title = `${system.name} — Preview`;
         setState({ system, error: null, loading: false });
       } catch (err) {
@@ -115,12 +142,14 @@ export function useSystemTokens() {
 
     apply(initial);
 
+    // file:// serializes its origin as the string "null"
+    const msgOrigin = location.origin === "null" ? "*" : location.origin;
     const onMessage = (e) => {
-      if (e.origin !== location.origin) return;
+      if (e.origin !== location.origin && e.origin !== "null") return;
       if (e.data && e.data.type === "dsv:system") apply(e.data.slug);
     };
     window.addEventListener("message", onMessage);
-    try { parent.postMessage({ type: "dsv:preview-ready" }, location.origin); } catch {}
+    try { parent.postMessage({ type: "dsv:preview-ready" }, msgOrigin); } catch {}
 
     return () => {
       alive = false;

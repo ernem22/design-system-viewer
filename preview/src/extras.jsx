@@ -16,7 +16,8 @@ export function DataDisplaySection() {
   return (
     <Section id="data-display" title="Data display" desc="Styled with tokens — not in Radix Primitives, built from theme variables.">
       <Demo title="Table (zebra + hover)">
-        <table className="dsv-table dsv-table--zebra" style={{ maxWidth: 460 }}>
+        <div className="dsv-table-wrap" style={{ maxWidth: 460, width: "100%" }}>
+        <table className="dsv-table dsv-table--zebra">
           <thead><tr><th>Package</th><th>Version</th><th>Size</th></tr></thead>
           <tbody>
             {[["react", "18.3.1", "6.4 kB"], ["@radix-ui/react-dialog", "1.1.4", "12 kB"], ["vite", "5.4.11", "—"]].map((r) => (
@@ -24,6 +25,7 @@ export function DataDisplaySection() {
             ))}
           </tbody>
         </table>
+        </div>
       </Demo>
 
       <Demo title="Data list">
@@ -36,7 +38,7 @@ export function DataDisplaySection() {
       </Demo>
 
       <Demo title="Stat cards">
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 160px)", gap: "var(--space-3)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "var(--space-3)" }}>
           <div className="dsv-stat"><div className="k">MRR</div><div className="v">$124k</div><div className="d up">▲ 8.2%</div></div>
           <div className="dsv-stat"><div className="k">Churn</div><div className="v">1.9%</div><div className="d down">▼ 0.4%</div></div>
           <div className="dsv-stat"><div className="k">NPS</div><div className="v">62</div><div className="d up">▲ 5</div></div>
@@ -50,6 +52,13 @@ export function DataDisplaySection() {
             Inline: <code className="dsv-code-inline">--color-accent</code> token.
           </p>
         </div>
+      </Demo>
+
+      <Demo title="Quote">
+        <blockquote className="dsv-quote" style={{ maxWidth: 460 }}>
+          “Good typography is invisible — until the wrong font makes it visible.”
+          <cite>— design systems, everywhere</cite>
+        </blockquote>
       </Demo>
 
       <Demo title="Tag / Chip (removable)">

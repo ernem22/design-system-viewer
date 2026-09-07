@@ -47,7 +47,9 @@ const readBody = (req) =>
 
 async function listSystems() {
   if (!existsSync(SYSTEMS_DIR)) return [];
-  const files = (await readdir(SYSTEMS_DIR)).filter((f) => f.endsWith(".json"));
+  // index.json is the generated static bundle of every system, not a system —
+  // parsing it as one yields a bogus "untitled" entry in the picker.
+  const files = (await readdir(SYSTEMS_DIR)).filter((f) => f.endsWith(".json") && f !== "index.json");
   const systems = await Promise.all(
     files.map(async (f) => upgrade(JSON.parse(await readFile(join(SYSTEMS_DIR, f), "utf8")))),
   );

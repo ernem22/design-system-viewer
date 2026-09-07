@@ -519,6 +519,12 @@ export function FeedbackSection() {
         <span className="dsv-badge dsv-badge--danger">Failed</span>
         <span className="dsv-badge dsv-badge--info">Beta</span>
       </Demo>
+      <Demo title="Badge (solid)">
+        <span className="dsv-badge dsv-badge--success-solid">Active</span>
+        <span className="dsv-badge dsv-badge--warning-solid">Pending</span>
+        <span className="dsv-badge dsv-badge--danger-solid">Failed</span>
+        <span className="dsv-badge dsv-badge--info-solid">Beta</span>
+      </Demo>
       <Demo title="Kbd">
         <span>Save: <kbd className="dsv-kbd">⌘</kbd> <kbd className="dsv-kbd">S</kbd></span>
       </Demo>

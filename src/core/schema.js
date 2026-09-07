@@ -49,7 +49,7 @@ export const REFERENCE = [
     "--letter-spacing-tight", "--letter-spacing-normal", "--letter-spacing-wide",
   ) },
   { id: "spacing", label: "Spacing", tokens: t(
-    "--space-0", "--space-px", "--space-0-5", "--space-1", "--space-2", "--space-3", "--space-4",
+    "--space-0", "--space-px", "--space-0-5", "--space-1", "--space-1-5", "--space-2", "--space-2-5", "--space-3", "--space-4",
     "--space-5", "--space-6", "--space-8", "--space-10", "--space-12", "--space-16", "--space-20", "--space-24",
   ) },
   { id: "radius", label: "Border Radius", tokens: t(
