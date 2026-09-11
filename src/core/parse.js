@@ -101,7 +101,7 @@ export function parseThemes(css) {
 }
 
 const COLORY = /(^|-)(color|bg|background|fill|stroke|accent|brand|primary|surface|text|scrim|tint|shade|ink|ring)(-|$)/;
-const LENGTHY = /(^|-)(space|spacing|gap|radius|rounded|inset|gutter|blur|offset)(-|$)|(-)(width|height|size|radius|gap)$/;
+const LENGTHY = /(^|-)(space|spacing|gap|radius|rounded|inset|gutter|blur|offset)(-|$)|(-)(width|height|size|radius|gap)(-|$)/;
 const BARE_NUMBER = /^-?(\d+\.?\d*|\.\d+)$/;
 const HEX = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 const COLOR_FN = /^(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix|gradient|linear-gradient|radial-gradient|conic-gradient)\(/i;
@@ -127,12 +127,19 @@ export function lintTokens(tokens) {
 
     if (v.startsWith("#") && !HEX.test(v)) { out.push({ name, value, msg: "invalid hex code" }); continue; }
 
-    if (LENGTHY.test(bare) && BARE_NUMBER.test(v) && v !== "0") {
+    // unitless line-height is valid CSS (a multiplier, not a length) — and a
+    // trailing !important never makes an otherwise fine value wrong
+    const vClean = v.replace(/\s*!important\s*$/i, "");
+    if (LENGTHY.test(bare) && !/line-height/.test(bare) && BARE_NUMBER.test(vClean) && vClean !== "0") {
       out.push({ name, value, msg: "unitless length (missing px/rem?)" });
       continue;
     }
-    if (COLORY.test(bare) && !/shadow|gradient/.test(bare)) {
-      const ok = HEX.test(v) || COLOR_FN.test(v) || NAMED.test(v) || v === "none";
+    // A name that reads as a measurement (LENGTHY: *-radius, *-width, *-gap…)
+    // is never a color, even when it also contains a color-ish word like
+    // "ring" (--focus-ring-radius) or "stroke" (--icon-stroke-width). The old
+    // literal denylist missed members of the same family every time.
+    if (COLORY.test(bare) && !LENGTHY.test(bare) && !/shadow|gradient|measure|motion|glow/.test(bare)) {
+      const ok = HEX.test(vClean) || COLOR_FN.test(vClean) || NAMED.test(vClean) || vClean === "none";
       if (!ok) out.push({ name, value, msg: "unrecognized color value" });
     }
   }

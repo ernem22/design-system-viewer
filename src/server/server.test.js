@@ -1,6 +1,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import http from "node:http";
 import { mkdtemp, cp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -92,4 +93,32 @@ test("missing /preview file with an extension is 404; extensionless client route
   const route = await fetch(`${base}/preview/settings/profile`);
   assert.equal(route.status, 200);
   assert.match(await route.text(), /<title>preview<\/title>/);
+});
+
+// Regression: importing CSS from an arbitrary URL client-side dies on CORS
+// ("Fetch failed: Failed to fetch") for any host without ACAO headers. The
+// dialog must route through /api/fetch-css, which has no same-origin limit.
+test("/api/fetch-css proxies CSS from a host that sends no CORS headers", async () => {
+  // stand up a plain CSS file server — deliberately with NO Access-Control-Allow-Origin
+  let cssHits = 0;
+  const cssServer = http.createServer((req, res) => {
+    cssHits++;
+    res.writeHead(200, { "content-type": "text/css" });
+    res.end("/* tokens */\n--color-bg: #ffffff;\n--color-text: #111111;\n");
+  });
+  await new Promise((r) => cssServer.listen(0, "127.0.0.1", r));
+  const cssPort = cssServer.address().port;
+
+  try {
+    const res = await fetch(`${base}/api/fetch-css?url=${encodeURIComponent(`http://127.0.0.1:${cssPort}/tokens.css`)}`);
+    assert.equal(res.status, 200);
+    assert.match(await res.text(), /--color-bg: #ffffff/);
+    assert.equal(cssHits, 1, "proxy should hit the URL exactly once");
+  } finally {
+    await new Promise((r) => cssServer.close(r));
+  }
+
+  // bad protocol must be rejected, not fetched
+  const bad = await fetch(`${base}/api/fetch-css?url=${encodeURIComponent("file:///C:/Windows/win.ini")}`);
+  assert.equal(bad.status, 400);
 });

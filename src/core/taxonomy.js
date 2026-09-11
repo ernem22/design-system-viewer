@@ -8,7 +8,63 @@ const starts = (...prefixes) => (name) => prefixes.some((p) => name.startsWith(p
 
 /** @type {Category[]} */
 export const CATEGORIES = [
+  // — Component tokens first: their prefixes (input-, avatar-, overlay-, …)
+  // overlap generic color/size rules below and must win.
+  { id: "component-button", label: "Component / Button", kind: "raw", test: starts("button-") },
+  { id: "component-card", label: "Component / Card", kind: "raw", test: starts("card-") },
+  { id: "component-nav", label: "Component / Navigation", kind: "raw", test: starts("nav-") },
+  { id: "component-badge", label: "Component / Badge", kind: "raw", test: starts("badge-") },
+  { id: "component-modal", label: "Component / Modal", kind: "raw", test: starts("modal-") },
+  { id: "component-tooltip", label: "Component / Tooltip", kind: "raw", test: starts("tooltip-") },
+  { id: "component-input", label: "Component / Input", kind: "raw", test: starts("input-") },
+  { id: "component-avatar", label: "Component / Avatar", kind: "raw", test: starts("avatar-") },
+  { id: "component-divider", label: "Component / Divider", kind: "raw", test: starts("divider-") },
+  { id: "component-overlay", label: "Component / Overlay", kind: "raw", test: starts("overlay-") },
+
+  // — Accessibility owns focus-ring-* geometry (not the focus-ring color).
+  {
+    id: "accessibility",
+    label: "Accessibility",
+    kind: "raw",
+    test: (n) => has("focus-ring-width", "focus-ring-offset", "focus-ring-radius", "touch-target")(n),
+  },
+  // — Brand primitive scale owns numbered brand tokens (not accent semantics).
+  {
+    id: "color-brand",
+    label: "Brand Scale (primitive)",
+    kind: "color",
+    test: (n) => n.includes("brand") && /-\d+$/.test(n),
+  },
+  // — Display sizes own font-size-display-* (not the base font-size group).
+  {
+    id: "font-display",
+    label: "Display Size",
+    kind: "type",
+    test: (n) => n.includes("font-size-display") || n.includes("display-size"),
+  },
+  // — Gradient owns gradient-* (names contain "brand", which accent would steal).
+  { id: "gradient", label: "Gradient", kind: "raw", test: starts("gradient-") },
+  // — Text measure owns text-measure-* ("text" would otherwise pull it into Text).
+  { id: "text-measure", label: "Text Measure", kind: "length", test: starts("text-measure", "measure-") },
+  // — Motion specifics own motion-distance/scale/blur-* ("blur" would steal motion-blur).
+  { id: "motion-distance", label: "Motion Distance", kind: "motion", test: starts("motion-distance") },
+  { id: "motion-scale", label: "Motion Scale", kind: "motion", test: starts("motion-scale") },
+  { id: "motion-blur", label: "Motion Blur", kind: "motion", test: starts("motion-blur") },
   // — Color: semantic roles first (more specific), then raw ramps.
+  // Disabled / input / chart matches come first so those tokens don't get
+  // swallowed by the generic surface/border/misc rules below.
+  {
+    id: "color-disabled",
+    label: "Disabled / Inert",
+    kind: "color",
+    test: (n) => n.includes("-disabled") && n.includes("color"),
+  },
+  {
+    id: "color-input",
+    label: "Form / Input",
+    kind: "color",
+    test: has("input"),
+  },
   {
     id: "color-surface",
     label: "Surface / Elevation",
@@ -25,7 +81,7 @@ export const CATEGORIES = [
     id: "color-interaction",
     label: "Interaction",
     kind: "color",
-    test: has("focus-ring", "hover-overlay", "active-overlay", "-selected"),
+    test: (n) => !n.startsWith("opacity-") && has("focus-ring", "hover-overlay", "active-overlay", "pressed-overlay", "-selected")(n),
   },
   {
     id: "color-border",
@@ -56,6 +112,18 @@ export const CATEGORIES = [
     test: (n) => has("scrim")(n) || /^color-(shadow|tint)/.test(n),
   },
   {
+    id: "color-chart",
+    label: "Data Visualization",
+    kind: "color",
+    test: has("chart"),
+  },
+  {
+    id: "color-neutral",
+    label: "Neutral Scale",
+    kind: "color",
+    test: has("neutral"),
+  },
+  {
     id: "color-ramp",
     label: "Color Ramps (primitive)",
     kind: "color",
@@ -78,6 +146,21 @@ export const CATEGORIES = [
   { id: "letter-spacing", label: "Letter Spacing", kind: "raw", test: has("letter-spacing", "tracking", "-ls") },
 
   // — Length scales
+  {
+    id: "layout",
+    label: "Layout / Grid",
+    kind: "raw",
+    test: has("grid-columns", "grid-gutter", "grid-margin", "container-max-width", "container-padding"),
+  },
+  { id: "section-spacing", label: "Section Spacing", kind: "length", test: starts("section-space", "section-spacing") },
+  // Composition / media / control-geometry / iconography / responsive all use
+  // generic length fragments (-width, -radius, icon-, control-, -gap) claimed
+  // by the rules below, so they must match first.
+  { id: "composition", label: "Composition", kind: "raw", test: starts("composition-") },
+  { id: "media", label: "Media", kind: "raw", test: starts("media-") },
+  { id: "control-geometry", label: "Control Geometry", kind: "length", test: starts("control-") },
+  { id: "iconography", label: "Iconography", kind: "raw", test: starts("icon-") },
+  { id: "responsive", label: "Responsive Layout", kind: "raw", test: starts("mobile-", "desktop-") },
   { id: "spacing", label: "Spacing", kind: "length", test: (n) => starts("space", "spacing", "gap", "size-space")(n) || /(^|-)(sp|space)-\d/.test(n) || has("-inset", "-gutter")(n) },
   { id: "radius", label: "Border Radius", kind: "length", test: has("radius", "rounded", "-corner", "-br") },
   { id: "border-width", label: "Border Width", kind: "length", test: has("border-width", "stroke-width", "-bw") },
@@ -85,11 +168,13 @@ export const CATEGORIES = [
 
   // — Effects
   { id: "shadow", label: "Shadow / Elevation", kind: "shadow", test: has("shadow", "elevation", "-depth") },
+  { id: "glow", label: "Glow / Light Effects", kind: "shadow", test: starts("glow-") },
   { id: "blur", label: "Blur", kind: "length", test: has("blur", "backdrop") },
   { id: "opacity", label: "Opacity / Alpha", kind: "number", test: has("opacity", "alpha", "-tint-") },
 
   // — Motion
   { id: "duration", label: "Duration", kind: "motion", test: has("duration", "-speed", "transition-time") },
+  { id: "motion", label: "Semantic Motion", kind: "motion", test: starts("motion-") },
   { id: "easing", label: "Easing", kind: "raw", test: has("ease", "easing", "-bezier", "timing-function") },
 
   // — Layout misc

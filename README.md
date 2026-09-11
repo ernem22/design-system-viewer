@@ -22,7 +22,7 @@ in that browser's localStorage.
 ## Tabs
 
 - **Tokens** — swatches, type specimens, spacing bars, shadow/radius cards.
-  Coverage against a 141-token reference (`schema.js`), value warnings,
+  Coverage against a 432-token reference (`schema.js`), value warnings,
   contrast (WCAG), copy/edit/export.
 - **Preview** — ~35 Radix primitives, extras Radix doesn't ship, and 15
   composite screens, all rendered with the active system's tokens live.

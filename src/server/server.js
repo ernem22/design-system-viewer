@@ -92,6 +92,30 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
 
+    // Proxy for the "Import from URL" dialog: fetching arbitrary URLs
+    // client-side fails on CORS for any host without ACAO headers.
+    if (path === "/api/fetch-css" && req.method === "GET") {
+      const target = url.searchParams.get("url");
+      let parsed;
+      try { parsed = new URL(target); } catch { return json(res, 400, { error: "invalid url" }); }
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
+        return json(res, 400, { error: "only http/https urls are supported" });
+      try {
+        const r = await fetch(parsed, {
+          redirect: "follow",
+          headers: { "user-agent": "design-system-viewer", accept: "text/css,text/plain,*/*" },
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (!r.ok) return json(res, 502, { error: `upstream ${r.status} ${r.statusText}` });
+        const text = await r.text();
+        if (text.length > 2_000_000) return json(res, 502, { error: "stylesheet too large (max 2 MB)" });
+        res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
+        return res.end(text);
+      } catch (err) {
+        return json(res, 502, { error: String(err && err.message) || "fetch failed" });
+      }
+    }
+
     if (req.method !== "GET") return json(res, 405, { error: "method" });
 
     // favicon — no file, return 204 to avoid 404 noise

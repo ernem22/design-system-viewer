@@ -104,9 +104,11 @@ function activateTab(next) {
   tab = next;
   localStorage.setItem("dsv.tab", tab);
   const inFrame = tab === "preview" || tab === "compare";
-  $("tabSystem").classList.toggle("active", tab === "system");
-  $("tabPreview").classList.toggle("active", tab === "preview");
-  $("tabCompare").classList.toggle("active", tab === "compare");
+  for (const [id, name] of [["tabSystem", "system"], ["tabPreview", "preview"], ["tabCompare", "compare"]]) {
+    const on = tab === name;
+    $(id).classList.toggle("active", on);
+    $(id).setAttribute("aria-selected", String(on));
+  }
   main.hidden = inFrame;
   $("previewFrame").hidden = !inFrame;
   if (inFrame) syncPreview();
@@ -146,34 +148,38 @@ window.addEventListener("message", (e) => {
 });
 
 const isStaticHost = () => location.hostname.includes("github.io") || location.protocol === "file:";
+
+// Persist a create/merge to localStorage — used on static hosts (Pages, file://)
+// and as the fallback when no /api backend answers.
+async function writeStatic(body) {
+  const { buildSystem: bs, mergeSystem: ms } = await import("../core/parse.js");
+  let list = loadFromLS();
+  if (!list) {
+    list = [];
+    try { const r = await fetch("./systems/index.json"); if (r.ok) list = await r.json(); } catch {}
+  }
+  let system;
+  if (body.mode === "merge") {
+    const existing = list.find(s => s.slug === body.slug) || systems.find(s => s.slug === body.slug);
+    if (!existing) throw new Error("system to merge not found");
+    system = ms(existing, body.css);
+    list = list.map(s => s.slug === system.slug ? system : s);
+  } else {
+    system = bs({ name: body.name, css: body.css });
+    if (list.some(s => s.slug === system.slug)) throw new Error(`"${system.slug}" already exists — use Add Tokens to merge`);
+    list.push(system);
+  }
+  saveToLS(list);
+  systems = list;
+  active = system.slug;
+  render();
+  syncPreview();
+  syncUrl();
+}
+
 async function postSystem(body) {
   // On Pages, don't even try the API — go straight to localStorage to avoid 405 console noise
-  if (isStaticHost()) {
-    const { buildSystem: bs, mergeSystem: ms } = await import("../core/parse.js");
-    let list = loadFromLS();
-    if (!list) {
-      list = [];
-      try { const r = await fetch("./systems/index.json"); if (r.ok) list = await r.json(); } catch {}
-    }
-    let system;
-    if (body.mode === "merge") {
-      const existing = list.find(s => s.slug === body.slug) || systems.find(s => s.slug === body.slug);
-      if (!existing) throw new Error("system to merge not found");
-      system = ms(existing, body.css);
-      list = list.map(s => s.slug === system.slug ? system : s);
-    } else {
-      system = bs({ name: body.name, css: body.css });
-      if (list.some(s => s.slug === system.slug)) throw new Error(`"${system.slug}" already exists — use Add Tokens to merge`);
-      list.push(system);
-    }
-    saveToLS(list);
-    systems = list;
-    active = system.slug;
-    render();
-    syncPreview();
-    syncUrl();
-    return;
-  }
+  if (isStaticHost()) return writeStatic(body);
   try {
     const res = await fetch("/api/systems", {
       method: "POST",
@@ -187,60 +193,25 @@ async function postSystem(body) {
     const data = await res.json();
     active = data.slug;
     await load();
-    return;
   } catch (e) {
     const msg = String(e.message || e);
     const isStatic = msg.includes("Failed to fetch") || msg.includes("404") || msg.includes("405") || msg.includes("HTTP 4");
-    if (isStatic) {
-      const { buildSystem: bs, mergeSystem: ms } = await import("../core/parse.js");
-      let list = loadFromLS();
-      // seed from the shipped systems the first time only
-      if (!list) {
-        list = [];
-        try {
-          const r = await fetch("./systems/index.json");
-          if (r.ok) list = await r.json();
-        } catch {}
-      }
-      let system;
-      if (body.mode === "merge") {
-        const existing = list.find(s => s.slug === body.slug) || systems.find(s => s.slug === body.slug);
-        if (!existing) throw new Error("system to merge not found");
-        system = ms(existing, body.css);
-        list = list.map(s => s.slug === system.slug ? system : s);
-      } else {
-        system = bs({ name: body.name, css: body.css });
-        if (list.some(s => s.slug === system.slug)) throw new Error(`"${system.slug}" already exists — use Add Tokens to merge`);
-        list.push(system);
-      }
-      saveToLS(list);
-      systems = list;
-      active = system.slug;
-      render();
-      syncPreview();
-      syncUrl();
-      return;
-    }
+    if (isStatic) return writeStatic(body);
     throw e;
   }
 }
 
 async function remove(slug) {
-  if (isStaticHost()) {
-    let list = (loadFromLS() ?? systems).filter(s => s.slug !== slug);
-    saveToLS(list);
-    systems = list;
-    active = null;
-    await load();
-    showToast("System deleted", "ok");
-    return;
-  }
-  try {
-    await fetch(`/api/systems/${encodeURIComponent(slug)}`, { method: "DELETE" });
-  } catch {
+  const dropLocal = () => {
     const list = (loadFromLS() ?? systems).filter(s => s.slug !== slug);
     saveToLS(list);
     systems = list;
+  };
+  if (isStaticHost()) {
+    dropLocal();
+  } else {
+    try { await fetch(`/api/systems/${encodeURIComponent(slug)}`, { method: "DELETE" }); }
+    catch { dropLocal(); }
   }
   active = null;
   await load();
@@ -287,16 +258,16 @@ function render() {
     return;
   }
 
-  const cov = sys.coverage ?? coverage(parseTokens(sys.css).map((t) => t.name));
+  // Coverage is always computed live: stored snapshots go stale when the schema
+  // grows (139 → 432 tokens) and then report 0 missing, which silently breaks
+  // "Show missing", the header counts and every per-group missing row.
+  const cov = coverage(parseTokens(sys.css).map((t) => t.name));
   const pct = Math.round((cov.present / cov.expected) * 100);
-
-  const d = (iso) => new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-  const updated = sys.updatedAt && sys.updatedAt !== sys.createdAt ? ` · updated ${d(sys.updatedAt)}` : "";
+  const tone = pct >= 80 ? "ok" : pct >= 50 ? "warn" : "bad";
 
   const warns = sys.warnings ?? lintTokens(parseTokens(sys.css));
 
   main.innerHTML = `
-    <div class="sys-meta"><code>${esc(sys.slug)}</code> · ${sys.tokenCount ?? "?"} tokens · added ${d(sys.createdAt)}${updated} · <span class="dim">double-click value → edit</span></div>
     ${
       warns.length
         ? `<details class="warn-row"><summary>⚠ ${warns.length} possible value issues</summary>${warns
@@ -305,37 +276,61 @@ function render() {
         : ""
     }
     <div class="toolbar">
-      <span class="cov">
-        <span class="bar-track"><span class="bar-fill" style="width:${pct}%"></span></span>
-        <b>${cov.present}/${cov.expected}</b> schema tokens (${pct}%) ·
-        <b>${cov.missing}</b> missing · <b>${cov.extraCount}</b> extra
-        ${cov.extraCount ? `<span class="dim" title="Preview only reads the ${cov.expected} schema names shown in the Schema view — a differently-named token renders here but not there.">(extra ≠ rendered in Preview)</span>` : ""}
+      <span class="cov tb-cov">
+        <span class="cov-ring ${tone}" role="img" aria-label="${pct}% of schema tokens present">
+          <svg viewBox="0 0 36 36" aria-hidden="true"><circle class="rr-track" cx="18" cy="18" r="15.5" pathLength="100" /><circle class="rr-val" cx="18" cy="18" r="15.5" pathLength="100" stroke-dasharray="${pct} 100" transform="rotate(-90 18 18)" /></svg>
+          <b>${pct}<i>%</i></b>
+        </span>
+        <span class="cov-text">
+          <b>${cov.present}/${cov.expected}</b> tokens · <b class="${cov.missing ? "miss" : "zero"}">${cov.missing}</b> missing · <b class="${cov.extraCount ? "extra" : "zero"}">${cov.extraCount}</b> extra
+          ${cov.extraCount ? `<span class="dim" title="Preview only reads the ${cov.expected} schema names shown in the Schema view — a differently-named token renders here but not there.">(≠ Preview)</span>` : ""}
+        </span>
       </span>
-      <input type="search" id="tokenFilter" class="tok-filter" placeholder="Filter tokens…" value="${esc(filter)}" autocomplete="off" />
-      ${
-        schemaMode
-          ? ""
-          : `<label class="inline"><input type="checkbox" id="toggleMissing" ${showMissing ? "checked" : ""}/> Show missing</label>`
-      }
-      <span class="tb-spacer"></span>
-      <button id="toolbarAddTokens" class="tiny" title="Add tokens to this system (PATCH)">Add tokens</button>
-      <button id="toolbarSchema" class="tiny" title="Toggle schema view">${schemaMode ? "Gallery" : "Schema"}</button>
-      <button id="expCss" class="tiny" title="Download active system as clean :root CSS">CSS</button>
-      <button id="expJson" class="tiny" title="Download active system as JSON">JSON</button>
-      <button id="toolbarDelete" class="tiny danger" title="Delete this system" style="color: var(--ui-danger); border-color: color-mix(in srgb, var(--ui-danger) 30%, transparent);">Delete</button>
+      <div class="tb-search">
+        <span class="tb-filter-wrap">
+          <svg class="tb-search-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="search" id="tokenFilter" class="tok-filter" placeholder="Filter tokens…" value="${esc(filter)}" autocomplete="off" aria-label="Filter tokens" />
+          <button id="filterClear" class="filter-clear" aria-label="Clear filter" title="Clear filter (Esc)" ${filter ? "" : "hidden"}>×</button>
+        </span>
+        ${
+          schemaMode
+            ? ""
+            : `<label class="inline"><input type="checkbox" id="toggleMissing" ${showMissing ? "checked" : ""}/> Show missing</label>`
+        }
+      </div>
+      <div class="tb-actions" role="toolbar" aria-label="System actions">
+        <button id="toolbarAddTokens" class="tiny primary" title="Add tokens to this system (PATCH)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add tokens</button>
+        <span class="tb-sep" aria-hidden="true"></span>
+        <button id="toolbarSchema" class="tiny" title="Toggle schema view"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>${schemaMode ? "Gallery" : "Schema"}</button>
+        <div class="tb-export">
+          <button id="expBtn" class="tiny" title="Download active system" aria-haspopup="menu" aria-expanded="false"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export<svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
+          <div id="expMenu" class="tb-menu" role="menu" hidden>
+            <button id="expCss" role="menuitem"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>CSS<code>:root stylesheet</code></button>
+            <button id="expJson" role="menuitem"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>JSON<code>full system</code></button>
+          </div>
+        </div>
+        <span class="tb-sep" aria-hidden="true"></span>
+        <button id="toolbarDelete" class="tiny danger icon-only" title="Delete this system" aria-label="Delete ${esc(sys.name)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+      </div>
     </div>
     <div id="body"></div>`;
 
   if (!schemaMode) {
     $("toggleMissing").addEventListener("change", (e) => {
       showMissing = e.target.checked;
-      render();
+      paint();
     });
   }
   const paint = () => {
     const view = schemaMode ? schemaView(sys, cov) : gallery(sys, cov);
     $("body").replaceChildren(view);
     if (!schemaMode && !filter) appendContrast(sys, view);
+    updateFilterMeta();
+  };
+  // clear-button visibility for the filter — updated on every paint
+  const updateFilterMeta = () => {
+    const fc = $("filterClear");
+    if (fc) fc.hidden = !filter;
   };
   const fi = $("tokenFilter");
   fi.addEventListener("input", (e) => {
@@ -343,8 +338,25 @@ function render() {
     paint();
   });
   fi.addEventListener("keydown", (e) => { if (e.key === "Escape") { fi.value = ""; fi.dispatchEvent(new Event("input")); } });
-  $("expCss")?.addEventListener("click", () => download(`${sys.slug}.css`, systemToCss(sys), "text/css"));
-  $("expJson")?.addEventListener("click", () => download(`${sys.slug}.json`, JSON.stringify(sys, null, 2), "application/json"));
+  $("filterClear")?.addEventListener("click", () => { fi.value = ""; fi.dispatchEvent(new Event("input")); fi.focus(); });
+  $("expCss")?.addEventListener("click", () => { closeExpMenu(); download(`${sys.slug}.css`, systemToCss(sys), "text/css"); });
+  $("expJson")?.addEventListener("click", () => { closeExpMenu(); download(`${sys.slug}.json`, JSON.stringify(sys, null, 2), "application/json"); });
+  // Export dropdown — fixed-positioned (via placeExpMenu) so it is never
+  // clipped by the scrollable actions row on narrow screens.
+  const expBtn = $("expBtn"), expMenu = $("expMenu");
+  const placeExpMenu = () => {
+    const r = expBtn.getBoundingClientRect();
+    expMenu.hidden = false;
+    const h = expMenu.offsetHeight;
+    expMenu.style.top = `${Math.max(8, Math.min(r.bottom + 6, window.innerHeight - h - 8))}px`;
+    expMenu.style.left = "auto";
+    expMenu.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
+  };
+  expBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (expMenu.hidden) { placeExpMenu(); expBtn.setAttribute("aria-expanded", "true"); }
+    else closeExpMenu();
+  });
   $("toolbarAddTokens")?.addEventListener("click", () => openDialog("merge"));
   $("toolbarSchema")?.addEventListener("click", () => { schemaMode = !schemaMode; render(); });
   $("toolbarDelete")?.addEventListener("click", () => { if (confirm(`Delete "${sys.name}"? This cannot be undone.`)) remove(sys.slug); });
@@ -397,13 +409,14 @@ function renderGroup(g, missing = []) {
   el.className = "group";
   el.innerHTML = `<h2>${esc(g.label)}<span>${g.tokens.length}</span></h2>`;
 
-  if (g.kind === "color") el.appendChild(colorGrid(g.tokens));
-  else if (g.id === "font-size") el.appendChild(rows(g.tokens, typeRow));
+  if (g.kind === "color" || g.id === "gradient") el.appendChild(colorGrid(g.tokens));
+  else if (g.id === "font-size" || g.id === "font-display") el.appendChild(rows(g.tokens, typeRow));
   else if (g.id === "font-family") el.appendChild(rows(g.tokens, fontFamilyRow));
   else if (g.id === "font-weight") el.appendChild(rows(g.tokens, fontWeightRow));
   else if (g.id === "line-height") el.appendChild(rows(g.tokens, lineHeightRow));
   else if (g.id === "letter-spacing") el.appendChild(rows(g.tokens, letterSpacingRow));
-  else if (g.id === "spacing" || g.id === "size" || g.id === "blur" || g.id === "border-width")
+  else if (g.id === "spacing" || g.id === "size" || g.id === "blur" || g.id === "border-width" ||
+    g.id === "text-measure" || g.id === "section-spacing" || g.id === "control-geometry" || g.id === "motion-distance")
     el.appendChild(rows(g.tokens, barRow));
   else if (g.id === "radius") el.appendChild(rows(g.tokens, radiusRow));
   else if (g.kind === "shadow") el.appendChild(rows(g.tokens, shadowRow));
@@ -428,12 +441,6 @@ function schemaView(sys, cov) {
   const have = valueMap(sys);
   const wrap = document.createElement("div");
   wrap.className = "schema-view";
-  // header with system name + coverage bar
-  const pct = Math.round((cov.present / cov.expected) * 100);
-  const hdr = document.createElement("div");
-  hdr.style.cssText = "display:flex; align-items:center; gap:12px; margin:0 0 20px; padding:12px 16px; background:var(--ui-bg-2); border:1px solid var(--ui-line); border-radius: var(--r);";
-  hdr.innerHTML = `<span style="font-size:13px; font-weight:600;">${esc(sys.name)}</span><span style="font-size:12px; color:var(--ui-dim);">${esc(sys.slug)}</span><span style="margin-left:auto; font-size:12px; color:var(--ui-dim); display:flex; align-items:center; gap:8px;"><span class="bar-track" style="width:120px;"><span class="bar-fill" style="width:${pct}%"></span></span><b style="color:var(--ui-text);">${cov.present}/${cov.expected}</b> (${pct}%)</span>`;
-  wrap.appendChild(hdr);
 
   let shown = 0;
   for (const g of cov.groups) {
@@ -449,9 +456,10 @@ function schemaView(sys, cov) {
       .map((name) => {
         const hit = have.has(name);
         const val = have.get(name) ?? "";
-        return `<tr data-token="${esc(name)}" data-value="${esc(val)}" title="${hit ? "copy" : "missing"}"><td class="${hit ? "yes" : "no"}">${hit ? "✓" : "✗"} ${esc(name)}</td><td>${esc(val)}${hit ? "" : '<span style="color:var(--ui-dim); font-size:11px; margin-left:6px;">— missing</span>'}</td></tr>`;
+        return `<tr data-token="${esc(name)}" data-value="${esc(val)}" title="${hit ? "click to copy — double-click or Update to edit" : "missing — Add to create it"}"><td class="${hit ? "yes" : "no"}">${hit ? "✓" : "✗"} ${esc(name)}</td><td>${esc(val)}${hit ? "" : '<span style="color:var(--ui-dim); font-size:11px; margin-left:6px;">— missing</span>'}</td><td style="text-align:right; white-space:nowrap;"><button class="tiny" data-update="${esc(name)}" title="${hit ? "Update token value" : "Add this missing token"}">${hit ? "Update" : "Add"}</button></td></tr>`;
       })
       .join("");
+    wireUpdate(table);
     sec.appendChild(scrollWrap(table));
     wrap.appendChild(sec);
   }
@@ -470,6 +478,23 @@ function schemaView(sys, cov) {
 }
 
 // — shared cell builders
+// A value containing var(--…) delegates to another token — badge it so raw
+// values and references are visually distinguishable in the gallery.
+const isRef = (v) => String(v ?? "").includes("var(--");
+const refBadge = (v) =>
+  isRef(v)
+    ? ' <span style="color:var(--ui-accent);font-size:10.5px;font-weight:700;white-space:nowrap;" title="references another token">→ref</span>'
+    : "";
+// Wire every [data-update] button inside `scope` to the inline editor.
+// stopPropagation keeps the click off the copy-on-click handler on `main`.
+function wireUpdate(scope) {
+  scope.querySelectorAll("[data-update]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openInlineEditor(e.target.closest("[data-token]"));
+    });
+  });
+}
 function colorGrid(tokens) {
   const w = document.createElement("div");
   w.className = "swatches";
@@ -477,19 +502,13 @@ function colorGrid(tokens) {
     .map(
       (t) => `<div class="swatch" data-token="${esc(t.name)}" data-value="${esc(t.value)}" title="click to copy">
         <div class="chip" style="--val: var(${t.name})"></div>
-        <div class="n">${esc(t.name)}</div><div class="v">${esc(t.value)}</div>
+        <div class="n">${esc(t.name)}${refBadge(t.value)}</div><div class="v">${esc(t.value)}</div>
         <button class="tiny" data-update="${esc(t.name)}" title="Update token" style="margin-top:6px; width:100%;">Update</button>
       </div>`,
     )
     .join("");
   // wire update buttons
-  w.querySelectorAll("[data-update]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const sw = e.target.closest("[data-token]");
-      openTokenUpdate(sw.dataset.token, sw.dataset.value);
-    });
-  });
+  wireUpdate(w);
   return w;
 }
 function rows(tokens, rowFn) {
@@ -504,20 +523,46 @@ function baseRow(t, demoHtml) {
   r.dataset.token = t.name;
   r.dataset.value = t.value;
   r.title = "click to copy — double-click or use Update to edit";
-  r.innerHTML = `<div class="label"><b>${esc(t.name)}</b>${esc(t.value)}</div><div class="demo" style="display:flex; align-items:center; gap:10px;">${demoHtml}<button class="tiny" data-update="${esc(t.name)}" title="Update token value" style="margin-left:auto; flex:none;">Update</button></div>`;
+  r.innerHTML = `<div class="label"><b>${esc(t.name)}</b>${esc(t.value)}${refBadge(t.value)}</div><div class="demo" style="display:flex; align-items:center; gap:10px;">${demoHtml}<button class="tiny" data-update="${esc(t.name)}" title="Update token value" style="margin-left:auto; flex:none;">Update</button></div>`;
   // update button — stop propagation so copy handler doesn't fire
   r.querySelector("[data-update]")?.addEventListener("click", (e) => {
     e.stopPropagation();
-    openTokenUpdate(t.name, t.value);
+    openInlineEditor(r);
   });
   return r;
 }
-function openTokenUpdate(name, cur) {
-  const v = prompt(`Update ${name}`, cur);
-  if (v == null) return;
-  const trimmed = v.trim();
-  if (!trimmed || trimmed === cur) return;
-  patchToken(name, trimmed);
+// Floating one-field editor — shared by the row/swatch "Update" buttons and
+// the double-click handler so both entry points behave identically.
+let editing = false;
+function openInlineEditor(el) {
+  if (!el || !main.contains(el) || editing) return;
+  const name = el.dataset.token;
+  const cur = el.dataset.value || "";
+  editing = true;
+
+  const inp = document.createElement("input");
+  inp.className = "tok-edit";
+  inp.value = cur;
+  inp.spellcheck = false;
+  const r = el.getBoundingClientRect();
+  inp.style.cssText =
+    `position:fixed;z-index:99;left:${Math.round(r.left)}px;top:${Math.round(r.bottom + 4)}px;width:${Math.max(200, Math.round(r.width))}px`;
+  document.body.appendChild(inp);
+  inp.focus();
+  inp.select();
+
+  const close = (save) => {
+    if (!editing) return;
+    editing = false;
+    const v = inp.value.trim();
+    inp.remove();
+    if (save && v && v !== cur) patchToken(name, v);
+  };
+  inp.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") { ev.preventDefault(); close(true); }
+    else if (ev.key === "Escape") { ev.preventDefault(); close(false); }
+  });
+  inp.addEventListener("blur", () => close(true));
 }
 const barRow = (t) => baseRow(t, `<div class="bar" style="width: var(${t.name})"></div>`);
 const radiusRow = (t) => baseRow(t, `<div class="radiusbox" style="border-radius: var(${t.name})"></div>`);
@@ -549,15 +594,9 @@ function rawTable(tokens) {
   const table = document.createElement("table");
   table.className = "raw";
   table.innerHTML = tokens
-    .map((t) => `<tr data-token="${esc(t.name)}" data-value="${esc(t.value)}" title="click to copy"><td>${esc(t.name)}</td><td>${esc(t.value)}</td><td><button class="tiny" data-update="${esc(t.name)}" title="Update token">Update</button></td></tr>`)
+    .map((t) => `<tr data-token="${esc(t.name)}" data-value="${esc(t.value)}" title="click to copy"><td>${esc(t.name)}</td><td>${esc(t.value)}${refBadge(t.value)}</td><td><button class="tiny" data-update="${esc(t.name)}" title="Update token">Update</button></td></tr>`)
     .join("");
-  table.querySelectorAll("[data-update]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const tr = e.target.closest("[data-token]");
-      openTokenUpdate(tr.dataset.token, tr.dataset.value);
-    });
-  });
+  wireUpdate(table);
   return table;
 }
 const esc = (s) =>
@@ -581,42 +620,30 @@ function flash(el) {
   setTimeout(() => el.classList.remove("copied"), 700);
 }
 
+// Export dropdown — attached once (render() rebuilds the toolbar, so closers
+// resolve the live elements on every event instead of holding stale refs).
+function closeExpMenu() {
+  const m = document.getElementById("expMenu");
+  if (m && !m.hidden) {
+    m.hidden = true;
+    document.getElementById("expBtn")?.setAttribute("aria-expanded", "false");
+  }
+}
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".tb-export")) closeExpMenu();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeExpMenu();
+});
+window.addEventListener("scroll", () => closeExpMenu(), true);
+
 // ─────────────────────────────────────────────── inline edit (double-click)
-let editing = false;
 main.addEventListener("dblclick", (e) => {
-  if (schemaMode) return;
   const el = e.target.closest("[data-token]");
   if (!el || !main.contains(el)) return;
   e.preventDefault();
   window.getSelection?.()?.removeAllRanges();
-  const name = el.dataset.token;
-  const cur = el.dataset.value || "";
-  if (editing) return;
-  editing = true;
-
-  const inp = document.createElement("input");
-  inp.className = "tok-edit";
-  inp.value = cur;
-  inp.spellcheck = false;
-  const r = el.getBoundingClientRect();
-  inp.style.cssText =
-    `position:fixed;z-index:99;left:${Math.round(r.left)}px;top:${Math.round(r.bottom + 4)}px;width:${Math.max(200, Math.round(r.width))}px`;
-  document.body.appendChild(inp);
-  inp.focus();
-  inp.select();
-
-  const close = (save) => {
-    if (!editing) return;
-    editing = false;
-    const v = inp.value.trim();
-    inp.remove();
-    if (save && v && v !== cur) patchToken(name, v);
-  };
-  inp.addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter") { ev.preventDefault(); close(true); }
-    else if (ev.key === "Escape") { ev.preventDefault(); close(false); }
-  });
-  inp.addEventListener("blur", () => close(true));
+  openInlineEditor(el);
 });
 
 // Reuse the merge endpoint: a one-line bare block, last-write-wins (no :root needed, wrapped on server).
@@ -851,6 +878,23 @@ $("themeBtn")?.addEventListener("click", () =>
 );
 
 // ── dlg: import from URL
+// Direct fetch works only for CORS-enabled URLs; most stylesheets send no
+// ACAO header and die with "Failed to fetch". On the local server, route
+// through /api/fetch-css (no origin restrictions); on static hosts the
+// direct fetch is all we have.
+async function fetchCss(url) {
+  if (!isStaticHost()) {
+    const res = await fetch(`/api/fetch-css?url=${encodeURIComponent(url)}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.error || `${res.status} ${res.statusText}`);
+    }
+    return res.text();
+  }
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.text();
+}
 $("dlgFetch")?.addEventListener("click", async () => {
   const url = $("dlgUrl")?.value.trim();
   if (!url) { showToast("Please enter URL", "warn"); return; }
@@ -859,9 +903,7 @@ $("dlgFetch")?.addEventListener("click", async () => {
   const prev = btn.textContent;
   btn.textContent = "…";
   try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    const text = await res.text();
+    const text = await fetchCss(url);
     const _dc2 = $("dlgCss"); if (_dc2) _dc2.value = text;
     updatePreview();
     showToast("CSS fetched", "ok");
