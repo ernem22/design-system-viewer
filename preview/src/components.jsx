@@ -70,8 +70,8 @@ export function FormsSection() {
       <Demo title="Button — icons & loading">
         <Button><Icon name="plus" size={14} /> New project</Button>
         <Button variant="outline">Next <Icon name="chevronRight" size={14} /></Button>
-        <Button disabled><span className="dsv-spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> Saving…</Button>
-        <Button variant="soft" disabled><span className="dsv-spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> Loading</Button>
+        <Button disabled><span className="dsv-spinner dsv-spinner--sm" /> Saving…</Button>
+        <Button variant="soft" disabled><span className="dsv-spinner dsv-spinner--sm" /> Loading</Button>
       </Demo>
 
       <Demo title="Input / Textarea (Label primitive)">
@@ -115,6 +115,21 @@ export function FormsSection() {
         <Field label="Username" id="f-ok" hint="Available">
           <input id="f-ok" className="dsv-input dsv-input--success" defaultValue="ada_lovelace" aria-invalid="false" />
         </Field>
+      </Demo>
+      <Demo title="Input — themed tokens">
+        <Field label="Themed" id="f-themed" hint="bg / border / focus / placeholder tokens">
+          <input id="f-themed" className="dsv-input dsv-input--themed" placeholder="Type here…" />
+        </Field>
+      </Demo>
+      <Demo title="Disabled treatment">
+        <div className="dsv-disabled-box" style={{ minWidth: "var(--space-56)" }}>
+          <div className="dsv-inline"><Icon name="x" size={14} /> Unavailable</div>
+          <div style={{ fontSize: "var(--font-size-xs)", marginTop: "var(--space-1)" }}>surface + border + icon tokens</div>
+        </div>
+        <div className="dsv-disabled-box is-dim" style={{ minWidth: "var(--space-56)" }}>
+          <div className="dsv-inline"><Icon name="x" size={14} /> Dimmed (--opacity-disabled)</div>
+          <div style={{ fontSize: "var(--font-size-xs)", marginTop: "var(--space-1)" }}>same box at --opacity-disabled</div>
+        </div>
       </Demo>
 
       <Demo title="Checkbox">
@@ -319,7 +334,7 @@ export function OverlaysSection() {
       <Demo title="Context Menu (right-click)">
         <ContextMenu.Root>
           <ContextMenu.Trigger asChild>
-            <div className="dsv-card" style={{ display: "grid", placeItems: "center", width: 220, height: 90, borderStyle: "dashed" }}>
+            <div className="dsv-card" style={{ display: "grid", placeItems: "center", width: "var(--space-56)", height: "var(--space-24)", borderStyle: "dashed" }}>
               Right-click here
             </div>
           </ContextMenu.Trigger>
@@ -328,7 +343,10 @@ export function OverlaysSection() {
               <ContextMenu.Item className="dsv-menu-item">Undo <span className="dsv-menu-shortcut">⌘Z</span></ContextMenu.Item>
               <ContextMenu.Item className="dsv-menu-item">Redo <span className="dsv-menu-shortcut">⇧⌘Z</span></ContextMenu.Item>
               <ContextMenu.Separator className="dsv-menu-sep" />
-              <ContextMenu.CheckboxItem className="dsv-menu-item" checked>Show grid</ContextMenu.CheckboxItem>
+              <ContextMenu.CheckboxItem className="dsv-menu-item dsv-menu-check" defaultChecked>
+                <ContextMenu.ItemIndicator className="dsv-menu-item-indicator"><Icon name="check" size={14} /></ContextMenu.ItemIndicator>
+                Show grid
+              </ContextMenu.CheckboxItem>
               <ContextMenu.Separator className="dsv-menu-sep" />
               <ContextMenu.Item className="dsv-menu-item dsv-menu-item--danger">Delete</ContextMenu.Item>
             </ContextMenu.Content>
@@ -342,7 +360,7 @@ export function OverlaysSection() {
           <HoverCard.Portal>
             <HoverCard.Content className="dsv-pop" sideOffset={6}>
               <div className="dsv-hovercard">
-                <span className="dsv-avatar" style={{ width: 44, height: 44 }}><span className="dsv-avatar-fallback">AL</span></span>
+                <span className="dsv-avatar dsv-avatar--lg"><span className="dsv-avatar-fallback">AL</span></span>
                 <div>
                   <div className="name">Ada Lovelace</div>
                   <div className="bio">The first programmer. Analytical Engine notes, 1843.</div>
@@ -413,7 +431,7 @@ export function NavigationSection() {
       </Demo>
 
       <Demo title="Tabs">
-        <Tabs.Root defaultValue="acc" style={{ width: 420 }}>
+        <Tabs.Root defaultValue="acc" style={{ width: "var(--space-96)", maxWidth: "100%" }}>
           <Tabs.List className="dsv-tabs-list">
             <Tabs.Trigger className="dsv-tabs-trigger" value="acc">Account</Tabs.Trigger>
             <Tabs.Trigger className="dsv-tabs-trigger" value="pass">Password</Tabs.Trigger>
@@ -452,13 +470,15 @@ function OtpDemo() {
 }
 
 export function FormSection() {
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState(0);
   return (
     <Section id="form" title="Form + validation" desc="Radix Form (built-in validation + messages), Password Toggle Field, One-Time Password Field.">
       <Demo title="Radix Form — client validation">
+        {/* key: successful submit rebuilds the tree → native form reset behavior */}
         <Form.Root
-          style={{ maxWidth: 360, width: "100%" }}
-          onSubmit={(e) => { e.preventDefault(); setSent(true); }}
+          key={sent}
+          style={{ maxWidth: "var(--space-80)", width: "100%" }}
+          onSubmit={(e) => { e.preventDefault(); setSent((n) => n + 1); }}
         >
           <Form.Field name="email" className="dsv-form-field">
             <div className="dsv-form-row">
@@ -477,12 +497,12 @@ export function FormSection() {
             <Form.Control asChild><textarea className="dsv-textarea" required /></Form.Control>
           </Form.Field>
           <Form.Submit asChild><Button style={{ width: "100%" }}>Submit</Button></Form.Submit>
-          {sent && <p className="dsv-form-message" data-valid style={{ marginTop: "var(--space-2)" }}>✓ submitted</p>}
+          {sent > 0 && <p className="dsv-form-message" data-valid style={{ marginTop: "var(--space-2)" }}>✓ submitted</p>}
         </Form.Root>
       </Demo>
 
       <Demo title="Password Toggle Field">
-        <div className="dsv-field" style={{ maxWidth: 280 }}>
+        <div className="dsv-field" style={{ maxWidth: "var(--space-72)" }}>
           <span className="dsv-label">Password</span>
           <PasswordToggleField.Root>
             <div className="dsv-pwd">
@@ -544,8 +564,13 @@ function ToastDemo() {
     <Toast.Provider swipeDirection="right">
       <Button variant="outline" onClick={show}>Show notification</Button>
       <Toast.Root className="dsv-toast" open={open} onOpenChange={setOpen} duration={4000}>
-        <Toast.Title className="dsv-toast-title">Saved</Toast.Title>
-        <Toast.Description className="dsv-toast-desc">Changes uploaded to cloud.</Toast.Description>
+        <div className="dsv-toast-body">
+          <Toast.Title className="dsv-toast-title">Saved</Toast.Title>
+          <Toast.Description className="dsv-toast-desc">Changes uploaded to cloud.</Toast.Description>
+        </div>
+        <Toast.Close asChild>
+          <Button variant="ghost" size="sm" className="dsv-icon-btn" aria-label="Dismiss notification"><Icon name="x" size={14} /></Button>
+        </Toast.Close>
       </Toast.Root>
       <Toast.Viewport className="dsv-toast-viewport" />
     </Toast.Provider>
@@ -560,7 +585,7 @@ export function FeedbackSection() {
         <Progress.Root className="dsv-progress" value={p}>
           <Progress.Indicator className="dsv-progress-indicator" style={{ width: `${p}%` }} />
         </Progress.Root>
-        <Button size="sm" variant="ghost" onClick={() => setP((v) => (v + 20) % 120)}>+20</Button>
+        <Button size="sm" variant="ghost" onClick={() => setP((v) => (v >= 100 ? 0 : v + 20))}>+20</Button>
         <span className="dsv-mono dsv-muted">{p}%</span>
       </Demo>
       <Demo title="Toast"><ToastDemo /></Demo>
@@ -581,17 +606,17 @@ export function FeedbackSection() {
         <span>Save: <kbd className="dsv-kbd">⌘</kbd> <kbd className="dsv-kbd">S</kbd></span>
       </Demo>
       <Demo title="State trio — empty / loading / error">
-        <div className="dsv-card" style={{ minWidth: 200 }}>
+        <div className="dsv-card" style={{ minWidth: "var(--space-48)" }}>
           <div className="dsv-empty" style={{ padding: "var(--space-6)" }}>
             <span className="glyph"><Icon name="search" size={20} /></span>
             <h4>No projects</h4>
             <p>Create one to get started.</p>
           </div>
         </div>
-        <div className="dsv-card dsv-inline" style={{ minWidth: 200, justifyContent: "center" }}>
-          <span className="dsv-spinner" /> <span className="dsv-muted" style={{ fontSize: "var(--font-size-sm)" }}>Loading…</span>
+        <div className="dsv-card dsv-inline" style={{ minWidth: "var(--space-40)", justifyContent: "center" }}>
+          <span className="dsv-spinner dsv-spinner--sm" /> <span className="dsv-muted" style={{ fontSize: "var(--font-size-sm)" }}>Loading…</span>
         </div>
-        <div className="dsv-callout dsv-callout--danger" style={{ minWidth: 200 }}>
+        <div className="dsv-callout dsv-callout--danger" style={{ minWidth: "var(--space-48)" }}>
           <span className="ico"><Icon name="x" size={16} /></span>
           <div>Sync failed. <a className="dsv-link" href="#feedback">Retry</a></div>
         </div>
@@ -630,12 +655,19 @@ export function LayoutSection() {
       </Demo>
 
       <Demo title="Separator">
-        <div style={{ maxWidth: 300 }}>
+        <div style={{ maxWidth: "var(--space-72)" }}>
           <div style={{ fontSize: "var(--font-size-sm)" }}>Design System Viewer</div>
           <div className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>Visualize tokens</div>
           <Separator className="dsv-sep" />
           <div className="dsv-inline" style={{ fontSize: "var(--font-size-sm)" }}>
             <span>Blog</span><Separator className="dsv-sep" orientation="vertical" decorative /><span>Docs</span><Separator className="dsv-sep" orientation="vertical" decorative /><span>Source</span>
+          </div>
+          <div className="dsv-inline" style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
+            <span>--divider-width ramp:</span>
+            <span className="dsv-divider-demo" style={{ borderTop: "var(--border-width-none) solid var(--color-divider)" }}>none</span>
+            <span className="dsv-divider-demo" style={{ borderTop: "var(--border-width-thin) solid var(--color-divider)" }}>thin</span>
+            <span className="dsv-divider-demo" style={{ borderTop: "var(--border-width-medium) solid var(--color-divider)" }}>medium</span>
+            <span className="dsv-divider-demo" style={{ borderTop: "var(--border-width-thick) solid var(--color-divider)" }}>thick</span>
           </div>
         </div>
       </Demo>
@@ -655,15 +687,71 @@ export function LayoutSection() {
       </Demo>
 
       <Demo title="Avatar — sizes & presence">
-        <span className="dsv-inline" style={{ gap: "var(--space-3)" }}>
-          {[["var(--size-icon-sm)", "var(--font-size-xs)"], ["var(--size-icon-md)", "var(--font-size-sm)"], ["var(--size-icon-lg)", "var(--font-size-base)"]].map(([sz, fs], i) => (
-            <span key={sz} className="dsv-avatar" style={{ width: sz, height: sz, position: "relative" }}>
-              <span className="dsv-avatar-fallback" style={{ fontSize: fs }}>AL</span>
-              <span style={{ position: "absolute", right: 0, bottom: 0, width: "var(--space-2-5)", height: "var(--space-2-5)", borderRadius: "var(--radius-full)", background: i === 2 ? "var(--color-warning)" : "var(--color-success)", border: "var(--border-width-thick) solid var(--color-surface)" }} />
+        <span className="dsv-inline" style={{ gap: "var(--space-4)" }}>
+          {[["var(--size-avatar-sm)", "var(--font-size-xs)", "var(--color-success)", "online"], ["var(--size-avatar-md)", "var(--font-size-sm)", "var(--color-success)", "online"], ["var(--size-avatar-lg)", "var(--font-size-base)", "var(--color-warning)", "busy"]].map(([sz, fs, fill, label]) => (
+            <span key={sz} className="dsv-stack" style={{ gap: "var(--space-1)", alignItems: "center" }}>
+              <span style={{ position: "relative", width: sz, height: sz, display: "inline-flex", flex: "none" }}>
+                <span className="dsv-avatar" style={{ width: "100%", height: "100%" }}>
+                  <span className="dsv-avatar-fallback" style={{ fontSize: fs }}>AL</span>
+                </span>
+                <span title={label} style={{ position: "absolute", right: -2, bottom: -2, width: "max(10px, 30%)", height: "max(10px, 30%)", maxWidth: "var(--space-3-5)", maxHeight: "var(--space-3-5)", borderRadius: "var(--radius-full)", background: fill, border: "var(--border-width-thick) solid var(--color-surface)", boxShadow: "var(--shadow-xs)" }} />
+              </span>
+              <span className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>{label}</span>
             </span>
           ))}
         </span>
-        <span className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>online / busy presence via semantic fills</span>
+        <span className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>presence via semantic fills</span>
+      </Demo>
+
+      <Demo title="App shell metrics">
+        <div style={{ width: "100%", maxWidth: "var(--space-96)" }}>
+          <div className="dsv-shell-bar dsv-inline" style={{ background: "var(--color-surface)", border: "var(--border-width-thin) solid var(--color-border-subtle)", borderRadius: "var(--radius-md)", padding: "0 var(--space-3)", marginBottom: "var(--space-2)" }}>
+            <span className="dsv-inline" style={{ gap: "var(--space-1-5)" }}>
+              {[0, 1, 2].map((i) => <span key={i} style={{ width: "var(--space-2-5)", height: "var(--space-2-5)", borderRadius: "var(--radius-full)", background: ["var(--color-danger-muted)", "var(--color-warning-muted)", "var(--color-success-muted)"][i] }} />)}
+            </span>
+            <strong style={{ fontSize: "var(--font-size-sm)" }}>Acme</strong>
+            <span style={{ flex: 1 }} />
+            <span className="dsv-muted" style={{ fontSize: "var(--font-size-xs)", fontFamily: "var(--font-mono)" }}>--size-header-height</span>
+            <span className="dsv-avatar dsv-avatar--sm"><span className="dsv-avatar-fallback" style={{ fontSize: "var(--font-size-xs)" }}>AL</span></span>
+          </div>
+          <div className="dsv-inline" style={{ alignItems: "stretch", gap: "var(--space-2)", flexWrap: "wrap" }}>
+            <div className="dsv-shell-side" style={{ background: "var(--color-surface-sunken)", borderRadius: "var(--radius-md)", padding: "var(--space-2)", fontSize: "var(--font-size-xs)", display: "flex", flexDirection: "column", gap: 2 }}>
+              {[["Overview", true], ["Projects", false], ["Team", false], ["Settings", false]].map(([label, on]) => (
+                <span key={label} style={{ padding: "var(--space-1) var(--space-2)", borderRadius: "var(--radius-sm)", background: on ? "var(--color-selected)" : "transparent", color: on ? "var(--color-accent-text)" : "var(--color-text-secondary)", fontWeight: on ? "var(--font-weight-semibold)" : "var(--font-weight-regular)" }}>{label}</span>
+              ))}
+              <span className="dsv-muted" style={{ fontSize: "var(--font-size-xs)", fontFamily: "var(--font-mono)", padding: "var(--space-1) var(--space-2)" }}>--size-sidebar-width</span>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="dsv-grid-12" style={{ marginBottom: "var(--space-2)" }}>
+                {Array.from({ length: 12 }, (_, i) => (
+                  <div key={i} style={{ height: "var(--space-4)", background: i % 2 ? "var(--color-accent-muted)" : "var(--color-accent-subtle)", borderRadius: "var(--radius-sm)" }} />
+                ))}
+              </div>
+              <div className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>repeat(var(--grid-columns)) · gap var(--grid-gutter)</div>
+            </div>
+          </div>
+          <div className="dsv-inline" style={{ marginTop: "var(--space-3)", gap: "var(--space-2)", flexWrap: "wrap" }}>
+            <span className="dsv-avatar dsv-avatar--xs"><span className="dsv-avatar-fallback">XS</span></span>
+            <span className="dsv-avatar dsv-avatar--sm"><span className="dsv-avatar-fallback">SM</span></span>
+            <span className="dsv-avatar dsv-avatar--md"><span className="dsv-avatar-fallback">MD</span></span>
+            <span className="dsv-avatar dsv-avatar--lg"><span className="dsv-avatar-fallback">LG</span></span>
+            <span className="dsv-avatar dsv-avatar--xl"><span className="dsv-avatar-fallback">XL</span></span>
+            <Button size="xl">XL control</Button>
+          </div>
+          <div className="dsv-inline" style={{ marginTop: "var(--space-3)", gap: "var(--space-2)" }}>
+            <div className="dsv-shell-bar--mobile dsv-inline" style={{ flex: 1, background: "var(--color-surface)", border: "var(--border-width-thin) solid var(--color-border-subtle)", borderRadius: "var(--radius-md)", padding: "0 var(--space-3)", fontSize: "var(--font-size-xs)" }}>
+              Mobile header (--size-header-height-mobile)
+            </div>
+            <div className="dsv-shell-side--collapsed" style={{ background: "var(--color-surface-sunken)", borderRadius: "var(--radius-md)", padding: "var(--space-2)", fontSize: "var(--font-size-xs)" }}>
+              Rail (--size-sidebar-width-collapsed)
+            </div>
+          </div>
+          <div className="dsv-stack" style={{ marginTop: "var(--space-3)", gap: "var(--space-1)" }}>
+            <div className="dsv-container-sm" style={{ background: "var(--color-tint-subtle)", borderRadius: "var(--radius-sm)", fontSize: "var(--font-size-xs)", padding: "var(--space-1) var(--space-2)" }}>container sm</div>
+            <div className="dsv-container-md" style={{ background: "var(--color-tint-subtle)", borderRadius: "var(--radius-sm)", fontSize: "var(--font-size-xs)", padding: "var(--space-1) var(--space-2)" }}>container md</div>
+            <div className="dsv-container-lg" style={{ background: "var(--color-tint-subtle)", borderRadius: "var(--radius-sm)", fontSize: "var(--font-size-xs)", padding: "var(--space-1) var(--space-2)" }}>container lg</div>
+          </div>
+        </div>
       </Demo>
 
       <Demo title="Scroll Area">

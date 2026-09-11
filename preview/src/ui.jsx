@@ -2,10 +2,11 @@
 import { forwardRef } from "react";
 import { tokensForDemo } from "./tokenUsage.js";
 
-export function Icon({ name, size = 16, ...rest }) {
+export function Icon({ name, size = 16, className = "", ...rest }) {
   const p = {
     width: size, height: size, viewBox: "0 0 24 24", fill: "none",
     stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round",
+    className: ["dsv-ico", className].filter(Boolean).join(" "),
     ...rest,
   };
   const paths = {

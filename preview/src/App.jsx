@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSystemTokens } from "./useSystemTokens.js";
 import { fontFamiliesIn } from "./fonts.js";
 import { COMPONENT_SECTIONS } from "./components.jsx";
@@ -81,26 +81,91 @@ function SchemaNote({ coverage }) {
 
 function Gallery() {
   const { system, error, loading, dark, setDark, hasDark } = useSystemTokens();
+  const [activeId, setActiveId] = useState(() => location.hash?.slice(1) || null);
+  const [query, setQuery] = useState("");
+  // section search — Turkish-aware lowercase so "Önizleme" finds "önizleme".
+  // Filters both the rail links and the rendered sections so a query like
+  // "tabs" shows only matching content, not an empty main next to a rail.
+  const visibleGroups = useMemo(() => {
+    const t = query.trim().toLocaleLowerCase("tr");
+    if (!t) return GROUPS;
+    return GROUPS.map(([label, sections]) => [
+      label,
+      sections.filter((s) => s.label.toLocaleLowerCase("tr").includes(t)),
+    ]).filter(([, sections]) => sections.length);
+  }, [query]);
+  const visibleSections = useMemo(
+    () => visibleGroups.flatMap(([, sections]) => sections),
+    [visibleGroups],
+  );
 
-  // content mounts after the browser's initial hash jump — redo it once ready
+  // content mounts after the browser's initial hash jump — redo it once ready,
+  // after layout settles (content-visibility was removed so one frame is enough,
+  // second frame covers font-driven shifts).
   useEffect(() => {
     if (loading || !location.hash) return;
-    document.getElementById(location.hash.slice(1))?.scrollIntoView();
+    const el = document.getElementById(location.hash.slice(1));
+    if (!el) return;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      el.scrollIntoView({ block: "start" });
+    }));
   }, [loading]);
+
+  // scrollspy — highlight the rail link for the section in view
+  useEffect(() => {
+    if (loading) return;
+    const map = new Map();
+    const obs = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) map.set(e.target.id, e.intersectionRatio);
+        else map.delete(e.target.id);
+      }
+      if (map.size) {
+        let best = null, bestR = -1;
+        for (const [id, r] of map) if (r > bestR) { bestR = r; best = id; }
+        if (best) {
+          setActiveId(best);
+          try { history.replaceState(null, "", `#${best}`); } catch {}
+        }
+      }
+    }, { rootMargin: "-20% 0px -65% 0px", threshold: [0, 0.1, 0.25] });
+    visibleSections.forEach(({ id }) => {
+      const el = document.getElementById(id);
+      if (el) obs.observe(el);
+    });
+    return () => obs.disconnect();
+  }, [loading, visibleSections]);
 
   return (
     <div className="dsv-app">
-      <nav className="dsv-rail">
-        <h1>{system ? system.name : "Preview"}</h1>
-        {hasDark && (
-          <label className="dsv-dark-toggle" style={{ padding: "0 var(--space-2)", marginBottom: "var(--space-2)" }}>
-            <input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} /> dark variant
-          </label>
+      <nav className="dsv-rail" aria-label="Preview sections">
+        <div className="dsv-rail-head">
+          <h1>{system ? system.name : "Preview"}</h1>
+          {hasDark && (
+            <label className="dsv-dark-toggle">
+              <input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} />
+              <span className="dsv-sw" aria-hidden="true"><span className="dsv-sw-th" /></span>
+              <span className="dsv-dark-label">Dark variant</span>
+            </label>
+          )}
+          <span className="dsv-rail-filter">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+            <input
+              type="search" value={query} onChange={(e) => setQuery(e.target.value)}
+              placeholder="Filter sections…" aria-label="Filter sections"
+            />
+            {query && <button onClick={() => setQuery("")} aria-label="Clear section filter">×</button>}
+          </span>
+        </div>
+        {visibleGroups.length === 0 && (
+          <p className="dsv-muted" style={{ padding: "0 var(--space-2)", fontSize: "var(--font-size-sm)" }}>
+            No sections match “{query.trim()}”.
+          </p>
         )}
-        {GROUPS.map(([label, sections]) => (
-          <div key={label}>
-            <div className="group-label">{label}</div>
-            {sections.map((s) => <a key={s.id} href={`#${s.id}`}>{s.label}</a>)}
+        {visibleGroups.map(([label, sections]) => (
+          <div key={label} className="dsv-rail-group">
+            <div className="group-label"><span>{label}</span><span className="n">{sections.length}</span></div>
+            {sections.map((s) => <a key={s.id} href={`#${s.id}`} className={activeId === s.id ? "active" : ""} aria-current={activeId === s.id ? "true" : undefined}>{s.label}</a>)}
           </div>
         ))}
       </nav>
@@ -116,7 +181,10 @@ function Gallery() {
 
         {!loading && system && <SchemaNote coverage={system.coverage} />}
         {!loading && system && <FontNote css={system.css} />}
-        {!loading && GROUPS.flatMap(([, sections]) => sections).map(({ id, Comp }) => <Comp key={id} />)}
+        {visibleSections.length === 0 && !loading && !error && (
+          <div className="dsv-err">No sections match “{query.trim()}”.</div>
+        )}
+        {!loading && visibleSections.map(({ id, Comp }) => <Comp key={id} />)}
       </main>
     </div>
   );

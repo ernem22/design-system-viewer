@@ -21,8 +21,9 @@ const Screen = ({ id, title, desc, children, pad = true }) => (
   </section>
 );
 
-const Avat = ({ n, size = 32 }) => (
-  <span className="dsv-avatar" style={{ width: size, height: size }}>
+// size: token scale name (xs/sm/md/lg/xl) — resolves to --size-avatar-*
+const Avat = ({ n, size = "md" }) => (
+  <span className={`dsv-avatar dsv-avatar--${size}`}>
     <Avatar.Root style={{ width: "100%", height: "100%", display: "flex" }}>
       <Avatar.Image src={`https://i.pravatar.cc/80?img=${n}`} alt="" />
       <Avatar.Fallback className="dsv-avatar-fallback">{String(n).slice(0, 2)}</Avatar.Fallback>
@@ -50,7 +51,7 @@ function LoginScreen() {
         </div>
       </div>
       <p className="dsv-muted" style={{ textAlign: "center", fontSize: "var(--font-size-sm)", marginTop: "var(--space-4)" }}>
-        No account? <Link>Sign up</Link>
+        No account? <Link to="#screen-signup">Sign up</Link>
       </p>
     </div>
   );
@@ -62,7 +63,7 @@ const Sep = ({ children }) => (
     <Separator className="dsv-sep" style={{ flex: 1, margin: 0 }} />
   </div>
 );
-const Link = ({ children }) => <a href="#" className="dsv-link" style={{ display: "inline", padding: 0 }}>{children}</a>;
+const Link = ({ children, to = "#screen-login" }) => <a href={to} className="dsv-link" style={{ display: "inline", padding: 0 }}>{children}</a>;
 
 // ─────────────────────────────────────────── Signup (steps)
 function SignupScreen() {
@@ -70,11 +71,11 @@ function SignupScreen() {
   const labels = ["Account", "Profile", "Team", "Confirm"];
   return (
     <div style={{ maxWidth: 420, margin: "0 auto" }}>
-      <div className="dsv-steps" style={{ marginBottom: "var(--space-5)", justifyContent: "center" }}>
+      <div className="dsv-steps dsv-steps--center" style={{ marginBottom: "var(--space-5)" }} role="list" aria-label="Signup progress">
         {labels.map((l, i) => (
-          <div key={l} className={`dsv-step ${i < step ? "dsv-step--done" : i === step ? "dsv-step--active" : ""}`}>
-            <span className="dot">{i < step ? <Icon name="check" size={12} /> : i + 1}</span>
-            {i < labels.length - 1 && <span className="bar" />}
+          <div key={l} role="listitem" aria-current={i === step ? "step" : undefined} className={`dsv-step ${i < step ? "dsv-step--done" : i === step ? "dsv-step--active" : ""}`}>
+            <span className="dot">{i < step ? <Icon name="check" size={12} /> : i + 1}</span><span className="label">{l}</span>
+            {i < labels.length - 1 && <span className="bar" aria-hidden="true" />}
           </div>
         ))}
       </div>
@@ -117,7 +118,7 @@ function PricingScreen() {
             {i === 1 && <span className="dsv-badge" style={{ marginBottom: "var(--space-2)" }}>Most popular</span>}
             <div style={{ fontWeight: "var(--font-weight-semibold)" }}>{name}</div>
             <div style={{ margin: "var(--space-2) 0" }}>
-              <span style={{ fontSize: "var(--font-size-3xl)", fontWeight: "var(--font-weight-bold)" }}>${price}</span>
+              <span style={{ fontSize: "var(--font-size-3xl)", fontWeight: "var(--font-weight-bold)" }}>₺{price}</span>
               <span className="dsv-muted" style={{ fontSize: "var(--font-size-sm)" }}>/mo</span>
             </div>
             <Button variant={i === 1 ? "solid" : "outline"} style={{ width: "100%", marginBottom: "var(--space-3)" }}>Choose</Button>
@@ -133,7 +134,7 @@ function PricingScreen() {
 
 // ─────────────────────────────────────────── Settings
 const SettingRow = ({ title, desc, children }) => (
-  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-4)" }}>
+  <div className="dsv-setting-row">
     <div>
       <div style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)" }}>{title}</div>
       <div className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>{desc}</div>
@@ -144,6 +145,8 @@ const SettingRow = ({ title, desc, children }) => (
 function SettingsScreen() {
   const [vol, setVol] = useState([60]);
   const [density, setDensity] = useState("comfortable");
+  const [notif, setNotif] = useState({ email: true, push: true, digest: false });
+  const [theme, setTheme] = useState("system");
   return (
     <div style={{ maxWidth: 560, margin: "0 auto" }}>
       <div className="dsv-card">
@@ -202,8 +205,42 @@ function SettingsScreen() {
               <Button variant="ghost">Reset</Button><Button>Save</Button>
             </div>
           </Tabs.Content>
-          <Tabs.Content className="dsv-tabs-content" value="notif">Email and push notification preferences.</Tabs.Content>
-          <Tabs.Content className="dsv-tabs-content" value="appear">Theme, font size and color settings.</Tabs.Content>
+          <Tabs.Content className="dsv-tabs-content" value="notif">
+            <div className="dsv-stack" style={{ color: "var(--color-text)" }}>
+              <SettingRow title="Email alerts" desc="Build results and invoices">
+                <Switch.Root className="dsv-switch" checked={notif.email} onCheckedChange={(v) => setNotif((n) => ({ ...n, email: v }))}><Switch.Thumb className="dsv-switch-thumb" /></Switch.Root>
+              </SettingRow>
+              <Separator className="dsv-sep" />
+              <SettingRow title="Push notifications" desc="Mentions and comments">
+                <Switch.Root className="dsv-switch" checked={notif.push} onCheckedChange={(v) => setNotif((n) => ({ ...n, push: v }))}><Switch.Thumb className="dsv-switch-thumb" /></Switch.Root>
+              </SettingRow>
+              <Separator className="dsv-sep" />
+              <SettingRow title="Weekly digest" desc="Summary every Monday">
+                <Switch.Root className="dsv-switch" checked={notif.digest} onCheckedChange={(v) => setNotif((n) => ({ ...n, digest: v }))}><Switch.Thumb className="dsv-switch-thumb" /></Switch.Root>
+              </SettingRow>
+              <p className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>
+                {notif.email || notif.push ? "At least one channel is on." : "All channels off — you will miss updates."}
+              </p>
+            </div>
+          </Tabs.Content>
+          <Tabs.Content className="dsv-tabs-content" value="appear">
+            <div className="dsv-stack" style={{ color: "var(--color-text)" }}>
+              <SettingRow title="Theme" desc="Follows the system's dark variant">
+                <RadioGroup.Root className="dsv-inline" value={theme} onValueChange={setTheme}>
+                  {["light", "dark", "system"].map((v) => (
+                    <label key={v} className="dsv-control-label">
+                      <RadioGroup.Item className="dsv-radio" value={v}><RadioGroup.Indicator className="dsv-radio-indicator" /></RadioGroup.Item>{v}
+                    </label>
+                  ))}
+                </RadioGroup.Root>
+              </SettingRow>
+              <Separator className="dsv-sep" />
+              <SettingRow title="Motion" desc="Reduce animations" >
+                <Switch.Root className="dsv-switch"><Switch.Thumb className="dsv-switch-thumb" /></Switch.Root>
+              </SettingRow>
+              <p className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>Type scale and color settings follow the active design system's tokens.</p>
+            </div>
+          </Tabs.Content>
         </Tabs.Root>
       </div>
     </div>
@@ -216,7 +253,7 @@ function ProfileScreen() {
     <div style={{ maxWidth: 620, margin: "0 auto" }}>
       <div className="dsv-card">
         <div className="dsv-inline" style={{ gap: "var(--space-4)", marginBottom: "var(--space-5)" }}>
-          <Avat n={31} size={64} />
+          <Avat n={31} size="xl" />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: "var(--font-size-lg)", fontWeight: "var(--font-weight-semibold)" }}>Ada Lovelace</div>
             <div className="dsv-muted" style={{ fontSize: "var(--font-size-sm)" }}>@ada · Joined March 2024</div>
@@ -309,7 +346,7 @@ function AnalyticsScreen() {
         </div>
       </div>
       <div className="dsv-card">
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 140 }}>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: "var(--space-1-5)", height: "var(--space-32)" }}>
           {bars.map((h, i) => (
             <div key={i} title={`${h}%`} style={{ flex: 1, height: `${h}%`, background: i === bars.length - 1 ? "var(--color-accent)" : "var(--color-accent-muted)", borderRadius: "var(--radius-sm) var(--radius-sm) 0 0" }} />
           ))}
@@ -338,7 +375,7 @@ function AnalyticsScreen() {
         <thead><tr><th>Page</th><th>Views</th><th>Change</th></tr></thead>
         <tbody>
           {[["/", "42.1k", "up"], ["/pricing", "18.7k", "up"], ["/docs", "12.3k", "down"], ["/blog", "9.8k", "up"]].map(([p, v, d]) => (
-            <tr key={p}><td className="dsv-mono">{p}</td><td>{v}</td><td><span className={`dsv-badge dsv-badge--${d === "up" ? "success" : "danger"}`}>{d === "up" ? "▲" : "▼"}</span></td></tr>
+            <tr key={p}><td className="dsv-mono">{p}</td><td>{v}</td><td><span className={`dsv-badge dsv-badge--${d === "up" ? "success" : "danger"}`}>{d === "up" ? "▲ up" : "▼ down"}</span></td></tr>
           ))}
         </tbody>
       </table>
@@ -361,8 +398,9 @@ function TableScreen() {
   return (
     <div className="dsv-card" style={{ padding: 0, overflow: "hidden" }}>
       <div className="dsv-toolbar" style={{ border: "none", borderBottom: "var(--border-width-thin) solid var(--color-divider)", borderRadius: 0, padding: "var(--space-3)" }}>
-        <div className="dsv-select-trigger" style={{ cursor: "text", minWidth: "min(220px, 100%)" }}>
-          <span className="dsv-inline dsv-muted"><Icon name="search" size={14} /> Search invoices…</span>
+        <div className="dsv-input-wrap dsv-input-wrap--prefix" style={{ minWidth: "min(220px, 100%)", flex: "1 1 180px", maxWidth: 280 }}>
+          <span className="dsv-adorn dsv-adorn--prefix"><Icon name="search" size={14} /></span>
+          <input className="dsv-input" placeholder="Search invoices…" aria-label="Search invoices" style={{ width: "100%" }} />
         </div>
         <div style={{ flex: 1 }} />
         <Dialog.Root>
@@ -432,7 +470,7 @@ function KanbanScreen() {
               {c}
               <div className="dsv-inline" style={{ marginTop: "var(--space-2)", justifyContent: "space-between" }}>
                 <span className="dsv-tag">{col === "Done" ? "done" : "dev"}</span>
-                <Avat n={c.length + 5} size={20} />
+                <Avat n={c.length + 5} size="xs" />
               </div>
             </div>
           ))}
@@ -456,7 +494,7 @@ function ChatScreen() {
           <div className="dsv-bubble dsv-bubble--me">Yes, live via postMessage.</div>
           <div className="dsv-bubble dsv-bubble--them">Great. Let's add more screens.</div>
           <div className="dsv-bubble dsv-bubble--me">This screen is one of them 😄</div>
-          <div className="dsv-bubble dsv-bubble--them"><span className="dsv-spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> typing…</div>
+          <div className="dsv-bubble dsv-bubble--them"><span className="dsv-spinner dsv-spinner--xs" /> typing…</div>
         </div>
         <div className="dsv-inline" style={{ padding: "var(--space-3)", borderTop: "var(--border-width-thin) solid var(--color-divider)", gap: "var(--space-2)" }}>
           <input className="dsv-input" placeholder="Write a message…" style={{ flex: 1 }} />
@@ -506,9 +544,9 @@ function CheckoutScreen() {
         <div className="dsv-stack">
           <Field label="Name on card" id="c-name"><input id="c-name" className="dsv-input" defaultValue="Ada Lovelace" /></Field>
           <Field label="Card number" id="c-num"><input id="c-num" className="dsv-input" placeholder="•••• •••• •••• ••••" inputMode="numeric" /></Field>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-3)" }}>
-            <Field label="Expiry" id="c-exp"><input id="c-exp" className="dsv-input" placeholder="MM/YY" /></Field>
-            <Field label="CVC" id="c-cvc"><input id="c-cvc" className="dsv-input" placeholder="•••" /></Field>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "var(--space-3)" }}>
+            <Field label="Expiry" id="c-exp"><input id="c-exp" className="dsv-input" placeholder="MM/YY" inputMode="numeric" autoComplete="cc-exp" /></Field>
+            <Field label="CVC" id="c-cvc"><input id="c-cvc" className="dsv-input" placeholder="•••" inputMode="numeric" autoComplete="cc-csc" /></Field>
           </div>
           <label className="dsv-control-label">
             <Checkbox.Root className="dsv-check" defaultChecked><Checkbox.Indicator><Icon name="check" size={14} /></Checkbox.Indicator></Checkbox.Root>
@@ -541,7 +579,7 @@ function EmptyStateScreen() {
   return (
     <div style={{ maxWidth: 520, margin: "0 auto" }}>
       <div className="dsv-breadcrumb" style={{ marginBottom: "var(--space-4)" }}>
-        <a className="dsv-link" href="#" style={{ textDecoration: "none" }}>Workspace</a><Icon name="chevronRight" size={12} /><span aria-current="page">Projects</span>
+        <a className="dsv-link" href="#screen-empty" style={{ textDecoration: "none" }}>Workspace</a><Icon name="chevronRight" size={12} /><span aria-current="page">Projects</span>
       </div>
       <div className="dsv-card">
         <div className="dsv-empty">
@@ -569,7 +607,7 @@ function CommandPaletteScreen() {
       <div className="dsv-menu" style={{ position: "static", padding: 0, animation: "none", minWidth: 0 }}>
         <div className="dsv-inline" style={{ gap: "var(--space-2)", padding: "var(--space-3) var(--space-4)", borderBottom: "var(--border-width-thin) solid var(--color-divider)" }}>
           <Icon name="search" size={16} />
-          <input className="dsv-input" placeholder="Search commands or pages…" style={{ border: "none", padding: 0, height: "auto", background: "transparent", flex: 1 }} autoFocus={false} />
+          <input className="dsv-input" placeholder="Search commands or pages…" aria-label="Search commands" style={{ border: "none", padding: 0, height: "auto", background: "transparent", flex: 1, minWidth: 0 }} autoFocus={false} />
           <kbd className="dsv-kbd">Esc</kbd>
         </div>
         <div style={{ padding: "var(--space-1-5)" }}>
@@ -600,13 +638,13 @@ function UploadScreen() {
           <span className="glyph" style={{ display: "inline-flex", width: "var(--space-12)", height: "var(--space-12)", borderRadius: "var(--radius-full)", background: "var(--color-surface-sunken)", alignItems: "center", justifyContent: "center", marginBottom: "var(--space-3)" }}>
             <Icon name="plus" size={20} />
           </span>
-          <div style={{ fontSize: "var(--font-size-sm)" }}>Drag files here or <Link>browse</Link></div>
+          <div style={{ fontSize: "var(--font-size-sm)" }}>Drag files here or <Link to="#screen-upload">browse</Link></div>
         </div>
         <div className="dsv-stack" style={{ marginTop: "var(--space-4)", gap: "var(--space-3)" }}>
           {files.map(([name, size, pct]) => (
             <div key={name}>
               <div className="dsv-inline" style={{ justifyContent: "space-between", fontSize: "var(--font-size-sm)" }}>
-                <span className="dsv-inline"><Icon name="alignLeft" size={14} /> {name}</span>
+                <span className="dsv-inline"><Icon name="file" size={14} /> {name}</span>
                 <span className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>{pct === 100 ? size : `${pct}%`}</span>
               </div>
               <Progress.Root className="dsv-progress" value={pct} style={{ width: "100%", marginTop: "var(--space-1)" }}>
@@ -623,7 +661,7 @@ function UploadScreen() {
 // ─────────────────────────────────────────── 404 / error
 function NotFoundScreen() {
   return (
-    <div style={{ textAlign: "center", padding: "var(--space-24) var(--space-6)" }}>
+    <div style={{ textAlign: "center", padding: "var(--space-12) var(--space-6)" }}>
       <div className="dsv-display" style={{ color: "var(--color-text)" }}>404</div>
       <p className="dsv-lede" style={{ margin: "var(--space-4) 0" }}>This page wandered off the grid.</p>
       <p className="dsv-muted" style={{ fontSize: "var(--font-size-sm)", margin: "0 0 var(--space-6)" }}>
@@ -640,31 +678,55 @@ function NotFoundScreen() {
 function MarketingScreen() {
   return (
     <div>
-      <div style={{ textAlign: "center", marginBottom: "var(--space-24)" }}>
-        <span className="dsv-badge">New · v2.0</span>
-        <h3 className="dsv-display dsv-display--4xl" style={{ margin: "var(--space-4) 0" }}>Design systems, visualized</h3>
-        <p className="dsv-lede" style={{ margin: "0 auto var(--space-6)", maxWidth: 480 }}>Paste tokens, get a gallery, a live preview and a diff. One link per view.</p>
-        <div className="dsv-inline" style={{ justifyContent: "center" }}>
-          <Button size="lg">Start free</Button><Button size="lg" variant="outline">Live demo</Button>
+      <div className="dsv-hero-panel" style={{ marginBottom: "var(--section-space-md)" }}>
+        <span className="dsv-hero-orb dsv-hero-orb--a" aria-hidden="true" />
+        <span className="dsv-hero-orb dsv-hero-orb--b" aria-hidden="true" />
+        <span className="dsv-hero-grid" aria-hidden="true" />
+        <span className="dsv-badge dsv-badge--on-dark"><span className="dsv-pulse-dot" aria-hidden="true" />New · v2.0 — compare mode</span>
+        <h3 className="dsv-display dsv-display--dlg" style={{ margin: "var(--space-4) 0 var(--space-3)" }}>Design systems,<br />visualized</h3>
+        <p className="dsv-lede" style={{ margin: "0 auto var(--space-6)", maxWidth: "var(--text-measure-md)" }}>Paste tokens, get a gallery, a live preview and a diff. One link per view — light and dark.</p>
+        <div className="dsv-inline" style={{ justifyContent: "center", gap: "var(--space-3)", flexWrap: "wrap" }}>
+          <Button size="lg" className="dsv-hero-cta">Start free <Icon name="chevronRight" size={16} /></Button><Button size="lg" variant="outline" className="dsv-hero-ghost">Live demo</Button>
+        </div>
+        <div className="dsv-hero-stats">
+          <span><strong>192+</strong> tokens covered</span>
+          <span className="dsv-hero-stats-sep" aria-hidden="true" />
+          <span><strong>4.9/5</strong> designer rating</span>
+          <span className="dsv-hero-stats-sep" aria-hidden="true" />
+          <span><strong>60s</strong> to first preview</span>
         </div>
       </div>
-      <div className="dsv-hero-img" style={{ height: 220, marginBottom: "var(--space-24)" }}>
-        <img src="https://images.unsplash.com/photo-1503264116251-35a269479413?w=900&q=60" alt="" loading="lazy" />
+      <div className="dsv-hero-img" style={{ marginBottom: "var(--space-8)" }}>
+        <img src="https://images.unsplash.com/photo-1503264116251-35a269479413?w=900&q=60" alt="Product preview" loading="lazy" />
+        <span className="dsv-hero-img-cap"><span className="dsv-badge dsv-badge--on-dark">Live preview</span><span>Tokens → gallery in one paste</span></span>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "var(--space-4)", marginBottom: "var(--space-24)" }}>
-        {[["Tokens", "141-reference coverage"], ["Preview", "Radix + tokens"], ["Compare", "Side by side diff"]].map(([h, b]) => (
-          <div key={h} className="dsv-card dsv-feature-card">
-            <div style={{ fontWeight: "var(--font-weight-semibold)" }}>{h}</div>
-            <div className="dsv-muted" style={{ fontSize: "var(--font-size-sm)" }}>{b}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "var(--space-4)", marginBottom: "var(--space-8)" }}>
+        {[["file", "Tokens", "Full-schema coverage, linted on paste"], ["eye", "Preview", "Radix primitives in your tokens"], ["copy", "Compare", "Side by side diff, shareable links"]].map(([ic, h, b]) => (
+          <div key={h} className="dsv-card dsv-card--lift dsv-feature-card">
+            <span className="dsv-feature-ico"><Icon name={ic} size={18} /></span>
+            <div style={{ fontWeight: "var(--font-weight-semibold)", marginTop: "var(--space-3)" }}>{h}</div>
+            <div className="dsv-muted" style={{ fontSize: "var(--font-size-sm)", marginTop: "var(--space-1)" }}>{b}</div>
           </div>
         ))}
       </div>
-      <blockquote className="dsv-quote" style={{ marginBottom: "var(--space-24)" }}>
+      <div className="dsv-inline" style={{ justifyContent: "center", gap: "var(--space-6)", flexWrap: "wrap", marginBottom: "var(--space-8)" }} aria-label="Trusted by">
+        {["ACME", "GLOBEX", "INITECH", "UMBRELLA"].map((w) => (
+          <span key={w} className="dsv-muted" style={{ fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-bold)", letterSpacing: "var(--letter-spacing-wider)" }}>{w}</span>
+        ))}
+      </div>
+      <blockquote className="dsv-quote" style={{ marginBottom: "var(--space-8)" }}>
         “We finally see every token in context.”
-        <cite>— platform team lead</cite>
+        <cite>
+          <span className="dsv-inline" style={{ gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
+            <span className="dsv-avatar dsv-avatar--sm"><span className="dsv-avatar-fallback" style={{ fontSize: "var(--font-size-xs)" }}>PL</span></span>
+            <span>Platform team lead · Acme</span>
+          </span>
+        </cite>
       </blockquote>
-      <div className="dsv-banner" style={{ justifyContent: "center" }}>
-        Ready when you are <Button size="sm" style={{ background: "var(--color-surface)", color: "var(--color-text)", marginLeft: "var(--space-3)" }}>Get started</Button>
+      <div className="dsv-banner dsv-banner--on-dark" style={{ justifyContent: "center", flexWrap: "wrap", gap: "var(--space-3)" }}>
+        <span>Ready when you are</span>
+        <Button size="sm" className="dsv-btn--on-dark-solid" style={{ marginLeft: "var(--space-3)" }}>Get started</Button>
+        <Button size="sm" variant="ghost" className="dsv-btn--on-dark-ghost">Talk to sales</Button>
       </div>
     </div>
   );
@@ -676,11 +738,11 @@ function OnboardingScreen() {
   const labels = ["Workspace", "Invite", "Connect", "Done"];
   return (
     <div style={{ maxWidth: 480, margin: "0 auto" }}>
-      <div className="dsv-steps" style={{ marginBottom: "var(--space-5)", justifyContent: "center" }}>
+      <div className="dsv-steps dsv-steps--center" style={{ marginBottom: "var(--space-5)" }} role="list" aria-label="Onboarding progress">
         {labels.map((l, i) => (
-          <div key={l} className={`dsv-step ${i < step ? "dsv-step--done" : i === step ? "dsv-step--active" : ""}`}>
-            <span className="dot">{i < step ? <Icon name="check" size={12} /> : i + 1}</span>{l}
-            {i < labels.length - 1 && <span className="bar" />}
+          <div key={l} role="listitem" aria-current={i === step ? "step" : undefined} className={`dsv-step ${i < step ? "dsv-step--done" : i === step ? "dsv-step--active" : ""}`}>
+            <span className="dot">{i < step ? <Icon name="check" size={12} /> : i + 1}</span><span className="label">{l}</span>
+            {i < labels.length - 1 && <span className="bar" aria-hidden="true" />}
           </div>
         ))}
       </div>
@@ -710,13 +772,13 @@ function InboxScreen() {
     ["Figma", "3 new comments", "On the hero exploration…", "Mon"],
   ];
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 280px) 1fr", gap: 0, border: "var(--border-width-thin) solid var(--color-border-subtle)", borderRadius: "var(--radius-lg)", overflow: "hidden", minHeight: 320 }}>
+    <div className="dsv-inbox">
       <div style={{ borderRight: "var(--border-width-thin) solid var(--color-divider)", background: "var(--color-surface)" }}>
         <div className="dsv-inline" style={{ padding: "var(--space-3)", borderBottom: "var(--border-width-thin) solid var(--color-divider)" }}>
-          <input className="dsv-input" placeholder="Search mail…" style={{ flex: 1 }} />
+          <input className="dsv-input" placeholder="Search mail…" aria-label="Search mail" style={{ flex: 1, minWidth: 0 }} />
         </div>
         {mails.map(([from, subj, body, when], i) => (
-          <div key={subj} className={`dsv-list-item ${sel === i ? "is-selected" : ""}`} style={{ borderRadius: 0, padding: "var(--space-3)" }} onClick={() => setSel(i)}>
+          <div key={subj} role="option" aria-selected={sel === i} tabIndex={0} className={`dsv-list-item ${sel === i ? "is-selected" : ""}`} style={{ borderRadius: 0, padding: "var(--space-3)" }} onClick={() => setSel(i)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSel(i); } }}>
             <div style={{ minWidth: 0 }}>
               <div className="dsv-inline" style={{ justifyContent: "space-between" }}>
                 <strong style={{ fontSize: "var(--font-size-sm)" }}>{from}</strong>
@@ -813,7 +875,7 @@ function SearchScreen() {
         ))}
       </div>
       <div className="dsv-stack" style={{ gap: "var(--space-4)" }}>
-        {[["Token reference", "Schema of 141 tokens with coverage…", "#patterns"], ["Preview app", "Radix primitives styled by tokens…", "#screen-dashboard"], ["Compare mode", "Diff two systems side by side…", "#screen-table"]].map(([t, b, href]) => (
+        {[["Token reference", "Schema of 192 tokens with coverage…", "#patterns"], ["Preview app", "Radix primitives styled by tokens…", "#screen-dashboard"], ["Compare mode", "Diff two systems side by side…", "#screen-table"]].map(([t, b, href]) => (
           <div key={t}>
             <a className="dsv-link" href={href} style={{ fontSize: "var(--font-size-base)", fontWeight: "var(--font-weight-medium)" }}>{t}</a>
             <p className="dsv-muted" style={{ fontSize: "var(--font-size-sm)", margin: "var(--space-1) 0 0" }}>{b}</p>
@@ -834,8 +896,8 @@ function TeamScreen() {
     <div style={{ maxWidth: 640, margin: "0 auto" }}>
       <div className="dsv-inline" style={{ justifyContent: "space-between", marginBottom: "var(--space-4)" }}>
         <div className="dsv-avatar-group">
-          {[13, 22, 31].map((n) => <Avat key={n} n={n} size={28} />)}
-          <span className="dsv-avatar dsv-avatar-more" style={{ width: 28, height: 28 }}>+5</span>
+          {[13, 22, 31].map((n) => <Avat key={n} n={n} size="sm" />)}
+          <span className="dsv-avatar dsv-avatar-more dsv-avatar--sm">+5</span>
         </div>
         <Dialog.Root>
           <Dialog.Trigger asChild><Button size="sm"><Icon name="plus" size={14} /> Invite</Button></Dialog.Trigger>
@@ -858,7 +920,7 @@ function TeamScreen() {
           <thead><tr><th>Member</th><th>Role</th><th>Status</th></tr></thead>
           <tbody>
             {rows.map(([name, role, tone]) => (
-              <tr key={name}><td><span className="dsv-inline"><Avat n={name.length + 10} size={24} /> {name}</span></td><td>{role}</td><td><span className={`dsv-badge dsv-badge--${tone}`}>Active</span></td></tr>
+              <tr key={name}><td><span className="dsv-inline"><Avat n={name.length + 10} size="sm" /> {name}</span></td><td>{role}</td><td><span className={`dsv-badge dsv-badge--${tone}`}>Active</span></td></tr>
             ))}
           </tbody>
         </table>
@@ -872,7 +934,7 @@ function ReportScreen() {
   return (
     <div style={{ maxWidth: 560, margin: "0 auto", fontFamily: "var(--font-serif)", lineHeight: "var(--line-height-relaxed)" }}>
       <div className="dsv-muted" style={{ fontSize: "var(--font-size-xs)", fontFamily: "var(--font-sans)" }}>Q2 · Design systems report</div>
-      <h3 className="dsv-display dsv-display--3xl" style={{ margin: "var(--space-3) 0" }}>Coverage is up, drift is down</h3>
+      <h3 className="dsv-display dsv-display--3xl" style={{ margin: "var(--space-3) 0", fontFamily: "var(--font-serif)" }}>Coverage is up, drift is down</h3>
       <p className="dsv-prose" style={{ fontFamily: "var(--font-serif)", fontSize: "var(--font-size-base)" }}>
         Token adoption rose from 61% to 84% this quarter. The preview now exercises every scale —
         color, type, spacing, radius, shadow and motion — so drift surfaces before it ships.
@@ -903,10 +965,10 @@ function FilesScreen() {
           <div key={name} className="dsv-inline" style={{ padding: "var(--space-3) var(--space-4)", borderBottom: "var(--border-width-thin) solid var(--color-border-subtle)", gap: "var(--space-3)" }}>
             <Icon name="file" size={16} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)" }}>{name}</div>
+              <div style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
               <div className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>{size} · {who} · {pct === 100 ? "done" : `${pct}%`}</div>
             </div>
-            {pct === 100 ? <span className="dsv-badge dsv-badge--success">Synced</span> : <span className="dsv-spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />}
+            {pct === 100 ? <span className="dsv-badge dsv-badge--success">Synced</span> : <span className="dsv-spinner dsv-spinner--sm" />}
           </div>
         ))}
       </div>
@@ -918,11 +980,11 @@ function FilesScreen() {
 function ActivityScreen() {
   const [f, setF] = useState("All");
   const items = [
-    ["Deploy succeeded", "v0.2.0 live · CI Bot", "2m", "success"],
-    ["Member joined", "@turing joined the team", "1h", "info"],
-    ["Quota warning", "Storage 85% full", "3h", "warning"],
-    ["Payment failed", "Card declined — update", "yesterday", "danger"],
-    ["API key created", "by @ada · read-only", "2d", "info"],
+    ["Deploy succeeded", "v0.2.0 live · CI Bot", "2m", "success", "Deploys"],
+    ["Member joined", "@turing joined the team", "1h", "info", "Members"],
+    ["Quota warning", "Storage 85% full", "3h", "warning", "Billing"],
+    ["Payment failed", "Card declined — update", "yesterday", "danger", "Billing"],
+    ["API key created", "by @ada · read-only", "2d", "info", "Deploys"],
   ];
   return (
     <div style={{ maxWidth: 560, margin: "0 auto" }}>
@@ -932,7 +994,7 @@ function ActivityScreen() {
         ))}
       </div>
       <ul className="dsv-timeline">
-        {items.filter(([, b]) => f === "All" || b.toLowerCase().includes(f.slice(0, 4).toLowerCase()) || f === "All").slice(0, f === "All" ? 5 : 2).map(([b, w, when, tone]) => (
+        {(f === "All" ? items : items.filter((it) => it[4] === f)).map(([b, w, when, tone]) => (
           <li key={b}>
             <span className="node" style={tone === "success" ? undefined : tone === "danger" ? { background: "var(--color-danger-subtle)", borderColor: "var(--color-danger)" } : tone === "warning" ? { background: "var(--color-warning-subtle)", borderColor: "var(--color-warning)" } : { background: "var(--color-info-subtle)", borderColor: "var(--color-info)" }} />
             <div><div className="body">{b}</div><div className="when">{w} · {when}</div></div>
@@ -944,7 +1006,38 @@ function ActivityScreen() {
   );
 }
 
+// ─────────────────────────────────────────── Data viz (chart theme)
+function VizScreen() {
+  // tokenUsage: var(--color-chart-1) var(--color-chart-2) var(--color-chart-3) var(--color-chart-4) var(--color-chart-5) var(--color-chart-6) var(--color-chart-7) var(--color-chart-8)
+  const bars = [42, 68, 55, 88, 60, 96, 74, 80];
+  return (
+    <div className="dsv-stack">
+      <div className="dsv-inline" style={{ justifyContent: "space-between" }}>
+        <h3 style={{ margin: 0, fontSize: "var(--font-size-lg)" }}>Channel mix</h3>
+        <span className="dsv-chart-tip">Q2 · all channels</span>
+      </div>
+      <div className="dsv-card">
+        <div className="dsv-inline" style={{ alignItems: "flex-end", gap: "var(--space-2)", height: 150 }}>
+          {bars.map((h, i) => (
+            <div key={i} title={`${h}%`} style={{ flex: 1, height: `${h}%`, background: `var(--color-chart-${i + 1})`, borderRadius: "var(--radius-sm) var(--radius-sm) 0 0" }} />
+          ))}
+        </div>
+        <div className="dsv-chart-grid" style={{ height: "var(--space-5)" }} />
+        <div className="dsv-chart-axis" />
+        <div className="dsv-inline" style={{ gap: "var(--space-3)", marginTop: "var(--space-3)", flexWrap: "wrap" }}>
+          {["Organic", "Paid", "Referral", "Social", "Email", "Direct", "Partner", "Other"].map((l, i) => (
+            <span key={l} className="dsv-inline" style={{ fontSize: "var(--font-size-xs)" }}>
+              <span style={{ width: "var(--space-2-5)", height: "var(--space-2-5)", borderRadius: "var(--radius-sm)", background: `var(--color-chart-${i + 1})` }} />{l}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export const SCREEN_SECTIONS = [
+  ["screen-viz", "Data viz", VizScreen, "Chart theme tokens + grid + axis + tooltip."],
   ["screen-files", "Files", FilesScreen, "Storage meter + file rows with sync states."],
   ["screen-activity", "Activity log", ActivityScreen, "Filter + tinted timeline with footer link."],
   ["screen-404", "404 / error", NotFoundScreen, "Display number, muted body, recovery actions."],

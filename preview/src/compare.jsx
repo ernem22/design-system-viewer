@@ -9,6 +9,11 @@ import * as Accordion from "@radix-ui/react-accordion";
 import * as Progress from "@radix-ui/react-progress";
 import { Button, Field, Icon } from "./ui.jsx";
 import { loadGoogleFonts, fetchSystems } from "./useSystemTokens.js";
+import { coverage } from "../../src/core/schema.js";
+import { parseTokens } from "../../src/core/parse.js";
+import { COMPONENT_SECTIONS } from "./components.jsx";
+import { EXTRA_SECTIONS } from "./extras.jsx";
+import { SCREEN_SECTIONS } from "./screens.jsx";
 
 // ── comparable component renderers (stateless-ish; local state is per column) ──
 const Buttons = () => (
@@ -173,6 +178,25 @@ export const REGISTRY = [
   { id: "accordion", label: "Accordion", Render: Accord },
   { id: "progress", label: "Progress / Spinner", Render: Progressy },
   { id: "login", label: "Login card", Render: LoginCard },
+  // Every gallery section, so the whole preview is comparable system-by-system.
+  // Section components only read canonical tokens via var(--x), which resolve
+  // against each column's inline token scope — no :root dependency.
+  ...COMPONENT_SECTIONS.map((s) => ({ id: `gallery-${s.id}`, label: `${s.label}`, Render: s.Comp })),
+  ...EXTRA_SECTIONS.map((s) => ({ id: `gallery-${s.id}`, label: `${s.label}`, Render: s.Comp })),
+  ...SCREEN_SECTIONS.map((s) => ({ id: `gallery-${s.id}`, label: `${s.label}`, Render: s.Comp })),
+];
+
+// Grouped options for the component picker — one flat list of ~40 entries is
+// unnavigable. Values stay identical, so ?c= links keep working.
+const byId = new Map(REGISTRY.map((r) => [r.id, r]));
+const OPT_GROUPS = [
+  { label: "Basics", items: REGISTRY.filter((r) => !r.id.startsWith("gallery-")) },
+  ...[["Components", COMPONENT_SECTIONS], ["Extras", EXTRA_SECTIONS], ["Screens", SCREEN_SECTIONS]].map(
+    ([label, sections]) => ({
+      label,
+      items: sections.map((s) => byId.get(`gallery-${s.id}`)).filter(Boolean),
+    }),
+  ),
 ];
 
 // ── data ──
@@ -307,6 +331,19 @@ export default function Compare() {
     return map;
   }, [systems]);
 
+  // Stored coverage snapshots go stale when the schema grows — recompute live
+  // so chips never claim a bogus 100%.
+  const pctMap = useMemo(() => {
+    const map = {};
+    for (const s of systems || []) {
+      try {
+        const c = coverage(parseTokens(s.css).map((t) => t.name));
+        map[s.slug] = Math.round((c.present / c.expected) * 100);
+      } catch { map[s.slug] = null; }
+    }
+    return map;
+  }, [systems]);
+
   useEffect(() => {
     const cols = (systems || []).filter((s) => picked.includes(s.slug));
     loadGoogleFonts(cols.map((s) => s.css).join("\n"));
@@ -324,27 +361,48 @@ export default function Compare() {
   return (
     <div className="cmp-wrap">
       <header className="cmp-toolbar">
-        <div className="cmp-seg">
-          <button className={view === "component" ? "on" : ""} onClick={() => setView("component")}>Component</button>
-          <button className={view === "diff" ? "on" : ""} onClick={() => setView("diff")}>Token diff</button>
-        </div>
-        {view === "component" && (
-          <label className="cmp-field">
-            Component
-            <select value={componentId} onChange={(e) => setComponentId(e.target.value)} className="cmp-select">
-              {REGISTRY.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
-            </select>
-          </label>
-        )}
-        <div className="cmp-systems">
-          {systems.map((s) => (
-            <label key={s.slug} className={`cmp-chip ${picked.includes(s.slug) ? "on" : ""}`}>
-              <input type="checkbox" checked={picked.includes(s.slug)} onChange={() => toggle(s.slug)} />
-              {s.name}
+        <div className="cmp-row">
+          <div className="cmp-seg">
+            <button className={view === "component" ? "on" : ""} onClick={() => setView("component")}>Component</button>
+            <button className={view === "diff" ? "on" : ""} onClick={() => setView("diff")}>Token diff</button>
+          </div>
+          {view === "component" && (
+            <label className="cmp-field">
+              <span>Component</span>
+              <span className="cmp-select-wrap">
+                <select value={componentId} onChange={(e) => setComponentId(e.target.value)} className="cmp-select" aria-label="Component to compare">
+                  {OPT_GROUPS.map((g) => (
+                    <optgroup key={g.label} label={`${g.label} (${g.items.length})`}>
+                      {g.items.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+                <Icon name="chevronDown" size={14} />
+              </span>
             </label>
-          ))}
+          )}
+          <span className="cmp-hint dsv-muted">{picked.length}/4 selected</span>
         </div>
-        <span className="cmp-hint dsv-muted">max 4 systems</span>
+        <div className="cmp-systems" role="group" aria-label="Systems to compare">
+          {systems.map((s) => {
+            const isOn = picked.includes(s.slug);
+            const locked = !isOn && picked.length >= 4;
+            const pct = pctMap[s.slug];
+            return (
+              <label
+                key={s.slug}
+                className={`cmp-chip ${isOn ? "on" : ""}`}
+                aria-disabled={locked || undefined}
+                title={locked ? "Max 4 systems — unpick one first" : `${s.name}${pct != null ? ` · ${pct}% schema tokens` : ""}`}
+              >
+                <input type="checkbox" checked={isOn} disabled={locked} onChange={() => toggle(s.slug)} aria-label={s.name} />
+                <span className="cmp-dot" aria-hidden="true" />
+                {s.name}
+                {pct != null && <span className="cmp-pct">{pct}%</span>}
+              </label>
+            );
+          })}
+        </div>
       </header>
 
       {cols.length < 2 ? (
@@ -358,7 +416,7 @@ export default function Compare() {
               <h3 className="cmp-col-head">
                 <span className="cmp-swatch" style={{ background: "var(--color-accent)" }} />
                 {s.name}
-                <span className="cmp-cov">{s.coverage ? `${Math.round((s.coverage.present / s.coverage.expected) * 100)}%` : ""}</span>
+                <span className="cmp-cov">{pctMap[s.slug] != null ? `${pctMap[s.slug]}%` : ""}</span>
               </h3>
               <div className="cmp-col-body"><active.Render /></div>
             </section>

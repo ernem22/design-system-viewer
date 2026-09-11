@@ -2,29 +2,62 @@ import { useEffect, useRef, useState } from "react";
 import { fontFamiliesIn } from "./fonts.js";
 
 const STYLE_ID = "dsv-tokens";
-const FONT_LINK_ID = "dsv-google-fonts";
+const FONT_LINK_ID = "dsv-google-fonts"; // legacy single-link id, removed on sight
+const FONT_LINK_ATTR = "data-dsv-font";
 
 // Systems name real webfonts but ship no @font-face — pull whatever families
-// the active system actually references from Google Fonts. Unknown/self-hosted
-// names are silently dropped by the API (no 400s), so this is safe to try for
-// every system, not just a hardcoded few.
+// the active system actually references from Google Fonts. One <link> per
+// family on purpose: the css2 API answers 400 for an unknown family (Georgia,
+// SFMono-Regular, self-hosted names…), and a single combined request would
+// take every valid family down with it. Isolated links fail independently.
+const familyHref = (f) =>
+  "https://fonts.googleapis.com/css2?" +
+  `family=${encodeURIComponent(f).replace(/%20/g, "+")}:wght@400;500;600;700` +
+  "&display=swap";
+
+// Google matches family names case-sensitively ("inter" 400s, "Inter" 200s),
+// and pasted CSS often gets the casing wrong. One automatic correction attempt.
+const titleCase = (f) => f.split(" ").map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(" ");
+
+function addFontLink(fam) {
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.setAttribute(FONT_LINK_ATTR, "");
+  link.dataset.fam = fam;
+  link.onerror = () => {
+    link.remove();
+    const fixed = titleCase(fam);
+    if (fixed !== fam && !document.querySelector(`link[${FONT_LINK_ATTR}][data-fam="${CSS.escape(fixed)}"]`)) {
+      // single retry with corrected casing; its own failure just removes it
+      const retry = document.createElement("link");
+      retry.rel = "stylesheet";
+      retry.setAttribute(FONT_LINK_ATTR, "");
+      retry.dataset.fam = fixed;
+      retry.onerror = () => retry.remove();
+      retry.href = familyHref(fixed);
+      document.head.appendChild(retry);
+    }
+  };
+  link.href = familyHref(fam);
+  document.head.appendChild(link);
+}
+
 export function loadGoogleFonts(css) {
-  const families = fontFamiliesIn(css);
+  const wanted = new Map(fontFamiliesIn(css).map((f) => [familyHref(f), f]));
 
-  let link = document.getElementById(FONT_LINK_ID);
-  if (!families.length) { link?.remove(); return; }
+  // legacy single combined link from before — always drop it
+  document.getElementById(FONT_LINK_ID)?.remove();
 
-  const href = "https://fonts.googleapis.com/css2?" +
-    families.map((f) => `family=${encodeURIComponent(f).replace(/%20/g, "+")}:wght@400;500;600;700`).join("&") +
-    "&display=swap";
-  if (link?.href === href) return;
-  if (!link) {
-    link = document.createElement("link");
-    link.id = FONT_LINK_ID;
-    link.rel = "stylesheet";
-    document.head.appendChild(link);
+  const existing = [...document.querySelectorAll(`link[${FONT_LINK_ATTR}]`)];
+  for (const link of existing) {
+    const fam = link.dataset.fam;
+    const href = link.getAttribute("href");
+    // keep exact-href matches AND pending title-case retries of wanted families
+    const keep = wanted.has(href) || (fam && [...wanted.values()].some((f) => titleCase(f) === fam));
+    if (!keep) link.remove();
+    else wanted.delete(href);
   }
-  link.href = href;
+  for (const [, fam] of wanted) addFontLink(fam);
 }
 
 function injectCss(system, dark) {
