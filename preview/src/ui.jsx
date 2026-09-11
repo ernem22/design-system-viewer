@@ -1,6 +1,8 @@
 // Shared bits used across component demos and screens.
-import { createContext, forwardRef, useContext } from "react";
+import { createContext, forwardRef, useContext, useMemo, useState } from "react";
+import * as Popover from "@radix-ui/react-popover";
 import { tokensForDemo } from "./tokenUsage.js";
+import { ALL_TOKENS, kindOf, useTokenOverrides } from "./tokenOverrides.js";
 
 // Radix *.Portal components default to document.body, which sits outside
 // Compare's per-column inline token scope (each cmp-col carries its own
@@ -75,6 +77,103 @@ export function Field({ label, hint, error, id, children }) {
   );
 }
 
+// Reads the live resolved value for a token off :root. Preview scopes tokens
+// there (single-system mode only — Compare scopes per-column instead, which
+// is why TokenChip/TokenSwatch just render plain when no overrides context
+// is present).
+function resolvedValue(name) {
+  try { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  catch { return ""; }
+}
+
+const isColorValue = (v) => /^(#|rgb|hsl|oklch|color\(|color-mix)/i.test(v);
+
+function TokenSwatch({ name }) {
+  if (kindOf(name) !== "color") return null;
+  const v = resolvedValue(name);
+  if (!v || !isColorValue(v)) return null;
+  return <span className="dsv-token-swatch" style={{ background: v }} aria-hidden="true" />;
+}
+
+function TokenPicker({ name, current, onPick, onReset }) {
+  const [q, setQ] = useState("");
+  const bareKind = kindOf(name);
+  const candidates = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    return ALL_TOKENS
+      .filter((t) => t.name !== name && kindOf(t.name) === bareKind)
+      .filter((t) => !query || t.name.toLowerCase().includes(query) || t.group.toLowerCase().includes(query));
+  }, [q, name, bareKind]);
+  const shown = candidates.slice(0, 60);
+
+  return (
+    <div className="dsv-token-picker">
+      <div className="dsv-token-picker-head">
+        <TokenSwatch name={name} />
+        <code className="dsv-code-inline">{name}</code>
+        <span className="dsv-muted dsv-token-picker-value">{resolvedValue(name) || "—"}</span>
+      </div>
+      {current && (
+        <div className="dsv-token-picker-current">
+          <span className="dsv-muted">swapped from</span>
+          <code className="dsv-code-inline">{current}</code>
+          <button type="button" className="dsv-token-picker-reset" onClick={onReset}>Reset</button>
+        </div>
+      )}
+      <div className="dsv-rail-filter dsv-token-picker-search">
+        <Icon name="search" size={14} />
+        <input
+          autoFocus type="search" value={q} onChange={(e) => setQ(e.target.value)}
+          placeholder={`Search ${bareKind} tokens…`} aria-label="Search tokens"
+        />
+      </div>
+      <div className="dsv-token-picker-list" role="listbox">
+        {shown.length === 0 && <div className="dsv-token-picker-empty dsv-muted">No matches</div>}
+        {shown.map((t) => (
+          <button key={t.name} type="button" className="dsv-token-picker-item" onClick={() => onPick(t.name)}>
+            <TokenSwatch name={t.name} />
+            <span className="dsv-token-picker-name">{t.name}</span>
+            <span className="dsv-token-picker-group dsv-muted">{t.group}</span>
+          </button>
+        ))}
+        {candidates.length > shown.length && (
+          <div className="dsv-token-picker-more dsv-muted">+{candidates.length - shown.length} more — keep typing to narrow</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** A demo's token badge — click to swap which token this preview reads, live. */
+function TokenChip({ name }) {
+  const ctx = useTokenOverrides();
+  const portalContainer = usePortalContainer();
+  const [open, setOpen] = useState(false);
+  if (!ctx) return <code className="dsv-code-inline">{name}</code>; // Compare: read-only
+
+  const source = ctx.overrides[name];
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>
+        <button type="button" className={`dsv-token-chip${source ? " is-overridden" : ""}`}>
+          <TokenSwatch name={source || name} />
+          <code>{name}</code>
+          {source && <Icon name="chevronRight" size={11} className="dsv-token-chip-arrow" />}
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal container={portalContainer}>
+        <Popover.Content className="dsv-pop" sideOffset={6} align="start" collisionPadding={8}>
+          <TokenPicker
+            name={name} current={source}
+            onPick={(picked) => { ctx.setOverride(name, picked); setOpen(false); }}
+            onReset={() => { ctx.clearOverride(name); setOpen(false); }}
+          />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
 export function Demo({ title, children }) {
   const tokens = tokensForDemo(title);
   return (
@@ -85,7 +184,7 @@ export function Demo({ title, children }) {
         <details className="dsv-demo-tokens">
           <summary>{tokens.length} token{tokens.length === 1 ? "" : "s"}</summary>
           <div className="dsv-demo-tokens-list">
-            {tokens.map((t) => <code key={t} className="dsv-code-inline">{t}</code>)}
+            {tokens.map((t) => <TokenChip key={t} name={t} />)}
           </div>
         </details>
       )}

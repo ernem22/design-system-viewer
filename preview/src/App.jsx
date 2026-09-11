@@ -5,6 +5,7 @@ import { COMPONENT_SECTIONS } from "./components.jsx";
 import { EXTRA_SECTIONS } from "./extras.jsx";
 import { SCREEN_SECTIONS } from "./screens.jsx";
 import Compare from "./compare.jsx";
+import { TokenOverridesContext, useTokenOverridesProvider } from "./tokenOverrides.js";
 
 const GROUPS = [
   ["Components", COMPONENT_SECTIONS],
@@ -81,6 +82,8 @@ function SchemaNote({ coverage }) {
 
 function Gallery() {
   const { system, error, loading, dark, setDark, hasDark } = useSystemTokens();
+  const tokenOverrides = useTokenOverridesProvider();
+  const overrideCount = Object.keys(tokenOverrides.overrides).length;
   const [activeId, setActiveId] = useState(() => location.hash?.slice(1) || null);
   const [query, setQuery] = useState("");
   // section search — Turkish-aware lowercase so "Önizleme" finds "önizleme".
@@ -137,6 +140,7 @@ function Gallery() {
   }, [loading, visibleSections]);
 
   return (
+    <TokenOverridesContext.Provider value={tokenOverrides}>
     <div className="dsv-app">
       <nav className="dsv-rail" aria-label="Preview sections">
         <div className="dsv-rail-head">
@@ -147,6 +151,12 @@ function Gallery() {
               <span className="dsv-sw" aria-hidden="true"><span className="dsv-sw-th" /></span>
               <span className="dsv-dark-label">Dark variant</span>
             </label>
+          )}
+          {overrideCount > 0 && (
+            <button type="button" className="dsv-override-pill" onClick={tokenOverrides.clearAll}>
+              <span>{overrideCount} token{overrideCount === 1 ? "" : "s"} swapped</span>
+              <span className="dsv-override-pill-reset">Reset</span>
+            </button>
           )}
           <span className="dsv-rail-filter">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
@@ -187,5 +197,6 @@ function Gallery() {
         {!loading && visibleSections.map(({ id, Comp }) => <Comp key={id} />)}
       </main>
     </div>
+    </TokenOverridesContext.Provider>
   );
 }
