@@ -83,7 +83,8 @@ function SchemaNote({ coverage }) {
 function Gallery() {
   const { system, error, loading, dark, setDark, hasDark } = useSystemTokens();
   const tokenOverrides = useTokenOverridesProvider();
-  const overrideCount = Object.keys(tokenOverrides.overrides).length;
+  const overrideCount = Object.keys(tokenOverrides.valueEdits).length
+    + Object.values(tokenOverrides.swaps).reduce((n, m) => n + Object.keys(m).length, 0);
   const [activeId, setActiveId] = useState(() => location.hash?.slice(1) || null);
   const [query, setQuery] = useState("");
   // section search — Turkish-aware lowercase so "Önizleme" finds "önizleme".
@@ -154,7 +155,7 @@ function Gallery() {
           )}
           {overrideCount > 0 && (
             <button type="button" className="dsv-override-pill" onClick={tokenOverrides.clearAll}>
-              <span>{overrideCount} token{overrideCount === 1 ? "" : "s"} swapped</span>
+              <span>{overrideCount} token edit{overrideCount === 1 ? "" : "s"}</span>
               <span className="dsv-override-pill-reset">Reset</span>
             </button>
           )}

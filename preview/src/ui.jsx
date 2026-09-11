@@ -1,8 +1,8 @@
 // Shared bits used across component demos and screens.
 import { createContext, forwardRef, useContext, useMemo, useState } from "react";
-import * as Popover from "@radix-ui/react-popover";
+import * as Dialog from "@radix-ui/react-dialog";
 import { tokensForDemo } from "./tokenUsage.js";
-import { ALL_TOKENS, kindOf, useTokenOverrides } from "./tokenOverrides.js";
+import { ALL_TOKENS, baseValue, demoId, kindOf, useTokenOverrides } from "./tokenOverrides.js";
 
 // Radix *.Portal components default to document.body, which sits outside
 // Compare's per-column inline token scope (each cmp-col carries its own
@@ -47,6 +47,7 @@ export function Icon({ name, size = 16, className = "", ...rest }) {
     star: <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />,
     copy: <><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></>,
     edit: <><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></>,
+    sliders: <><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></>,
     calendar: <><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></>,
     inbox: <><polyline points="22 12 16 12 14 15 10 15 8 12 2 12" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /></>,
     file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></>,
@@ -77,28 +78,22 @@ export function Field({ label, hint, error, id, children }) {
   );
 }
 
-// Reads the live resolved value for a token off :root. Preview scopes tokens
-// there (single-system mode only — Compare scopes per-column instead, which
-// is why TokenChip/TokenSwatch just render plain when no overrides context
-// is present).
-function resolvedValue(name) {
-  try { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
-  catch { return ""; }
-}
-
 const isColorValue = (v) => /^(#|rgb|hsl|oklch|color\(|color-mix)/i.test(v);
-// Long shadow/gradient/composite values would blow out a chip — keep just
-// enough to recognize the value, full string still lives in the popover.
-const shortValue = (v, max = 22) => (v.length > max ? v.slice(0, max - 1) + "…" : v);
+// Long shadow/gradient/composite values would blow out a row — keep just
+// enough to recognize the value at a glance.
+const shortValue = (v, max = 30) => (v.length > max ? v.slice(0, max - 1) + "…" : v);
+const hexOf = (v) => (/^#[0-9a-f]{6}$/i.test(v) ? v : "#888888");
 
-function TokenSwatch({ name }) {
-  if (kindOf(name) !== "color") return null;
-  const v = resolvedValue(name);
-  if (!v || !isColorValue(v)) return null;
-  return <span className="dsv-token-swatch" style={{ background: v }} aria-hidden="true" />;
+function TokenSwatch({ value }) {
+  if (!value || !isColorValue(value)) return null;
+  return <span className="dsv-token-swatch" style={{ background: value }} aria-hidden="true" />;
 }
 
-function TokenPicker({ name, current, onPick, onReset }) {
+const KIND_ORDER = ["color", "length", "shadow", "motion", "type", "number", "raw"];
+const KIND_LABEL = { color: "Colors", length: "Lengths & sizes", shadow: "Shadows", motion: "Motion", type: "Type", number: "Numbers", raw: "Other" };
+
+/** Inline "use a different token here" search — same kind only, scoped to one demo. */
+function SwapPicker({ name, onPick }) {
   const [q, setQ] = useState("");
   const bareKind = kindOf(name);
   const candidates = useMemo(() => {
@@ -107,23 +102,10 @@ function TokenPicker({ name, current, onPick, onReset }) {
       .filter((t) => t.name !== name && kindOf(t.name) === bareKind)
       .filter((t) => !query || t.name.toLowerCase().includes(query) || t.group.toLowerCase().includes(query));
   }, [q, name, bareKind]);
-  const shown = candidates.slice(0, 60);
+  const shown = candidates.slice(0, 40);
 
   return (
-    <div className="dsv-token-picker">
-      <div className="dsv-token-picker-head">
-        <TokenSwatch name={name} />
-        <code className="dsv-code-inline">{name}</code>
-        <span className="dsv-muted dsv-token-picker-value">{resolvedValue(name) || "—"}</span>
-      </div>
-      {current && (
-        <div className="dsv-token-picker-current">
-          <Icon name="chevronRight" size={11} />
-          <span className="dsv-muted">now reading</span>
-          <code className="dsv-code-inline">{current}</code>
-          <button type="button" className="dsv-token-picker-reset" onClick={onReset}>Undo</button>
-        </div>
-      )}
+    <div className="dsv-token-editor">
       <div className="dsv-rail-filter dsv-token-picker-search">
         <Icon name="search" size={14} />
         <input
@@ -135,7 +117,7 @@ function TokenPicker({ name, current, onPick, onReset }) {
         {shown.length === 0 && <div className="dsv-token-picker-empty dsv-muted">No matches</div>}
         {shown.map((t) => (
           <button key={t.name} type="button" className="dsv-token-picker-item" onClick={() => onPick(t.name)}>
-            <TokenSwatch name={t.name} />
+            <TokenSwatch value={baseValue(t.name)} />
             <span className="dsv-token-picker-name">{t.name}</span>
             <span className="dsv-token-picker-group dsv-muted">{t.group}</span>
           </button>
@@ -148,62 +130,147 @@ function TokenPicker({ name, current, onPick, onReset }) {
   );
 }
 
-/** A demo's token badge — click to swap which token this preview reads, live. */
-function TokenChip({ name }) {
-  const ctx = useTokenOverrides();
-  const portalContainer = usePortalContainer();
-  const [open, setOpen] = useState(false);
-  if (!ctx) return <code className="dsv-code-inline">{name}</code>; // Compare: read-only
-
-  const source = ctx.overrides[name];
+/** Inline "change what this token equals" editor — global, edits the token itself. */
+function ValueEditor({ name, value, onChange }) {
   return (
-    <span className={`dsv-token-chip-wrap${source ? " is-overridden" : ""}`}>
-      <Popover.Root open={open} onOpenChange={setOpen}>
-        <Popover.Trigger asChild>
-          <button type="button" className="dsv-token-chip" title={`Click to swap ${name}`}>
-            <TokenSwatch name={source || name} />
-            <code>{name}</code>
-            {source
-              ? <><Icon name="chevronRight" size={11} className="dsv-token-chip-arrow" /><code>{source}</code></>
-              : <span className="dsv-token-chip-value">{shortValue(resolvedValue(name))}</span>}
-          </button>
-        </Popover.Trigger>
-        <Popover.Portal container={portalContainer}>
-          <Popover.Content className="dsv-pop" sideOffset={6} align="start" collisionPadding={8}>
-            <TokenPicker
-              name={name} current={source}
-              onPick={(picked) => { ctx.setOverride(name, picked); setOpen(false); }}
-              onReset={() => { ctx.clearOverride(name); setOpen(false); }}
-            />
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
-      {source && (
-        <button
-          type="button" className="dsv-token-chip-undo" title={`Reset ${name} to its own value`}
-          onClick={() => ctx.clearOverride(name)}
-        >
-          <Icon name="x" size={10} />
-        </button>
+    <div className="dsv-token-editor dsv-token-value-editor">
+      {kindOf(name) === "color" && (
+        <input
+          type="color" className="dsv-token-color-input" value={hexOf(value)}
+          onChange={(e) => onChange(e.target.value)} aria-label={`${name} color picker`}
+        />
       )}
-    </span>
+      <input
+        type="text" className="dsv-input dsv-token-value-input" value={value}
+        onChange={(e) => onChange(e.target.value)} spellCheck={false}
+        placeholder="CSS value…" aria-label={`${name} value`}
+      />
+    </div>
+  );
+}
+
+function TokenRow({ id, name, ctx }) {
+  const [mode, setMode] = useState(null); // null | "swap" | "edit"
+  const swappedTo = ctx.swaps[id]?.[name];
+  const isValueEdited = name in ctx.valueEdits;
+  const value = ctx.valueInDemo(id, name);
+
+  return (
+    <div className="dsv-token-row">
+      <div className="dsv-token-row-main">
+        <TokenSwatch value={value} />
+        <code className="dsv-token-row-name">{name}</code>
+        {swappedTo ? (
+          <span className="dsv-token-row-swap">
+            <Icon name="chevronRight" size={11} />
+            <code>{swappedTo}</code>
+            <button type="button" className="dsv-token-row-undo" title={`Stop using ${swappedTo} here`} onClick={() => ctx.clearSwap(id, name)}>
+              <Icon name="x" size={10} />
+            </button>
+          </span>
+        ) : (
+          <span className="dsv-token-row-value" title={value}>{shortValue(value)}</span>
+        )}
+        {isValueEdited && (
+          <span className="dsv-token-row-edited" title={`${name} value edited — affects every use of this token`}>
+            edited
+            <button type="button" className="dsv-token-row-undo" title={`Revert ${name}'s value`} onClick={() => ctx.clearValueEdit(name)}>
+              <Icon name="x" size={10} />
+            </button>
+          </span>
+        )}
+        <span className="dsv-token-row-actions">
+          <button type="button" className={mode === "swap" ? "is-active" : ""} onClick={() => setMode(mode === "swap" ? null : "swap")}>
+            Use another token here
+          </button>
+          <button type="button" className={mode === "edit" ? "is-active" : ""} onClick={() => setMode(mode === "edit" ? null : "edit")}>
+            Edit value
+          </button>
+        </span>
+      </div>
+      {mode === "swap" && (
+        <SwapPicker name={name} onPick={(picked) => { ctx.setSwap(id, name, picked); setMode(null); }} />
+      )}
+      {mode === "edit" && (
+        <ValueEditor name={name} value={ctx.globalValue(name)} onChange={(v) => ctx.setValueEdit(name, v)} />
+      )}
+    </div>
+  );
+}
+
+/** Drawer listing every token a Demo uses — swap what it reads here only, or edit the token's own value everywhere. */
+function TokenDrawer({ title, id, tokens, ctx }) {
+  const portalContainer = usePortalContainer();
+  const groups = useMemo(() => {
+    const byKind = new Map();
+    for (const t of tokens) {
+      const k = kindOf(t);
+      if (!byKind.has(k)) byKind.set(k, []);
+      byKind.get(k).push(t);
+    }
+    return KIND_ORDER.filter((k) => byKind.has(k)).map((k) => [k, byKind.get(k)]);
+  }, [tokens]);
+  const swapCount = Object.keys(ctx.swaps[id] || {}).length;
+
+  return (
+    <Dialog.Portal container={portalContainer}>
+      <Dialog.Overlay className="dsv-drawer-overlay" />
+      <Dialog.Content className="dsv-drawer">
+        <div className="dsv-drawer-head">
+          <div>
+            <Dialog.Title asChild><h3>{title}</h3></Dialog.Title>
+            <Dialog.Description asChild><p className="dsv-muted">{tokens.length} token{tokens.length === 1 ? "" : "s"} used here</p></Dialog.Description>
+          </div>
+          <Dialog.Close asChild>
+            <button type="button" className="dsv-btn dsv-btn--ghost dsv-icon-btn" aria-label="Close"><Icon name="x" size={16} /></button>
+          </Dialog.Close>
+        </div>
+        {swapCount > 0 && (
+          <button type="button" className="dsv-drawer-reset" onClick={() => ctx.clearSwapsIn(id)}>
+            Reset {swapCount} swap{swapCount === 1 ? "" : "s"} in this component
+          </button>
+        )}
+        <div className="dsv-drawer-body">
+          {groups.map(([kind, names]) => (
+            <div key={kind} className="dsv-drawer-group">
+              <div className="dsv-drawer-group-label">{KIND_LABEL[kind]}</div>
+              {names.map((name) => <TokenRow key={name} id={id} name={name} ctx={ctx} />)}
+            </div>
+          ))}
+        </div>
+      </Dialog.Content>
+    </Dialog.Portal>
   );
 }
 
 export function Demo({ title, children }) {
   const tokens = tokensForDemo(title);
+  const ctx = useTokenOverrides();
+  const id = demoId(title);
+  const [open, setOpen] = useState(false);
+
+  const swapStyle = ctx
+    ? Object.fromEntries(Object.entries(ctx.swaps[id] || {}).map(([target, source]) => [target, `var(${source})`]))
+    : undefined;
+  const hasEdits = ctx && (Object.keys(ctx.swaps[id] || {}).length > 0);
+
   return (
-    <div className="dsv-block">
-      <h3>{title}</h3>
+    <div className="dsv-block" style={swapStyle}>
+      <div className="dsv-block-head">
+        <h3>{title}</h3>
+        {ctx && tokens.length > 0 && (
+          <Dialog.Root open={open} onOpenChange={setOpen}>
+            <Dialog.Trigger asChild>
+              <button type="button" className={`dsv-token-drawer-trigger${hasEdits ? " has-edits" : ""}`} title={`${tokens.length} tokens used here — click to inspect or edit`}>
+                <Icon name="sliders" size={13} />
+                {tokens.length}
+              </button>
+            </Dialog.Trigger>
+            {open && <TokenDrawer title={title} id={id} tokens={tokens} ctx={ctx} />}
+          </Dialog.Root>
+        )}
+      </div>
       <div className="dsv-row">{children}</div>
-      {tokens.length > 0 && (
-        <details className="dsv-demo-tokens">
-          <summary>{tokens.length} token{tokens.length === 1 ? "" : "s"}</summary>
-          <div className="dsv-demo-tokens-list">
-            {tokens.map((t) => <TokenChip key={t} name={t} />)}
-          </div>
-        </details>
-      )}
     </div>
   );
 }
