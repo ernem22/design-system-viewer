@@ -213,11 +213,20 @@ body {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 .dsv-section { margin-bottom: var(--desktop-section-spacing); scroll-margin-top: var(--space-6); }
-.dsv-section > h2 {
+/* Components/Extras tabs: Section renders h2/p as direct children (no drawer trigger —
+   each child Demo already has its own, finer-grained scope). Screens tab: Screen wraps
+   them in .dsv-section-head alongside its own trigger. Same type styling, either shape. */
+.dsv-section > h2, .dsv-section-head h2 {
   font-size: var(--font-size-2xl); font-weight: var(--font-weight-semibold);
   margin: 0 0 var(--space-1);
 }
-.dsv-section > p { color: var(--color-text-muted); margin: 0 0 var(--space-6); }
+.dsv-section > p, .dsv-section-head p { color: var(--color-text-muted); margin: 0 0 var(--space-6); }
+.dsv-section-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+.dsv-section-head p { margin-bottom: 0; }
+.dsv-section-head .dsv-token-drawer-trigger { margin-top: var(--space-1); flex: none; }
 .dsv-block { margin-bottom: var(--space-10); }
 .dsv-block-head {
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);

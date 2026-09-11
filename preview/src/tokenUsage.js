@@ -129,3 +129,30 @@ const DEMO_TOKENS = buildDemoTokenMap();
 export function tokensForDemo(title) {
   return DEMO_TOKENS.get(title) ?? [];
 }
+
+// Screens aren't <Demo> blocks — each is one whole-page mockup assigned to a
+// stable id via the `["screen-id", "Label", BodyFn, "desc"]` rows of
+// SCREEN_SECTIONS. BodyFn is a real `function Name() {}` (matches
+// extractFunctionBodies), so its full body is the screen's slice.
+function extractScreenIds(src) {
+  return [...src.matchAll(/\["([a-z0-9-]+)",\s*"[^"]*",\s*([A-Z]\w*),\s*"[^"]*"\]/g)]
+    .map((m) => ({ id: m[1], fn: m[2] }));
+}
+
+function buildScreenTokenMap() {
+  const classTokenMap = buildClassTokenMap(cssText);
+  const map = new Map();
+  const localFns = extractFunctionBodies(screensSrc);
+  for (const { id, fn } of extractScreenIds(screensSrc)) {
+    const body = localFns.get(fn);
+    if (body) map.set(id, tokensForSlice(body, localFns, classTokenMap));
+  }
+  return map;
+}
+
+const SCREEN_TOKENS = buildScreenTokenMap();
+
+/** Tokens a given `<Screen id="…">`'s body references, sorted; [] if unknown. */
+export function tokensForScreen(id) {
+  return SCREEN_TOKENS.get(id) ?? [];
+}

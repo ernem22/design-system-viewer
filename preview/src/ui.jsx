@@ -1,7 +1,7 @@
 // Shared bits used across component demos and screens.
 import { createContext, forwardRef, useContext, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { tokensForDemo } from "./tokenUsage.js";
+import { tokensForDemo, tokensForScreen } from "./tokenUsage.js";
 import { ALL_TOKENS, baseValue, demoId, kindOf, useTokenOverrides } from "./tokenOverrides.js";
 
 // Radix *.Portal components default to document.body, which sits outside
@@ -243,34 +243,65 @@ function TokenDrawer({ title, id, tokens, ctx }) {
   );
 }
 
+/** Inline style scoping a component's token swaps to its own subtree — undefined outside Preview (Compare). */
+function useSwapStyle(ctx, id) {
+  if (!ctx) return undefined;
+  return Object.fromEntries(Object.entries(ctx.swaps[id] || {}).map(([target, source]) => [target, `var(${source})`]));
+}
+
+/** The small "N tokens" icon that opens a scope's drawer — shared by Demo and Screen. */
+function TokenScopeTrigger({ id, title, tokens }) {
+  const ctx = useTokenOverrides();
+  const [open, setOpen] = useState(false);
+  if (!ctx || !tokens.length) return null; // Compare, or nothing tracked here
+  const hasEdits = Object.keys(ctx.swaps[id] || {}).length > 0;
+
+  return (
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      <Dialog.Trigger asChild>
+        <button type="button" className={`dsv-token-drawer-trigger${hasEdits ? " has-edits" : ""}`} title={`${tokens.length} tokens used here — click to inspect or edit`}>
+          <Icon name="sliders" size={13} />
+          {tokens.length}
+        </button>
+      </Dialog.Trigger>
+      {open && <TokenDrawer title={title} id={id} tokens={tokens} ctx={ctx} />}
+    </Dialog.Root>
+  );
+}
+
 export function Demo({ title, children }) {
   const tokens = tokensForDemo(title);
   const ctx = useTokenOverrides();
   const id = demoId(title);
-  const [open, setOpen] = useState(false);
-
-  const swapStyle = ctx
-    ? Object.fromEntries(Object.entries(ctx.swaps[id] || {}).map(([target, source]) => [target, `var(${source})`]))
-    : undefined;
-  const hasEdits = ctx && (Object.keys(ctx.swaps[id] || {}).length > 0);
+  const style = useSwapStyle(ctx, id);
 
   return (
-    <div className="dsv-block" style={swapStyle}>
+    <div className="dsv-block" style={style}>
       <div className="dsv-block-head">
         <h3>{title}</h3>
-        {ctx && tokens.length > 0 && (
-          <Dialog.Root open={open} onOpenChange={setOpen}>
-            <Dialog.Trigger asChild>
-              <button type="button" className={`dsv-token-drawer-trigger${hasEdits ? " has-edits" : ""}`} title={`${tokens.length} tokens used here — click to inspect or edit`}>
-                <Icon name="sliders" size={13} />
-                {tokens.length}
-              </button>
-            </Dialog.Trigger>
-            {open && <TokenDrawer title={title} id={id} tokens={tokens} ctx={ctx} />}
-          </Dialog.Root>
-        )}
+        <TokenScopeTrigger id={id} title={title} tokens={tokens} />
       </div>
       <div className="dsv-row">{children}</div>
     </div>
+  );
+}
+
+/** Full-page mockup wrapper for the Screens tab — same token-scoping as Demo, keyed by its own stable id. */
+export function Screen({ id, title, desc, children, pad = true }) {
+  const tokens = tokensForScreen(id);
+  const ctx = useTokenOverrides();
+  const style = useSwapStyle(ctx, id);
+
+  return (
+    <section className="dsv-section" id={id} style={style}>
+      <div className="dsv-section-head">
+        <div>
+          <h2>{title}</h2>
+          <p>{desc}</p>
+        </div>
+        <TokenScopeTrigger id={id} title={title} tokens={tokens} />
+      </div>
+      <div className="dsv-screen-frame" style={pad ? undefined : { padding: 0 }}>{children}</div>
+    </section>
   );
 }

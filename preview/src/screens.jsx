@@ -11,15 +11,7 @@ import * as HoverCard from "@radix-ui/react-hover-card";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Separator } from "@radix-ui/react-separator";
-import { Button, Field, Icon, usePortalContainer } from "./ui.jsx";
-
-const Screen = ({ id, title, desc, children, pad = true }) => (
-  <section className="dsv-section" id={id}>
-    <h2>{title}</h2>
-    <p>{desc}</p>
-    <div className="dsv-screen-frame" style={pad ? undefined : { padding: 0 }}>{children}</div>
-  </section>
-);
+import { Button, Field, Icon, Screen, usePortalContainer } from "./ui.jsx";
 
 // size: token scale name (xs/sm/md/lg/xl) — resolves to --size-avatar-*
 const Avat = ({ n, size = "md" }) => (
