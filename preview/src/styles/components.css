@@ -235,20 +235,36 @@ body {
 .dsv-demo-tokens-list code { color: var(--color-text-secondary); }
 
 /* ─────────────────────────────────────────────── token editor (chip + picker) */
+.dsv-token-chip-wrap { display: inline-flex; align-items: stretch; }
 .dsv-token-chip {
-  appearance: none; display: inline-flex; align-items: center; gap: var(--space-1);
-  font: inherit; font-size: inherit; font-family: var(--font-mono);
+  appearance: none; display: inline-flex; align-items: center; gap: var(--space-1-5);
+  font: inherit; font-size: inherit;
   background: var(--color-surface-sunken); color: var(--color-text-secondary);
   border: var(--border-width-thin) solid var(--color-border-subtle);
-  border-radius: var(--radius-sm); padding: 1px var(--space-1-5); cursor: pointer;
+  border-radius: var(--radius-sm); padding: 2px var(--space-1-5); cursor: pointer;
   transition: border-color var(--motion-hover), background var(--motion-hover);
 }
+.dsv-token-chip code { font-family: var(--font-mono); }
 .dsv-token-chip:hover { border-color: var(--color-border-strong); background: var(--color-surface); }
-.dsv-token-chip.is-overridden {
-  background: var(--color-accent-subtle); color: var(--color-accent-text);
-  border-color: var(--color-accent-border);
+.dsv-token-chip-value {
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-muted);
+  padding-left: var(--space-1); border-left: var(--border-width-thin) solid var(--color-border);
 }
-.dsv-token-chip-arrow { flex: none; opacity: 0.7; }
+.dsv-token-chip-wrap.is-overridden .dsv-token-chip {
+  background: var(--color-accent-subtle); color: var(--color-accent-text);
+  border-color: var(--color-accent-border); border-right-width: 0;
+  border-top-right-radius: 0; border-bottom-right-radius: 0;
+}
+.dsv-token-chip-wrap.is-overridden .dsv-token-chip code { font-weight: var(--font-weight-medium); }
+.dsv-token-chip-arrow { flex: none; opacity: 0.8; }
+.dsv-token-chip-undo {
+  appearance: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; flex: none; cursor: pointer;
+  background: var(--color-accent-subtle); color: var(--color-accent-text);
+  border: var(--border-width-thin) solid var(--color-accent-border); border-left: none;
+  border-top-right-radius: var(--radius-sm); border-bottom-right-radius: var(--radius-sm);
+}
+.dsv-token-chip-undo:hover { background: var(--color-danger-subtle); color: var(--color-danger-text); border-color: var(--color-danger-border); }
 .dsv-token-swatch {
   width: 9px; height: 9px; border-radius: var(--radius-full); flex: none;
   box-shadow: inset 0 0 0 var(--border-width-thin) rgba(0, 0, 0, 0.15);

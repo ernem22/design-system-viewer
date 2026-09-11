@@ -87,6 +87,9 @@ function resolvedValue(name) {
 }
 
 const isColorValue = (v) => /^(#|rgb|hsl|oklch|color\(|color-mix)/i.test(v);
+// Long shadow/gradient/composite values would blow out a chip — keep just
+// enough to recognize the value, full string still lives in the popover.
+const shortValue = (v, max = 22) => (v.length > max ? v.slice(0, max - 1) + "…" : v);
 
 function TokenSwatch({ name }) {
   if (kindOf(name) !== "color") return null;
@@ -115,9 +118,10 @@ function TokenPicker({ name, current, onPick, onReset }) {
       </div>
       {current && (
         <div className="dsv-token-picker-current">
-          <span className="dsv-muted">swapped from</span>
+          <Icon name="chevronRight" size={11} />
+          <span className="dsv-muted">now reading</span>
           <code className="dsv-code-inline">{current}</code>
-          <button type="button" className="dsv-token-picker-reset" onClick={onReset}>Reset</button>
+          <button type="button" className="dsv-token-picker-reset" onClick={onReset}>Undo</button>
         </div>
       )}
       <div className="dsv-rail-filter dsv-token-picker-search">
@@ -153,24 +157,36 @@ function TokenChip({ name }) {
 
   const source = ctx.overrides[name];
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger asChild>
-        <button type="button" className={`dsv-token-chip${source ? " is-overridden" : ""}`}>
-          <TokenSwatch name={source || name} />
-          <code>{name}</code>
-          {source && <Icon name="chevronRight" size={11} className="dsv-token-chip-arrow" />}
+    <span className={`dsv-token-chip-wrap${source ? " is-overridden" : ""}`}>
+      <Popover.Root open={open} onOpenChange={setOpen}>
+        <Popover.Trigger asChild>
+          <button type="button" className="dsv-token-chip" title={`Click to swap ${name}`}>
+            <TokenSwatch name={source || name} />
+            <code>{name}</code>
+            {source
+              ? <><Icon name="chevronRight" size={11} className="dsv-token-chip-arrow" /><code>{source}</code></>
+              : <span className="dsv-token-chip-value">{shortValue(resolvedValue(name))}</span>}
+          </button>
+        </Popover.Trigger>
+        <Popover.Portal container={portalContainer}>
+          <Popover.Content className="dsv-pop" sideOffset={6} align="start" collisionPadding={8}>
+            <TokenPicker
+              name={name} current={source}
+              onPick={(picked) => { ctx.setOverride(name, picked); setOpen(false); }}
+              onReset={() => { ctx.clearOverride(name); setOpen(false); }}
+            />
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+      {source && (
+        <button
+          type="button" className="dsv-token-chip-undo" title={`Reset ${name} to its own value`}
+          onClick={() => ctx.clearOverride(name)}
+        >
+          <Icon name="x" size={10} />
         </button>
-      </Popover.Trigger>
-      <Popover.Portal container={portalContainer}>
-        <Popover.Content className="dsv-pop" sideOffset={6} align="start" collisionPadding={8}>
-          <TokenPicker
-            name={name} current={source}
-            onPick={(picked) => { ctx.setOverride(name, picked); setOpen(false); }}
-            onReset={() => { ctx.clearOverride(name); setOpen(false); }}
-          />
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+      )}
+    </span>
   );
 }
 
