@@ -4,19 +4,6 @@ import { coverage, templateCss, REFERENCE, REFERENCE_TOKEN_COUNT } from "./schem
 import { buildSystem, lintTokens, parseTokens } from "./parse.js";
 import { CATEGORIES, categorize } from "./taxonomy.js";
 
-// Tokens whose gallery bucket intentionally differs from their schema group
-// (legacy behaviour, preserved so stored systems don't regroup on upgrade).
-const LEGACY_BUCKETS = new Set([
-  "--color-text-disabled",
-  "--color-accent-border", "--color-accent-text", "--color-on-accent",
-  "--color-input-bg-disabled",
-  "--color-chart-tooltip-bg",
-  "--color-success-border", "--color-success-text", "--color-on-success",
-  "--color-warning-border", "--color-warning-text", "--color-on-warning",
-  "--color-danger-border", "--color-danger-text", "--color-on-danger",
-  "--color-info-border", "--color-info-text", "--color-on-info",
-]);
-
 const bucketOf = (name) => {
   const groups = categorize([{ name, value: "x" }]);
   return groups[0]?.id;
@@ -44,15 +31,14 @@ test("migration: expected new categories exist in schema + taxonomy", () => {
   }
 });
 
-test("migration: all non-legacy tokens bucket into their own schema group", () => {
+test("migration: every token buckets into its own schema group", () => {
   const bad = [];
   for (const g of REFERENCE) {
     for (const name of g.tokens) {
-      if (LEGACY_BUCKETS.has(name)) continue;
       if (bucketOf(name) !== g.id) bad.push(`${name} (want ${g.id}, got ${bucketOf(name)})`);
     }
   }
-  assert.deepEqual(bad, [], "new tokens must categorize into their schema group");
+  assert.deepEqual(bad, [], "every token must categorize into its schema group");
 });
 
 test("migration: preserved tokens still exist with stable names", () => {

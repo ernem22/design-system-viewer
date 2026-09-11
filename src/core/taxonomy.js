@@ -50,15 +50,11 @@ export const CATEGORIES = [
   { id: "motion-distance", label: "Motion Distance", kind: "motion", test: starts("motion-distance") },
   { id: "motion-scale", label: "Motion Scale", kind: "motion", test: starts("motion-scale") },
   { id: "motion-blur", label: "Motion Blur", kind: "motion", test: starts("motion-blur") },
-  // — Color: semantic roles first (more specific), then raw ramps.
-  // Disabled / input / chart matches come first so those tokens don't get
-  // swallowed by the generic surface/border/misc rules below.
-  {
-    id: "color-disabled",
-    label: "Disabled / Inert",
-    kind: "color",
-    test: (n) => n.includes("-disabled") && n.includes("color"),
-  },
+  // — Color: named families first (input / accent / state / chart), so a
+  // family's own -border/-text/-on-*/-disabled variants stay with that
+  // family instead of being swallowed by the generic surface/text/border/
+  // disabled rules below (e.g. --color-success-border must stay Semantic
+  // State, not fall into generic Border / Divider).
   {
     id: "color-input",
     label: "Form / Input",
@@ -66,16 +62,42 @@ export const CATEGORIES = [
     test: has("input"),
   },
   {
-    id: "color-surface",
-    label: "Surface / Elevation",
+    id: "color-accent",
+    label: "Accent / Brand",
     kind: "color",
-    test: has("-bg", "background", "surface", "-canvas", "-overlay-color"),
+    // --color-text-on-accent is a Text token (schema), not Accent — exclude
+    // the "color-text-" prefix so it falls through to color-text below.
+    test: (n) => !n.startsWith("color-text-") && has("accent", "brand", "primary", "-brass")(n),
+  },
+  {
+    id: "color-state",
+    label: "Semantic State",
+    kind: "color",
+    test: has("success", "danger", "error", "warning", "info", "positive", "negative", "caution"),
+  },
+  {
+    id: "color-chart",
+    label: "Data Visualization",
+    kind: "color",
+    test: has("chart"),
   },
   {
     id: "color-text",
     label: "Text",
     kind: "color",
-    test: (n) => has("text", "-fg", "foreground", "on-accent", "on-success", "on-danger", "on-warning", "on-info", "-ink")(n),
+    test: (n) => has("text", "-fg", "foreground", "-ink")(n),
+  },
+  {
+    id: "color-disabled",
+    label: "Disabled / Inert",
+    kind: "color",
+    test: (n) => n.includes("-disabled") && n.includes("color"),
+  },
+  {
+    id: "color-surface",
+    label: "Surface / Elevation",
+    kind: "color",
+    test: has("-bg", "background", "surface", "-canvas", "-overlay-color"),
   },
   {
     id: "color-interaction",
@@ -94,28 +116,10 @@ export const CATEGORIES = [
         /(^|-)(ring|focus)(-|$)/.test(n)),
   },
   {
-    id: "color-accent",
-    label: "Accent / Brand",
-    kind: "color",
-    test: has("accent", "brand", "primary", "-brass"),
-  },
-  {
-    id: "color-state",
-    label: "Semantic State",
-    kind: "color",
-    test: has("success", "danger", "error", "warning", "info", "positive", "negative", "caution"),
-  },
-  {
     id: "color-alpha",
     label: "Alpha / Overlay",
     kind: "color",
     test: (n) => has("scrim")(n) || /^color-(shadow|tint)/.test(n),
-  },
-  {
-    id: "color-chart",
-    label: "Data Visualization",
-    kind: "color",
-    test: has("chart"),
   },
   {
     id: "color-neutral",
