@@ -32,7 +32,7 @@ import * as OneTimePasswordField from "@radix-ui/react-one-time-password-field";
 import { AccessibleIcon } from "@radix-ui/react-accessible-icon";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { DirectionProvider } from "@radix-ui/react-direction";
-import { Button, Field, Demo, Icon } from "./ui.jsx";
+import { Button, Field, Demo, Icon, usePortalContainer } from "./ui.jsx";
 
 const Section = ({ id, title, desc, children }) => (
   <section className="dsv-section" id={id}>
@@ -44,6 +44,7 @@ const Section = ({ id, title, desc, children }) => (
 
 // ───────────────────────────────────────────────────────── Forms
 export function FormsSection() {
+  const portalContainer = usePortalContainer();
   const [checked, setChecked] = useState(true);
   const [ind, setInd] = useState("indeterminate");
   const [radio, setRadio] = useState("comfortable");
@@ -201,7 +202,7 @@ export function FormsSection() {
             <Select.Value />
             <Select.Icon><Icon name="chevronDown" size={14} /></Select.Icon>
           </Select.Trigger>
-          <Select.Portal>
+          <Select.Portal container={portalContainer}>
             <Select.Content className="dsv-select-content" position="popper" sideOffset={6}>
               <Select.Viewport>
                 <Select.Group>
@@ -233,12 +234,13 @@ export function FormsSection() {
 
 // ───────────────────────────────────────────────────────── Overlays
 export function OverlaysSection() {
+  const portalContainer = usePortalContainer();
   return (
     <Section id="overlays" title="Overlays" desc="Dialog, menu, popover, tooltip — portal + scrim + focus from Radix, appearance from tokens.">
       <Demo title="Dialog">
         <Dialog.Root>
           <Dialog.Trigger asChild><Button variant="outline">Edit profile</Button></Dialog.Trigger>
-          <Dialog.Portal>
+          <Dialog.Portal container={portalContainer}>
             <Dialog.Overlay className="dsv-overlay" />
             <Dialog.Content className="dsv-modal">
               <Dialog.Title asChild><h3>Edit profile</h3></Dialog.Title>
@@ -262,7 +264,7 @@ export function OverlaysSection() {
       <Demo title="Alert Dialog">
         <AlertDialog.Root>
           <AlertDialog.Trigger asChild><Button variant="danger">Delete account</Button></AlertDialog.Trigger>
-          <AlertDialog.Portal>
+          <AlertDialog.Portal container={portalContainer}>
             <AlertDialog.Overlay className="dsv-overlay" />
             <AlertDialog.Content className="dsv-modal">
               <AlertDialog.Title asChild><h3>Are you sure?</h3></AlertDialog.Title>
@@ -279,7 +281,7 @@ export function OverlaysSection() {
       <Demo title="Popover">
         <Popover.Root>
           <Popover.Trigger asChild><Button variant="outline">Size settings</Button></Popover.Trigger>
-          <Popover.Portal>
+          <Popover.Portal container={portalContainer}>
             <Popover.Content className="dsv-pop" sideOffset={6}>
               <div className="dsv-stack">
                 <strong style={{ fontSize: "var(--font-size-sm)" }}>Dimensions</strong>
@@ -296,7 +298,7 @@ export function OverlaysSection() {
         <Tooltip.Provider delayDuration={200}>
           <Tooltip.Root>
             <Tooltip.Trigger asChild><Button variant="ghost" className="dsv-icon-btn" aria-label="Notifications"><Icon name="bell" /></Button></Tooltip.Trigger>
-            <Tooltip.Portal>
+            <Tooltip.Portal container={portalContainer}>
               <Tooltip.Content className="dsv-tooltip" sideOffset={6}>
                 Notifications
                 <Tooltip.Arrow className="dsv-tooltip-arrow" />
@@ -309,14 +311,14 @@ export function OverlaysSection() {
       <Demo title="Dropdown Menu">
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild><Button variant="outline"><Icon name="dots" size={14} /> Menu</Button></DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
+          <DropdownMenu.Portal container={portalContainer}>
             <DropdownMenu.Content className="dsv-menu" sideOffset={6} align="start">
               <DropdownMenu.Label className="dsv-menu-label">Account</DropdownMenu.Label>
               <DropdownMenu.Item className="dsv-menu-item"><Icon name="user" size={14} /> Profile <span className="dsv-menu-shortcut">⌘P</span></DropdownMenu.Item>
               <DropdownMenu.Item className="dsv-menu-item"><Icon name="settings" size={14} /> Settings</DropdownMenu.Item>
               <DropdownMenu.Sub>
                 <DropdownMenu.SubTrigger className="dsv-menu-subtrigger">Theme <span style={{ marginLeft: "auto" }}><Icon name="chevronRight" size={14} /></span></DropdownMenu.SubTrigger>
-                <DropdownMenu.Portal>
+                <DropdownMenu.Portal container={portalContainer}>
                   <DropdownMenu.SubContent className="dsv-menu" sideOffset={2} alignOffset={-4}>
                     <DropdownMenu.Item className="dsv-menu-item">Light</DropdownMenu.Item>
                     <DropdownMenu.Item className="dsv-menu-item">Dark</DropdownMenu.Item>
@@ -338,7 +340,7 @@ export function OverlaysSection() {
               Right-click here
             </div>
           </ContextMenu.Trigger>
-          <ContextMenu.Portal>
+          <ContextMenu.Portal container={portalContainer}>
             <ContextMenu.Content className="dsv-menu">
               <ContextMenu.Item className="dsv-menu-item">Undo <span className="dsv-menu-shortcut">⌘Z</span></ContextMenu.Item>
               <ContextMenu.Item className="dsv-menu-item">Redo <span className="dsv-menu-shortcut">⇧⌘Z</span></ContextMenu.Item>
@@ -357,7 +359,7 @@ export function OverlaysSection() {
       <Demo title="Hover Card">
         <HoverCard.Root openDelay={150}>
           <HoverCard.Trigger asChild><a className="dsv-link" href="#forms">@ada</a></HoverCard.Trigger>
-          <HoverCard.Portal>
+          <HoverCard.Portal container={portalContainer}>
             <HoverCard.Content className="dsv-pop" sideOffset={6}>
               <div className="dsv-hovercard">
                 <span className="dsv-avatar dsv-avatar--lg"><span className="dsv-avatar-fallback">AL</span></span>
@@ -374,7 +376,7 @@ export function OverlaysSection() {
       <Demo title="Popover — large (shadow-xl)">
         <Popover.Root>
           <Popover.Trigger asChild><Button variant="outline">Mega menu</Button></Popover.Trigger>
-          <Popover.Portal>
+          <Popover.Portal container={portalContainer}>
             <Popover.Content className="dsv-pop dsv-pop--lg" sideOffset={6}>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "var(--space-4)" }}>
                 {[["Product", ["Analytics", "Dashboard", "Automation"]], ["Company", ["About", "Careers", "Press"]], ["Resources", ["Docs", "API", "Status"]]].map(([h, items]) => (
@@ -395,6 +397,7 @@ export function OverlaysSection() {
 
 // ───────────────────────────────────────────────────────── Navigation
 export function NavigationSection() {
+  const portalContainer = usePortalContainer();
   return (
     <Section id="navigation" title="Navigation" desc="Menubar, navigation menu, tabs, toolbar.">
       <Demo title="Menubar">
@@ -402,7 +405,7 @@ export function NavigationSection() {
           {[["File", ["New", "Open…", "Save"]], ["Edit", ["Cut", "Copy", "Paste"]], ["View", ["Zoom in", "Zoom out", "Fullscreen"]]].map(([m, items]) => (
             <Menubar.Menu key={m}>
               <Menubar.Trigger className="dsv-nav-trigger">{m}</Menubar.Trigger>
-              <Menubar.Portal>
+              <Menubar.Portal container={portalContainer}>
                 <Menubar.Content className="dsv-menu" sideOffset={6}>
                   {items.map((it) => <Menubar.Item key={it} className="dsv-menu-item">{it}</Menubar.Item>)}
                 </Menubar.Content>

@@ -1,20 +1,26 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as Avatar from "@radix-ui/react-avatar";
 import * as Popover from "@radix-ui/react-popover";
 import * as Tooltip from "@radix-ui/react-tooltip";
-import { Button, Demo, Icon } from "./ui.jsx";
+import { Button, Demo, Icon, usePortalContainer } from "./ui.jsx";
 
 // Live token value badge — reads the active system's computed value so the
 // demo shows real numbers (480px, 20ch…) instead of hardcoded guesses.
+// Reads its own computed style (not document.documentElement): custom
+// properties inherit down the DOM, so this resolves correctly whether tokens
+// live on :root (single-system Preview) or on an ancestor's inline style
+// (Compare's per-column scope) — reading :root directly would always show
+// the wrong (or fallback) column's value in Compare.
 function VarVal({ name }) {
+  const ref = useRef(null);
   const [val, setVal] = useState("");
   useEffect(() => {
     try {
-      setVal(getComputedStyle(document.documentElement).getPropertyValue(name).trim());
+      setVal(getComputedStyle(ref.current).getPropertyValue(name).trim());
     } catch { setVal(""); }
   }, [name]);
-  if (!val) return null;
-  return <code className="dsv-code-inline">{val}</code>;
+  if (!val) return <code ref={ref} className="dsv-code-inline" hidden />;
+  return <code ref={ref} className="dsv-code-inline">{val}</code>;
 }
 
 const Section = ({ id, title, desc, children }) => (
@@ -533,6 +539,7 @@ function CalendarDemo() {
 }
 
 function ComboboxDemo() {
+  const portalContainer = usePortalContainer();
   const all = ["Design tokens", "Component preview", "Compare mode", "Dark variant", "Command palette", "Analytics"];
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState(["Compare mode"]);
@@ -551,7 +558,7 @@ function ComboboxDemo() {
             <input className="dsv-input" placeholder="Search options…" aria-label="Search options" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
         </Popover.Trigger>
-        <Popover.Portal>
+        <Popover.Portal container={portalContainer}>
           <Popover.Content className="dsv-menu" sideOffset={6} align="start" style={{ minWidth: 260 }} onOpenAutoFocus={(e) => e.preventDefault()}>
             {opts.length === 0 && <div className="dsv-menu-label">No matches</div>}
             {opts.map((o) => (

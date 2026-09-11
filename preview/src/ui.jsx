@@ -1,6 +1,19 @@
 // Shared bits used across component demos and screens.
-import { forwardRef } from "react";
+import { createContext, forwardRef, useContext } from "react";
 import { tokensForDemo } from "./tokenUsage.js";
+
+// Radix *.Portal components default to document.body, which sits outside
+// Compare's per-column inline token scope (each cmp-col carries its own
+// system's tokens as an inline style, not :root) — so a Dialog/Popover/
+// Select/etc opened from one column would render with another column's (or
+// the fallback) tokens instead of its own. Compare provides its column's DOM
+// node here; every *.Portal below reads it and falls back to Radix's own
+// default (document.body) when no Provider is present, i.e. the single-
+// system Preview page.
+export const PortalContainerContext = createContext(undefined);
+export function usePortalContainer() {
+  return useContext(PortalContainerContext);
+}
 
 export function Icon({ name, size = 16, className = "", ...rest }) {
   const p = {

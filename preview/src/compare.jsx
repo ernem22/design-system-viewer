@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useContext, useEffect, useMemo, useState } from "react";
 import * as Checkbox from "@radix-ui/react-checkbox";
 import * as RadioGroup from "@radix-ui/react-radio-group";
 import * as Switch from "@radix-ui/react-switch";
@@ -7,7 +7,7 @@ import * as Select from "@radix-ui/react-select";
 import * as Tabs from "@radix-ui/react-tabs";
 import * as Accordion from "@radix-ui/react-accordion";
 import * as Progress from "@radix-ui/react-progress";
-import { Button, Field, Icon } from "./ui.jsx";
+import { Button, Field, Icon, PortalContainerContext } from "./ui.jsx";
 import { loadGoogleFonts, fetchSystems } from "./useSystemTokens.js";
 import { coverage } from "../../src/core/schema.js";
 import { parseTokens } from "../../src/core/parse.js";
@@ -74,12 +74,14 @@ function Sliders() {
   );
 }
 
-const Selects = () => (
+const Selects = () => {
+  const portalContainer = useContext(PortalContainerContext);
+  return (
   <Select.Root defaultValue="tr">
     <Select.Trigger className="dsv-select-trigger" aria-label="Language" style={{ width: "100%" }}>
       <Select.Value /><Select.Icon><Icon name="chevronDown" size={14} /></Select.Icon>
     </Select.Trigger>
-    <Select.Portal>
+    <Select.Portal container={portalContainer}>
       <Select.Content className="dsv-select-content" position="popper" sideOffset={6}>
         <Select.Viewport>
           {[["tr", "Turkish"], ["en", "English"], ["de", "German"]].map(([v, l]) => (
@@ -92,7 +94,8 @@ const Selects = () => (
       </Select.Content>
     </Select.Portal>
   </Select.Root>
-);
+  );
+};
 
 const Cards = () => (
   <div className="cmp-stack">
@@ -283,6 +286,27 @@ function DiffTable({ cols }) {
   );
 }
 
+// One column = one CSS-variable scope. Radix *.Portal content (dialogs,
+// popovers, selects…) needs to land inside this DOM node — not document.body
+// — to pick up this column's tokens instead of another column's or the
+// fallback. The ref only resolves after mount, so the Provider (and its
+// container prop) waits for a real node; until then, portal content falls
+// through to context's `undefined` default, i.e. Radix's own document.body.
+function CompareColumn({ name, style, pct, Render }) {
+  const [node, setNode] = useState(null);
+  const body = <div className="cmp-col-body"><Render /></div>;
+  return (
+    <section ref={setNode} className="cmp-col" style={style}>
+      <h3 className="cmp-col-head">
+        <span className="cmp-swatch" style={{ background: "var(--color-accent)" }} />
+        {name}
+        <span className="cmp-cov">{pct != null ? `${pct}%` : ""}</span>
+      </h3>
+      {node ? <PortalContainerContext.Provider value={node}>{body}</PortalContainerContext.Provider> : body}
+    </section>
+  );
+}
+
 // ── screen ──
 const Q = new URLSearchParams(location.search);
 
@@ -412,14 +436,10 @@ export default function Compare() {
       ) : (
         <div className="cmp-cols" data-count={cols.length}>
           {cols.map((s) => (
-            <section key={s.slug} className="cmp-col" style={styleFor[s.slug]}>
-              <h3 className="cmp-col-head">
-                <span className="cmp-swatch" style={{ background: "var(--color-accent)" }} />
-                {s.name}
-                <span className="cmp-cov">{pctMap[s.slug] != null ? `${pctMap[s.slug]}%` : ""}</span>
-              </h3>
-              <div className="cmp-col-body"><active.Render /></div>
-            </section>
+            <CompareColumn
+              key={s.slug} name={s.name} style={styleFor[s.slug]}
+              pct={pctMap[s.slug]} Render={active.Render}
+            />
           ))}
         </div>
       )}

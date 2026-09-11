@@ -11,7 +11,7 @@ import * as HoverCard from "@radix-ui/react-hover-card";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Separator } from "@radix-ui/react-separator";
-import { Button, Field, Icon } from "./ui.jsx";
+import { Button, Field, Icon, usePortalContainer } from "./ui.jsx";
 
 const Screen = ({ id, title, desc, children, pad = true }) => (
   <section className="dsv-section" id={id}>
@@ -143,6 +143,7 @@ const SettingRow = ({ title, desc, children }) => (
   </div>
 );
 function SettingsScreen() {
+  const portalContainer = usePortalContainer();
   const [vol, setVol] = useState([60]);
   const [density, setDensity] = useState("comfortable");
   const [notif, setNotif] = useState({ email: true, push: true, digest: false });
@@ -165,7 +166,7 @@ function SettingsScreen() {
               <SettingRow title="Language" desc="Interface language">
                 <Select.Root defaultValue="tr">
                   <Select.Trigger className="dsv-select-trigger" aria-label="Language"><Select.Value /><Select.Icon><Icon name="chevronDown" size={14} /></Select.Icon></Select.Trigger>
-                  <Select.Portal>
+                  <Select.Portal container={portalContainer}>
                     <Select.Content className="dsv-select-content" position="popper" sideOffset={6}>
                       <Select.Viewport>
                         {[["tr", "Turkish"], ["en", "English"], ["de", "German"]].map(([v, l]) => (
@@ -280,6 +281,7 @@ function ProfileScreen() {
 
 // ─────────────────────────────────────────── Dashboard
 function DashboardScreen() {
+  const portalContainer = usePortalContainer();
   return (
     <div className="dsv-stack">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -318,7 +320,7 @@ function DashboardScreen() {
           {[13, 5, 47, 22].map((n) => (
             <HoverCard.Root key={n} openDelay={120}>
               <HoverCard.Trigger asChild><span style={{ display: "inline-flex" }}><Avat n={n} /></span></HoverCard.Trigger>
-              <HoverCard.Portal>
+              <HoverCard.Portal container={portalContainer}>
                 <HoverCard.Content className="dsv-pop" sideOffset={6}>
                   <div className="dsv-hovercard"><div><div className="name">Contributor #{n}</div><div className="bio">24 commits, 3 PR reviews this month.</div></div></div>
                 </HoverCard.Content>
@@ -386,6 +388,7 @@ function AnalyticsScreen() {
 
 // ─────────────────────────────────────────── Data table
 function TableScreen() {
+  const portalContainer = usePortalContainer();
   const rows = [
     ["INV-1001", "Ada Lovelace", "Paid", "₺1.200"],
     ["INV-1002", "Grace Hopper", "Pending", "₺840"],
@@ -405,7 +408,7 @@ function TableScreen() {
         <div style={{ flex: 1 }} />
         <Dialog.Root>
           <Dialog.Trigger asChild><Button size="sm"><Icon name="plus" size={14} /> Invoice</Button></Dialog.Trigger>
-          <Dialog.Portal>
+          <Dialog.Portal container={portalContainer}>
             <Dialog.Overlay className="dsv-overlay" />
             <Dialog.Content className="dsv-modal">
               <Dialog.Title asChild><h3>New invoice</h3></Dialog.Title>
@@ -434,7 +437,7 @@ function TableScreen() {
               <td style={{ textAlign: "right" }}>
                 <DropdownMenu.Root>
                   <DropdownMenu.Trigger asChild><Button variant="ghost" size="sm" className="dsv-icon-btn" aria-label="Actions"><Icon name="dots" size={14} /></Button></DropdownMenu.Trigger>
-                  <DropdownMenu.Portal>
+                  <DropdownMenu.Portal container={portalContainer}>
                     <DropdownMenu.Content className="dsv-menu" align="end" sideOffset={4}>
                       <DropdownMenu.Item className="dsv-menu-item">View</DropdownMenu.Item>
                       <DropdownMenu.Item className="dsv-menu-item">Copy</DropdownMenu.Item>
@@ -891,6 +894,7 @@ function SearchScreen() {
 
 // ─────────────────────────────────────────── Team
 function TeamScreen() {
+  const portalContainer = usePortalContainer();
   const rows = [["Ada Lovelace", "Admin", "success"], ["Grace Hopper", "Editor", "info"], ["Alan Turing", "Viewer", "warning"]];
   return (
     <div style={{ maxWidth: 640, margin: "0 auto" }}>
@@ -901,7 +905,7 @@ function TeamScreen() {
         </div>
         <Dialog.Root>
           <Dialog.Trigger asChild><Button size="sm"><Icon name="plus" size={14} /> Invite</Button></Dialog.Trigger>
-          <Dialog.Portal>
+          <Dialog.Portal container={portalContainer}>
             <Dialog.Overlay className="dsv-overlay" />
             <Dialog.Content className="dsv-modal">
               <Dialog.Title asChild><h3>Invite member</h3></Dialog.Title>
