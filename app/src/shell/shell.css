@@ -1,0 +1,111 @@
+/* Skeletal shell layout. Every themed value reads a CSS var with a
+   fallback, so a future single-:root token layer repaints the whole
+   shell (topbar, rail, main, props) with zero changes here. */
+
+.app-shell {
+  display: grid;
+  grid-template-areas:
+    "topbar topbar topbar"
+    "rail main props";
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: 44px minmax(0, 1fr);
+  min-height: 100dvh;
+  background: var(--color-bg, #0a0a0f);
+  color: var(--color-text, #f0f0f3);
+}
+
+.app-topbar {
+  grid-area: topbar;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  background: var(--color-surface, #14141a);
+  border-bottom: 1px solid var(--color-divider, #25252e);
+}
+
+.app-topbar-left,
+.app-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.app-topbar-left {
+  justify-self: start;
+}
+
+.app-topbar-right {
+  justify-self: end;
+}
+
+.app-brand {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.app-sysbtn,
+.app-iconbtn {
+  font: inherit;
+  cursor: pointer;
+}
+
+.app-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 99px;
+  background: var(--color-bg, #0a0a0f);
+  border: 1px solid var(--color-divider, #25252e);
+  justify-self: center;
+}
+
+.app-tabs button {
+  appearance: none;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 12px;
+  border-radius: 99px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--color-text-muted, #71717a);
+}
+
+.app-tabs button.on {
+  background: var(--color-surface, #14141a);
+  color: var(--color-text, #f0f0f3);
+}
+
+.app-rail {
+  grid-area: rail;
+  width: 220px;
+  padding: 12px;
+  border-right: 1px solid var(--color-divider, #25252e);
+}
+
+.app-main {
+  grid-area: main;
+  min-width: 0;
+  padding: 24px;
+}
+
+.app-props {
+  grid-area: props;
+  width: 260px;
+  padding: 12px;
+  border-left: 1px solid var(--color-divider, #25252e);
+}
+
+.app-placeholder {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-muted, #71717a);
+}
