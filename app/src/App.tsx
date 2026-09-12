@@ -1,15 +1,4 @@
-import { useState } from "react";
 import Shell, { type AppTab } from "./shell/Shell.tsx";
-import { useSystems } from "./systems/store.ts";
-import {
-  PreviewProvider,
-  PreviewSystemSwitcher,
-  PreviewActions,
-  PreviewRail,
-  PreviewMain,
-  PreviewProps,
-} from "./legacy/gallery.jsx";
-import Compare from "./legacy/compare.jsx";
 
 const TABS: { id: AppTab; label: string }[] = [
   { id: "tokens", label: "Tokens" },
@@ -18,28 +7,28 @@ const TABS: { id: AppTab; label: string }[] = [
 ];
 
 function App() {
-  const { systems, active, setActiveSlug } = useSystems();
-  const [tab, setTab] = useState<AppTab>("preview");
-  const isPreview = tab === "preview";
-
   return (
-    <PreviewProvider system={active} systems={systems} onSelectSystem={setActiveSlug}>
-      <Shell
-        tab={tab}
-        onTabChange={setTab}
-        brand={<span className="app-brand">Design System Viewer</span>}
-        systemSwitcher={<PreviewSystemSwitcher />}
-        actions={isPreview ? <PreviewActions /> : undefined}
-        tabs={TABS}
-        rail={isPreview ? <PreviewRail /> : <p className="app-placeholder">No sections on this tab</p>}
-        views={{
-          tokens: <p className="app-placeholder">Tokens gallery goes here</p>,
-          preview: <PreviewMain />,
-          compare: <Compare systems={systems} />,
-        }}
-        propsPanel={isPreview ? <PreviewProps /> : <p className="app-placeholder">Props panel — nothing selected</p>}
-      />
-    </PreviewProvider>
+    <Shell
+      brand={<span className="app-brand">Design System Viewer</span>}
+      systemSwitcher={
+        <button type="button" className="app-sysbtn" disabled title="System switcher (placeholder)">
+          System…
+        </button>
+      }
+      actions={
+        <button type="button" className="app-iconbtn" disabled title="Actions (placeholder)">
+          +
+        </button>
+      }
+      tabs={TABS}
+      rail={<p className="app-placeholder">Rail — section links go here</p>}
+      views={{
+        tokens: <p className="app-placeholder">Tokens gallery goes here</p>,
+        preview: <p className="app-placeholder">Single-system preview goes here</p>,
+        compare: <p className="app-placeholder">Compare columns go here</p>,
+      }}
+      propsPanel={<p className="app-placeholder">Props panel — nothing selected</p>}
+    />
   );
 }
 

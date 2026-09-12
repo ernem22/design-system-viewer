@@ -1,7 +1,5 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import './legacy/styles/fallback.css'
-import './legacy/styles/components.css'
 import './tokens/tokens.css'
 import './index.css'
 import App from './App.tsx'

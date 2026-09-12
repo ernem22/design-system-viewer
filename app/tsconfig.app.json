@@ -14,9 +14,6 @@
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
-    /* Ported legacy preview is plain JS — transpile only, don't typecheck it */
-    "allowJs": true,
-    "checkJs": false,
 
     /* Linting */
     "strict": true,
