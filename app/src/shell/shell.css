@@ -1,6 +1,5 @@
-/* Skeletal shell layout. Every themed value reads a CSS var with a
-   fallback, so a future single-:root token layer repaints the whole
-   shell (topbar, rail, main, props) with zero changes here. */
+/* Skeletal shell layout. All themed values resolve from the single
+   token root (src/tokens/tokens.css) — no fallbacks here. */
 
 .app-shell {
   display: grid;
@@ -10,8 +9,8 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-rows: 44px minmax(0, 1fr);
   min-height: 100dvh;
-  background: var(--color-bg, #0a0a0f);
-  color: var(--color-text, #f0f0f3);
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 .app-topbar {
@@ -24,8 +23,8 @@
   align-items: center;
   gap: 12px;
   padding: 0 12px;
-  background: var(--color-surface, #14141a);
-  border-bottom: 1px solid var(--color-divider, #25252e);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .app-topbar-left,
@@ -61,8 +60,8 @@
   gap: 2px;
   padding: 2px;
   border-radius: 99px;
-  background: var(--color-bg, #0a0a0f);
-  border: 1px solid var(--color-divider, #25252e);
+  background: var(--color-bg);
+  border: 1px solid var(--color-divider);
   justify-self: center;
 }
 
@@ -76,19 +75,19 @@
   border-radius: 99px;
   cursor: pointer;
   white-space: nowrap;
-  color: var(--color-text-muted, #71717a);
+  color: var(--color-text-muted);
 }
 
 .app-tabs button.on {
-  background: var(--color-surface, #14141a);
-  color: var(--color-text, #f0f0f3);
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 
 .app-rail {
   grid-area: rail;
   width: 220px;
   padding: 12px;
-  border-right: 1px solid var(--color-divider, #25252e);
+  border-right: 1px solid var(--color-divider);
 }
 
 .app-main {
@@ -101,11 +100,11 @@
   grid-area: props;
   width: 260px;
   padding: 12px;
-  border-left: 1px solid var(--color-divider, #25252e);
+  border-left: 1px solid var(--color-divider);
 }
 
 .app-placeholder {
   margin: 0;
   font-size: 13px;
-  color: var(--color-text-muted, #71717a);
+  color: var(--color-text-muted);
 }

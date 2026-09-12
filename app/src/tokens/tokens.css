@@ -1,0 +1,12 @@
+/* Single token root. Every themed value in the app resolves from here —
+   components and shell must use bare var(--token), never a fallback.
+   A system layer later overwrites these same names on :root (single view)
+   or on a scope node (compare columns). */
+
+:root {
+  --color-bg: #0a0a0f;
+  --color-surface: #14141a;
+  --color-text: #f0f0f3;
+  --color-text-muted: #71717a;
+  --color-divider: #25252e;
+}
