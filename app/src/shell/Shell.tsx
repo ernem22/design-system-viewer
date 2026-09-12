@@ -1,9 +1,11 @@
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import "./shell.css";
 
 export type AppTab = "tokens" | "preview" | "compare";
 
 export interface ShellSlots {
+  tab: AppTab;
+  onTabChange: (tab: AppTab) => void;
   brand: ReactNode;
   systemSwitcher?: ReactNode;
   actions?: ReactNode;
@@ -17,9 +19,7 @@ export interface ShellSlots {
  * Layout + tab state only. All content arrives via slots —
  * Shell never owns gallery, preview, compare or panel content.
  */
-export default function Shell({ brand, systemSwitcher, actions, tabs, rail, views, propsPanel }: ShellSlots) {
-  const [tab, setTab] = useState<AppTab>("tokens");
-
+export default function Shell({ tab, onTabChange, brand, systemSwitcher, actions, tabs, rail, views, propsPanel }: ShellSlots) {
   return (
     <div className="app-shell" data-tab={tab}>
       <header className="app-topbar">
@@ -35,7 +35,7 @@ export default function Shell({ brand, systemSwitcher, actions, tabs, rail, view
               role="tab"
               aria-selected={tab === id}
               className={tab === id ? "on" : ""}
-              onClick={() => setTab(id)}
+              onClick={() => onTabChange(id)}
             >
               {label}
             </button>
