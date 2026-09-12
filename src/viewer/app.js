@@ -5,7 +5,6 @@ import { contrastRatio, rating, CONTRAST_PAIRS } from "../core/contrast.js";
 
 const $ = (id) => document.getElementById(id);
 const main = $("main");
-const picker = $("sysPicker");
 const dlg = $("dlg");
 
 let systems = [];
@@ -15,6 +14,23 @@ let schemaMode = false;
 let dlgMode = "add"; // "add" | "merge"
 let filter = "";
 const TABS = ["system", "preview", "compare"];
+// Where the add-dialog lands after a successful save (its footer "Open in"
+// segmented control). Merge keeps you where you are.
+let afterSave = localStorage.getItem("dsv.afterSave") || "preview";
+if (!TABS.includes(afterSave)) afterSave = "preview";
+function paintGoButtons() {
+  document.querySelectorAll("#dlgGoWrap [data-go]").forEach((b) =>
+    b.classList.toggle("on", b.dataset.go === afterSave),
+  );
+}
+document.querySelectorAll("#dlgGoWrap [data-go]").forEach((b) =>
+  b.addEventListener("click", () => {
+    afterSave = b.dataset.go;
+    try { localStorage.setItem("dsv.afterSave", afterSave); } catch {}
+    paintGoButtons();
+  }),
+);
+paintGoButtons();
 
 // Shareable state lives in the query string; localStorage is the fallback.
 const bootParams = new URLSearchParams(location.search);
@@ -103,6 +119,7 @@ async function load() {
 function activateTab(next) {
   tab = next;
   localStorage.setItem("dsv.tab", tab);
+  document.body.dataset.tab = tab;
   const inFrame = tab === "preview" || tab === "compare";
   for (const [id, name] of [["tabSystem", "system"], ["tabPreview", "preview"], ["tabCompare", "compare"]]) {
     const on = tab === name;
@@ -144,6 +161,25 @@ window.addEventListener("message", (e) => {
   if (e.data?.type === "dsv:compare-state") {
     cmpState = e.data;
     if (tab === "compare") syncUrl();
+  }
+  // Remote controls from the fullscreen iframe's own header (it owns brand /
+  // system / tabs there): switch the active system, jump tabs, or open the
+  // add dialog — the parent applies and posts back / re-renders.
+  if (e.data?.type === "dsv:request-system" && e.data.slug) {
+    if (systems.some((s) => s.slug === e.data.slug)) {
+      active = e.data.slug;
+      schemaMode = false;
+      filter = "";
+      render();
+      syncPreview();
+      syncUrl();
+    }
+  }
+  if (e.data?.type === "dsv:request-tab" && TABS.includes(e.data.tab)) {
+    activateTab(e.data.tab);
+  }
+  if (e.data?.type === "dsv:request-add") {
+    openDialog("add");
   }
 });
 
@@ -220,15 +256,54 @@ async function remove(slug) {
 
 const activeSystem = () => systems.find((s) => s.slug === active);
 
+// ── header system switcher (custom menu; a native <select> dropdown is
+// OS-rendered and can't follow any theme, so this renders its own listbox)
+function sysPct(s) {
+  try {
+    const c = coverage(parseTokens(s.css).map((t) => t.name));
+    return Math.round((c.present / c.expected) * 100);
+  } catch { return null; }
+}
+function paintSysHeader(sys) {
+  $("sysBtnName").textContent = sys?.name ?? "No systems";
+  const covEl = $("sysCov");
+  if (sys) {
+    const pct = sysPct(sys);
+    covEl.hidden = pct == null;
+    covEl.textContent = pct == null ? "" : `${pct}%`;
+  } else covEl.hidden = true;
+  $("sysMenu").innerHTML = systems.map((s) => {
+    const pct = sysPct(s);
+    const on = s.slug === active;
+    return `<button type="button" role="menuitemradio" aria-checked="${on}" class="${on ? "on" : ""}" data-sys="${esc(s.slug)}" tabindex="-1" title="${esc(s.name)}${pct == null ? "" : ` · ${pct}% schema tokens`}">`
+      + `<span class="tick" aria-hidden="true">✓</span><span class="nm">${esc(s.name)}</span>`
+      + `${pct == null ? "" : `<span class="pc">${pct}%</span>`}</button>`;
+  }).join("");
+}
+function selectSystem(slug) {
+  if (!systems.some((s) => s.slug === slug)) return;
+  active = slug;
+  schemaMode = false;
+  filter = "";
+  closeSysMenu();
+  render();
+  syncPreview();
+  syncUrl();
+  $("sysBtn")?.focus();
+}
+function closeSysMenu() {
+  const m = $("sysMenu");
+  if (m && !m.hidden) {
+    m.hidden = true;
+    $("sysBtn")?.setAttribute("aria-expanded", "false");
+  }
+}
+
 // ─────────────────────────────────────────────── render
 function render() {
   const sys = activeSystem();
 
-  picker.hidden = systems.length < 2;
-  if (!picker.hidden) {
-    picker.innerHTML = systems.map((s) => `<option value="${s.slug}">${esc(s.name)}</option>`).join("");
-    picker.value = active;
-  }
+  paintSysHeader(sys);
 
   if (!sys) {
     main.innerHTML = `
@@ -633,7 +708,10 @@ document.addEventListener("click", (e) => {
   if (!e.target.closest(".tb-export")) closeExpMenu();
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeExpMenu();
+  if (e.key === "Escape") {
+    closeExpMenu();
+    closeSysMenu();
+  }
 });
 window.addEventListener("scroll", () => closeExpMenu(), true);
 
@@ -726,11 +804,13 @@ function templateNames() {
 function openDialog(mode) {
   dlgMode = mode;
   $("dlgForm").reset();
+  window.dlgTab?.("paste");
   const _de = $("dlgErr"); if (_de) _de.hidden = true;
   const _dth = $("dlgTplHint"); if (_dth) _dth.textContent = "";
   const merge = mode === "merge";
   $("dlgTitle").textContent = merge ? `Add Tokens — ${activeSystem()?.name ?? ""}` : "Add System";
   const _dnw = $("dlgNameWrap"); if (_dnw) _dnw.hidden = merge;
+  const _dgw = $("dlgGoWrap"); if (_dgw) _dgw.hidden = merge;
   const n = merge ? templateNames().length : REFERENCE.reduce((s, g) => s + g.tokens.length, 0);
   const _dtf = $("dlgTplFill"); if (_dtf) _dtf.textContent = merge ? `Fill missing template (${n})` : `Fill full template (${n})`;
   const _dtc = $("dlgTplCopy"); if (_dtc) _dtc.textContent = "Copy template";
@@ -825,6 +905,9 @@ $("dlgForm").addEventListener("submit", async (e) => {
       showToast("System added", "ok");
     }
     dlg.close();
+    // Fresh system → land where the footer "Open in" control points.
+    // Merge stays put (you're editing the system you're looking at).
+    if (dlgMode !== "merge" && TABS.includes(afterSave)) activateTab(afterSave);
   } catch (ex) {
     err.textContent = String(ex.message || ex);
     err.hidden = false;
@@ -850,18 +933,60 @@ function showToast(msg, type = "ok") {
 }
 
 // ─────────────────────────────────────────────── header controls
-picker.addEventListener("change", () => {
-  active = picker.value;
-  schemaMode = false;
-  filter = "";
-  render();
-  syncPreview();
-  syncUrl();
+function openSysMenu() {
+  const m = $("sysMenu");
+  if (!m.hidden) return;
+  const r = $("sysBtn").getBoundingClientRect();
+  m.hidden = false;
+  m.style.top = `${Math.min(r.bottom + 6, window.innerHeight - m.offsetHeight - 8)}px`;
+  m.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 240))}px`;
+  m.style.right = "auto";
+  $("sysBtn").setAttribute("aria-expanded", "true");
+}
+const sysMenuItems = () => [...document.querySelectorAll("#sysMenu [data-sys]")];
+function focusSysItem(i) {
+  const items = sysMenuItems();
+  if (!items.length) return;
+  items[(i + items.length) % items.length].focus();
+}
+$("sysBtn")?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if ($("sysMenu").hidden) openSysMenu();
+  else closeSysMenu();
+});
+// Radix-grade keyboard nav: arrows move, Home/End jump, Esc closes.
+$("sysBtn")?.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    openSysMenu();
+    focusSysItem(e.key === "ArrowDown" ? 0 : -1);
+  }
+});
+$("sysMenu")?.addEventListener("keydown", (e) => {
+  const i = sysMenuItems().indexOf(document.activeElement);
+  if (e.key === "ArrowDown") { e.preventDefault(); focusSysItem(i + 1); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); focusSysItem(i - 1); }
+  else if (e.key === "Home") { e.preventDefault(); focusSysItem(0); }
+  else if (e.key === "End") { e.preventDefault(); focusSysItem(-1); }
+  else if (e.key === "Escape") { e.preventDefault(); closeSysMenu(); $("sysBtn")?.focus(); }
+});
+$("sysMenu")?.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-sys]");
+  if (b) selectSystem(b.dataset.sys);
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".app-sys")) closeSysMenu();
 });
 $("tabSystem")?.addEventListener("click", () => activateTab("system"));
 $("tabPreview")?.addEventListener("click", () => activateTab("preview"));
 $("tabCompare")?.addEventListener("click", () => activateTab("compare"));
 $("addBtn")?.addEventListener("click", () => openDialog("add"));
+$("shareBtn")?.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(location.href);
+    showToast("Link copied", "ok");
+  } catch { showToast("Copy failed", "err"); }
+});
 
 // ── theme (the light palette lives in index.html; this is what switches it)
 const THEME_KEY = "dsv.theme";
@@ -906,6 +1031,7 @@ $("dlgFetch")?.addEventListener("click", async () => {
     const text = await fetchCss(url);
     const _dc2 = $("dlgCss"); if (_dc2) _dc2.value = text;
     updatePreview();
+    window.dlgTab?.("paste");
     showToast("CSS fetched", "ok");
   } catch (err) {
     showToast(`Fetch failed: ${err.message || err}`, "err");
@@ -913,6 +1039,19 @@ $("dlgFetch")?.addEventListener("click", async () => {
     btn.disabled = false;
     btn.textContent = prev;
   }
+});
+
+// ── modal file tab: pick a .css file into the Paste tab for review
+$("dlgFile")?.addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  if (!file.name.endsWith(".css")) { showToast("Only .css files", "warn"); return; }
+  const text = await file.text();
+  const _dc3 = $("dlgCss"); if (_dc3) _dc3.value = text;
+  updatePreview();
+  window.dlgTab?.("paste");
+  showToast("File loaded — review, then Save", "ok");
 });
 
 // ── drag & drop + file input
