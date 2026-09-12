@@ -3,3 +3,4 @@ preview/dist/
 dist-static/
 _site/
 systems/index.json
+.serena/
