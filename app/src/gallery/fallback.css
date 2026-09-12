@@ -1,0 +1,585 @@
+/*
+ * Neutral light-theme fallback for every canonical token in schema.js.
+ * The active system's CSS is injected into <style id="dsv-tokens"> AFTER this
+ * file, so any token it defines wins; anything it omits still has a sane value
+ * and the preview never renders unstyled.
+ */
+:root {
+  /* Surface / Elevation */
+  --color-bg: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-overlay: #ffffff;
+  --color-surface-sunken: #eceef1;
+
+  /* Text */
+  --color-text: #1a1d21;
+  --color-text-secondary: #4b5563;
+  --color-text-muted: #6b7280;
+  --color-text-disabled: #9ca3af;
+  --color-text-link: #4f46e5;
+  --color-text-inverse: #ffffff;
+
+  /* Border */
+  --color-border: #d8dbe0;
+  --color-border-subtle: #e8eaed;
+  --color-border-strong: #b7bcc4;
+  --color-divider: #e2e4e8;
+
+  /* Accent */
+  --color-accent: #4f46e5;
+  --color-accent-hover: #4338ca;
+  --color-accent-active: #3730a3;
+  --color-accent-subtle: #eef2ff;
+  --color-accent-muted: #c7d2fe;
+  --color-accent-border: #a5b4fc;
+  --color-accent-text: #4338ca;
+  --color-on-accent: #ffffff;
+  --color-accent-secondary: #0ea5e9;
+
+  /* Disabled / Inert */
+  --color-surface-disabled: #e5e7eb;
+  --color-border-disabled: #d1d5db;
+  --color-icon-disabled: #9ca3af;
+
+  /* Form / Input */
+  --color-input-bg: #ffffff;
+  --color-input-border: #d8dbe0;
+  --color-input-border-focus: #a5b4fc;
+  --color-input-placeholder: #9ca3af;
+
+  /* Neutral Scale */
+  --color-neutral-50: #f9fafb;
+  --color-neutral-100: #f3f4f6;
+  --color-neutral-200: #e5e7eb;
+  --color-neutral-300: #d1d5db;
+  --color-neutral-400: #9ca3af;
+  --color-neutral-500: #6b7280;
+  --color-neutral-600: #4b5563;
+  --color-neutral-700: #374151;
+  --color-neutral-800: #1f2937;
+  --color-neutral-900: #111827;
+
+  /* Data Visualization */
+  --color-chart-1: #4f46e5;
+  --color-chart-2: #0ea5e9;
+  --color-chart-3: #16a34a;
+  --color-chart-4: #d97706;
+  --color-chart-5: #dc2626;
+  --color-chart-6: #9333ea;
+  --color-chart-7: #db2777;
+  --color-chart-8: #65a30d;
+  --color-chart-grid: #e8eaed;
+  --color-chart-axis: #9ca3af;
+  --color-chart-tooltip-bg: #1a1d21;
+
+  /* Interaction */
+  --color-focus-ring: #818cf8;
+  --color-hover-overlay: rgb(15 23 42 / 0.04);
+  --color-active-overlay: rgb(15 23 42 / 0.08);
+  --color-selected: #eef2ff;
+
+  /* Semantic State */
+  --color-success: #16a34a;
+  --color-success-subtle: #f0fdf4;
+  --color-success-muted: #bbf7d0;
+  --color-success-border: #86efac;
+  --color-success-text: #15803d;
+  --color-on-success: #ffffff;
+  --color-warning: #d97706;
+  --color-warning-subtle: #fffbeb;
+  --color-warning-muted: #fde68a;
+  --color-warning-border: #fcd34d;
+  --color-warning-text: #b45309;
+  --color-on-warning: #ffffff;
+  --color-danger: #dc2626;
+  --color-danger-subtle: #fef2f2;
+  --color-danger-muted: #fecaca;
+  --color-danger-border: #fca5a5;
+  --color-danger-text: #b91c1c;
+  --color-on-danger: #ffffff;
+  --color-info: #0284c7;
+  --color-info-subtle: #f0f9ff;
+  --color-info-muted: #bae6fd;
+  --color-info-border: #7dd3fc;
+  --color-info-text: #0369a1;
+  --color-on-info: #ffffff;
+
+  /* Alpha / Overlay */
+  --color-scrim: rgb(15 23 42 / 0.5);
+  --color-shadow: rgb(15 23 42 / 0.12);
+  --color-tint-subtle: rgb(79 70 229 / 0.04);
+
+  /* Font Family */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Font Size */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+  --font-size-4xl: 2.25rem;
+  --font-size-5xl: 3rem;
+  --font-size-6xl: 3.75rem;
+  --font-size-7xl: 4.5rem;
+
+  /* Font Weight */
+  --font-weight-light: 300;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Line Height */
+  --line-height-tight: 1.2;
+  --line-height-snug: 1.375;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.625;
+
+  /* Letter Spacing */
+  --letter-spacing-tight: -0.02em;
+  --letter-spacing-normal: 0;
+  --letter-spacing-wide: 0.02em;
+  --letter-spacing-wider: 0.05em;
+
+  /* Spacing */
+  --space-0: 0;
+  --space-px: 1px;
+  --space-0-5: 0.125rem;
+  --space-1: 0.25rem;
+  --space-1-5: 0.375rem;
+  --space-2: 0.5rem;
+  --space-2-5: 0.625rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+
+  /* Border Radius */
+  --radius-none: 0;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-full: 9999px;
+
+  /* Border Width */
+  --border-width-none: 0;
+  --border-width-thin: 1px;
+  --border-width-thick: 2px;
+
+  /* Sizes */
+  --size-icon-sm: 1rem;
+  --size-icon-md: 1.25rem;
+  --size-icon-lg: 1.5rem;
+  --size-control-sm: 2rem;
+  --size-control-md: 2.5rem;
+  --size-control-lg: 3rem;
+  --size-control-xl: 3.5rem;
+  --size-avatar-sm: 1.5rem;
+  --size-avatar-md: 2rem;
+  --size-avatar-lg: 2.75rem;
+  --size-header-height: 3.5rem;
+  --size-sidebar-width: 16rem;
+
+  /* Layout / Grid */
+  --container-max-width-sm: 640px;
+  --container-max-width-md: 768px;
+  --container-max-width-lg: 1024px;
+  --grid-columns: 12;
+  --grid-gutter: 1rem;
+
+  /* Shadow */
+  --shadow-xs: 0 1px 2px rgb(15 23 42 / 0.04);
+  --shadow-sm: 0 1px 3px rgb(15 23 42 / 0.08), 0 1px 2px rgb(15 23 42 / 0.04);
+  --shadow-md: 0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06);
+  --shadow-lg: 0 10px 15px -3px rgb(15 23 42 / 0.1), 0 4px 6px -4px rgb(15 23 42 / 0.06);
+  --shadow-xl: 0 20px 25px -5px rgb(15 23 42 / 0.1), 0 8px 10px -6px rgb(15 23 42 / 0.06);
+  --shadow-2xl: 0 25px 50px -12px rgb(15 23 42 / 0.18);
+  --shadow-inner: inset 0 2px 4px rgb(15 23 42 / 0.05);
+  --shadow-focus: 0 0 0 3px rgb(129 140 248 / 0.35);
+  --shadow-outline: 0 0 0 2px rgb(79 70 229 / 0.45);
+
+  /* Blur */
+  --blur-sm: 4px;
+  --blur-md: 8px;
+  --blur-lg: 16px;
+
+  /* Opacity */
+  --opacity-hover: 0.8;
+  --opacity-disabled: 0.5;
+
+  /* Duration */
+  --duration-instant: 0ms;
+  --duration-fast: 100ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+  --duration-slower: 500ms;
+
+  /* Easing */
+  --ease-linear: linear;
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-bounce: cubic-bezier(0.68, -0.55, 0.27, 1.55);
+
+  /* Z-index */
+  --z-base: 0;
+  --z-dropdown: 1000;
+  --z-sticky: 1100;
+  --z-overlay: 1200;
+  --z-modal: 1300;
+  --z-popover: 1400;
+  --z-toast: 1500;
+  --z-tooltip: 1600;
+  --z-raised: 100;
+
+  /* Breakpoint */
+  --breakpoint-xs: 480px;
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+
+  /* Surface additions */
+  --color-surface-inverse: #1a1d21;
+
+  /* Text additions */
+  --color-text-link-hover: #4338ca;
+  --color-text-on-accent: #ffffff;
+
+  /* Accent additions */
+  --color-accent-secondary-subtle: #f0f9ff;
+
+  /* Form / Input additions */
+  --color-input-bg-hover: #f9fafb;
+  --color-input-bg-disabled: #e5e7eb;
+  --color-input-border-hover: #b7bcc4;
+  --color-input-border-error: #fca5a5;
+  --color-input-text: #1a1d21;
+  --color-input-icon: #6b7280;
+
+  /* Brand Scale (primitive) */
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #4f46e5;
+  --color-brand-600: #4338ca;
+  --color-brand-700: #3730a3;
+  --color-brand-800: #312e81;
+  --color-brand-900: #1e1b4b;
+
+  /* Neutral Scale additions */
+  --color-neutral-950: #030712;
+  --color-neutral-1000: #000000;
+
+  /* Interaction additions */
+  --color-selected-subtle: #f5f8ff;
+  --color-pressed-overlay: rgb(15 23 42 / 0.12);
+
+  /* Font Family additions */
+  --font-display: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Display Size */
+  --font-size-display-xs: 2.25rem;
+  --font-size-display-sm: 3rem;
+  --font-size-display-md: 3.75rem;
+  --font-size-display-lg: 4.5rem;
+  --font-size-display-xl: 6rem;
+
+  /* Line Height additions */
+  --line-height-none: 1;
+  --line-height-loose: 2;
+
+  /* Letter Spacing additions */
+  --letter-spacing-tighter: -0.05em;
+
+  /* Text Measure */
+  --text-measure-xs: 20ch;
+  --text-measure-sm: 30ch;
+  --text-measure-md: 45ch;
+  --text-measure-lg: 60ch;
+  --text-measure-xl: 70ch;
+  --text-measure-wide: 85ch;
+
+  /* Spacing additions */
+  --space-3-5: 0.875rem;
+  --space-7: 1.75rem;
+  --space-14: 3.5rem;
+  --space-28: 7rem;
+  --space-32: 8rem;
+  --space-40: 10rem;
+  --space-48: 12rem;
+  --space-56: 14rem;
+  --space-64: 16rem;
+  --space-72: 18rem;
+  --space-80: 20rem;
+  --space-96: 24rem;
+
+  /* Section Spacing */
+  --section-space-xs: 1.5rem;
+  --section-space-sm: 2.5rem;
+  --section-space-md: 4rem;
+  --section-space-lg: 6rem;
+  --section-space-xl: 8rem;
+  --section-space-2xl: 12rem;
+  --section-space-3xl: 16rem;
+
+  /* Border Radius additions */
+  --radius-xs: 0.125rem;
+  --radius-3xl: 1.5rem;
+
+  /* Border Width additions */
+  --border-width-medium: 1.5px;
+
+  /* Container additions */
+  --container-max-width-xs: 480px;
+  --container-max-width-xl: 1280px;
+  --container-max-width-2xl: 1536px;
+  --container-padding-sm: 1rem;
+  --container-padding-md: 1.5rem;
+  --container-padding-lg: 2rem;
+  --container-padding-xl: 3rem;
+  --container-padding-2xl: 4rem;
+
+  /* Grid additions */
+  --grid-columns-sm: 4;
+  --grid-columns-md: 8;
+  --grid-columns-lg: 12;
+  --grid-columns-xl: 12;
+  --grid-gutter-sm: 0.75rem;
+  --grid-gutter-md: 1rem;
+  --grid-gutter-lg: 1.5rem;
+  --grid-gutter-xl: 2rem;
+  --grid-margin-sm: 1rem;
+  --grid-margin-md: 1.5rem;
+  --grid-margin-lg: 2rem;
+  --grid-margin-xl: 3rem;
+
+  /* Composition */
+  --composition-max-width: 72rem;
+  --composition-max-width-wide: 90rem;
+  --composition-max-width-narrow: 48rem;
+  --composition-gutter: 1.5rem;
+  --composition-offset-sm: 2rem;
+  --composition-offset-md: 4rem;
+  --composition-offset-lg: 8rem;
+  --composition-overlap-sm: 1rem;
+  --composition-overlap-md: 2rem;
+  --composition-overlap-lg: 4rem;
+  --composition-aspect-wide: 16 / 9;
+  --composition-aspect-standard: 4 / 3;
+  --composition-aspect-square: 1 / 1;
+  --composition-aspect-portrait: 3 / 4;
+
+  /* Media */
+  --media-radius: 0.75rem;
+  --media-radius-sm: 0.5rem;
+  --media-radius-lg: 1rem;
+  --media-radius-xl: 1.5rem;
+  --media-aspect-wide: 16 / 9;
+  --media-aspect-video: 16 / 9;
+  --media-aspect-standard: 4 / 3;
+  --media-aspect-square: 1 / 1;
+  --media-aspect-portrait: 3 / 4;
+  --media-overlay: rgb(15 23 42 / 0.35);
+  --media-overlay-subtle: rgb(15 23 42 / 0.18);
+  --media-overlay-strong: rgb(15 23 42 / 0.6);
+
+  /* Size additions */
+  --size-icon-xs: 0.75rem;
+  --size-icon-xl: 2rem;
+  --size-control-xs: 1.5rem;
+  --size-avatar-xs: 1rem;
+  --size-avatar-xl: 3.5rem;
+  --size-header-height-mobile: 3rem;
+  --size-sidebar-width-collapsed: 4rem;
+
+  /* Control Geometry */
+  --control-padding-x-xs: 0.5rem;
+  --control-padding-x-sm: 0.75rem;
+  --control-padding-x-md: 1rem;
+  --control-padding-x-lg: 1.25rem;
+  --control-padding-x-xl: 1.5rem;
+  --control-padding-y-xs: 0.125rem;
+  --control-padding-y-sm: 0.25rem;
+  --control-padding-y-md: 0.5rem;
+  --control-padding-y-lg: 0.75rem;
+  --control-padding-y-xl: 1rem;
+  --control-radius: 0.375rem;
+  --control-border-width: 1px;
+  --control-icon-gap: 0.5rem;
+
+  /* Iconography */
+  --icon-stroke-width-thin: 1px;
+  --icon-stroke-width: 1.5px;
+  --icon-stroke-width-medium: 2px;
+  --icon-stroke-width-bold: 2.5px;
+  --icon-gap-xs: 0.25rem;
+  --icon-gap-sm: 0.5rem;
+  --icon-gap-md: 0.75rem;
+
+  /* Glow / Light Effects */
+  --glow-sm: 0 0 8px rgb(99 102 241 / 0.25);
+  --glow-md: 0 0 24px rgb(99 102 241 / 0.35);
+  --glow-lg: 0 0 48px rgb(99 102 241 / 0.4);
+  --glow-xl: 0 0 96px rgb(99 102 241 / 0.45);
+
+  /* Blur additions */
+  --blur-xl: 24px;
+
+  /* Gradient */
+  --gradient-brand: linear-gradient(135deg, #4f46e5, #7c3aed);
+  --gradient-brand-subtle: linear-gradient(135deg, #eef2ff, #f5f3ff);
+  --gradient-surface: linear-gradient(180deg, #ffffff, #f6f7f9);
+  --gradient-surface-subtle: linear-gradient(180deg, #ffffff, #eceef1);
+  --gradient-glow: radial-gradient(circle, rgb(129 140 248 / 0.35), transparent 70%);
+  --gradient-fade: linear-gradient(180deg, transparent, rgb(15 23 42 / 0.5));
+  --gradient-hero: linear-gradient(135deg, #4f46e5, #0ea5e9);
+
+  /* Opacity additions */
+  --opacity-active: 0.7;
+  --opacity-selected: 0.9;
+  --opacity-muted: 0.6;
+  --opacity-overlay: 0.5;
+
+  /* Duration additions */
+  --duration-slowest: 800ms;
+
+  /* Motion Distance */
+  --motion-distance-xs: 2px;
+  --motion-distance-sm: 4px;
+  --motion-distance-md: 8px;
+  --motion-distance-lg: 16px;
+  --motion-distance-xl: 32px;
+
+  /* Motion Scale */
+  --motion-scale-hover: 1.03;
+  --motion-scale-active: 0.97;
+  --motion-scale-enter: 0.95;
+  --motion-scale-exit: 1;
+
+  /* Motion Blur */
+  --motion-blur-enter: 8px;
+  --motion-blur-exit: 4px;
+
+  /* Easing additions */
+  --ease-smooth: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Semantic Motion (aliases over duration + easing) */
+  --motion-enter: var(--duration-normal) var(--ease-emphasized);
+  --motion-exit: var(--duration-fast) var(--ease-in);
+  --motion-hover: var(--duration-fast) var(--ease-out);
+  --motion-press: var(--duration-fast) var(--ease-in);
+  --motion-reveal: var(--duration-normal) var(--ease-out);
+  --motion-layout: var(--duration-slow) var(--ease-in-out);
+  --motion-modal: var(--duration-normal) var(--ease-spring);
+  --motion-page: var(--duration-slow) var(--ease-out);
+
+  /* Accessibility */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --focus-ring-radius: 6px;
+  --touch-target-min: 44px;
+
+  /* Component / Button */
+  --button-height-sm: 2rem;
+  --button-height-md: 2.5rem;
+  --button-height-lg: 3rem;
+  --button-height-xl: 3.5rem;
+  --button-padding-x-sm: 0.75rem;
+  --button-padding-x-md: 1rem;
+  --button-padding-x-lg: 1.25rem;
+  --button-padding-x-xl: 1.5rem;
+  --button-radius: 0.375rem;
+  --button-icon-size: 1rem;
+  --button-gap: 0.5rem;
+
+  /* Component / Card */
+  --card-padding-sm: 0.75rem;
+  --card-padding-md: 1.25rem;
+  --card-padding-lg: 1.5rem;
+  --card-padding-xl: 2rem;
+  --card-radius: 0.5rem;
+  --card-border-width: 1px;
+  --card-shadow: var(--shadow-sm);
+
+  /* Component / Navigation */
+  --nav-height: 3.5rem;
+  --nav-padding-x: 0.25rem;
+  --nav-gap: 0.25rem;
+  --nav-item-height: 2.25rem;
+  --nav-item-radius: 0.375rem;
+
+  /* Component / Badge */
+  --badge-height-sm: 1.25rem;
+  --badge-height-md: 1.5rem;
+  --badge-padding-x: 0.5rem;
+  --badge-radius: 9999px;
+  --badge-gap: 0.25rem;
+
+  /* Component / Modal */
+  --modal-width-sm: 22rem;
+  --modal-width-md: 28.75rem;
+  --modal-width-lg: 36rem;
+  --modal-width-xl: 48rem;
+  --modal-padding: 1.5rem;
+  --modal-radius: 0.75rem;
+  --modal-shadow: var(--shadow-2xl);
+
+  /* Component / Tooltip */
+  --tooltip-max-width: 16rem;
+  --tooltip-padding-x: 0.5rem;
+  --tooltip-padding-y: 0.25rem;
+  --tooltip-radius: 0.25rem;
+
+  /* Component / Input */
+  --input-height-sm: 2rem;
+  --input-height-md: 2.5rem;
+  --input-height-lg: 3rem;
+  --input-padding-x: 0.75rem;
+  --input-padding-y: 0.5rem;
+  --input-radius: 0.375rem;
+  --input-border-width: 1px;
+
+  /* Component / Avatar */
+  --avatar-ring-width: 2px;
+  --avatar-ring-color: #ffffff;
+  --avatar-group-overlap: 0.5rem;
+
+  /* Component / Divider */
+  --divider-width: 1px;
+  --divider-spacing: 0.75rem;
+
+  /* Component / Overlay */
+  --overlay-opacity: 0.5;
+  --overlay-blur: 8px;
+  --overlay-radius: 0.75rem;
+
+  /* Responsive Layout */
+  --mobile-page-padding: 1rem;
+  --mobile-section-spacing: 2.5rem;
+  --mobile-content-gap: 1rem;
+  --mobile-grid-gap: 1rem;
+  --desktop-page-padding: 2.5rem;
+  --desktop-section-spacing: 4rem;
+  --desktop-content-gap: 1.5rem;
+  --desktop-grid-gap: 1.5rem;
+}
