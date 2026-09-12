@@ -1,4 +1,7 @@
+import { useLayoutEffect } from "react";
 import Shell, { type AppTab } from "./shell/Shell.tsx";
+import { useSystems, injectSystemTokens } from "./systems/store.ts";
+import SystemSwitcher from "./systems/SystemSwitcher.tsx";
 
 const TABS: { id: AppTab; label: string }[] = [
   { id: "tokens", label: "Tokens" },
@@ -7,13 +10,17 @@ const TABS: { id: AppTab; label: string }[] = [
 ];
 
 function App() {
+  const { systems, active, activeSlug, setActiveSlug } = useSystems();
+
+  useLayoutEffect(() => {
+    injectSystemTokens(active);
+  }, [active]);
+
   return (
     <Shell
       brand={<span className="app-brand">Design System Viewer</span>}
       systemSwitcher={
-        <button type="button" className="app-sysbtn" disabled title="System switcher (placeholder)">
-          System…
-        </button>
+        <SystemSwitcher systems={systems} activeSlug={activeSlug} onSelect={setActiveSlug} />
       }
       actions={
         <button type="button" className="app-iconbtn" disabled title="Actions (placeholder)">
