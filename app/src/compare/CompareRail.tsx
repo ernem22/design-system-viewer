@@ -8,7 +8,7 @@ import type { CompareViewModel } from "./useCompareView.ts";
 /**
  * Compare tab's rail: the system picker (up to `maxColumns` systems, as a
  * vertical chip list) and, in "component" mode, the option-group picker
- * (Basics / Components) — legacy's toolbar row of system chips plus its
+ * (Basics / Components / Extras / Screens) — legacy's toolbar row of system chips plus its
  * `<select>` of comparable components, reshaped for the shell's side rail
  * instead of a page-level toolbar. Whole-panel open/close is owned by
  * App.tsx, same as every other tab's rail.

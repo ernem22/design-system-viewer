@@ -13,6 +13,8 @@ import * as Tabs from "@radix-ui/react-tabs";
 import * as Accordion from "@radix-ui/react-accordion";
 import * as Progress from "@radix-ui/react-progress";
 import { Button, Field, usePortalContainer } from "../gallery/ui.tsx";
+import { COMPONENT_ENTRIES } from "../gallery/components/index.ts";
+import type { GalleryEntry } from "../gallery/registry.ts";
 import { Icon } from "../lib/icons.tsx";
 
 const Buttons = () => (
@@ -266,3 +268,33 @@ export const BASIC_OPTIONS: ComparableOption[] = [
   { id: "progress", label: "Progress / Spinner", Render: Progressy },
   { id: "login", label: "Login card", Render: LoginCard },
 ];
+
+/** One gallery section as a picker option: stable `gallery-<id>` values (the
+   same scheme legacy's REGISTRY used, so `?c=` links keep working) with the
+   section's own Body as the renderer. Section components only read canonical
+   tokens via var(--x), which resolve against each column's inline token
+   scope — no :root dependency, so the whole gallery is comparable
+   system-by-system. */
+function toComparable(e: GalleryEntry): ComparableOption {
+  return { id: `gallery-${e.id}`, label: e.label, Render: e.Body };
+}
+
+const isScreenEntry = (e: GalleryEntry) => e.id.startsWith("screen-");
+
+/** The issue-2 Extras port: these sections live in COMPONENT_ENTRIES next to
+   the original components but get their own picker group, mirroring legacy
+   OPT_GROUPS' Components / Extras / Screens split. */
+const EXTRA_IDS = new Set(["foundation", "patterns", "data-display", "status", "nav-extras"]);
+
+/** Original component sections (Forms … Utilities). */
+export const COMPONENT_OPTIONS: ComparableOption[] = COMPONENT_ENTRIES.filter(
+  (e) => !isScreenEntry(e) && !EXTRA_IDS.has(e.id),
+).map(toComparable);
+
+/** Extras sections (Foundation … Navigation extras). */
+export const EXTRA_OPTIONS: ComparableOption[] = COMPONENT_ENTRIES.filter(
+  (e) => !isScreenEntry(e) && EXTRA_IDS.has(e.id),
+).map(toComparable);
+
+/** Whole-page screen mockups (Data viz … Command palette). */
+export const SCREEN_OPTIONS: ComparableOption[] = COMPONENT_ENTRIES.filter(isScreenEntry).map(toComparable);

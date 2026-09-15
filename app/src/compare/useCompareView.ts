@@ -1,16 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { COMPONENT_ENTRIES } from "../gallery/components/index.ts";
 import { resolveSystemTokens } from "../systems/store.ts";
 import type { DesignSystem } from "../systems/store.ts";
-import { BASIC_OPTIONS } from "./registry.tsx";
+import { BASIC_OPTIONS, COMPONENT_OPTIONS, EXTRA_OPTIONS, SCREEN_OPTIONS } from "./registry.tsx";
 import type { ComparableOption } from "./registry.tsx";
 
 export type CompareMode = "component" | "diff";
 
-/** One group of picker options — legacy's OPT_GROUPS. Extras/Screens aren't
-   ported yet (separate issue), so only Basics + Components exist for now;
-   add their groups here once that port lands — see app/CLAUDE.md's
-   "Not yet implemented" note for the tracking issue. */
+/** One group of picker options — legacy's OPT_GROUPS: Basics (compare-only
+   mini demos) plus Components / Extras / Screens built from the real
+   gallery sections, so the whole preview is comparable system-by-system. */
 export interface OptionGroup {
   label: string;
   items: ComparableOption[];
@@ -41,11 +39,9 @@ export function useCompareView(systems: DesignSystem[]) {
   const optionGroups = useMemo<OptionGroup[]>(
     () => [
       { label: "Basics", items: BASIC_OPTIONS },
-      {
-        label: "Components",
-        items: COMPONENT_ENTRIES.map((e) => ({ id: `gallery-${e.id}`, label: e.label, Render: e.Body })),
-      },
-      // TODO: add "Extras" / "Screens" groups once that gallery port lands.
+      { label: "Components", items: COMPONENT_OPTIONS },
+      { label: "Extras", items: EXTRA_OPTIONS },
+      { label: "Screens", items: SCREEN_OPTIONS },
     ],
     [],
   );
