@@ -1,13 +1,21 @@
 import { useCallback, useState } from "react";
-import { buildSystem } from "../../../src/core/parse.js";
+import { buildSystem, mergeSystem, parseTokens } from "../../../src/core/parse.js";
+import { categorize } from "../../../src/core/taxonomy.js";
 
 export interface Token {
   name: string;
   value: string;
 }
 
+/** Token category — mirrors src/core/taxonomy.js Category (id/kind drive
+   the gallery renderer dispatch, so the type must carry them, not just
+   label/tokens). */
+export type TokenGroupKind = "color" | "type" | "length" | "shadow" | "motion" | "number" | "raw";
+
 export interface TokenGroup {
+  id: string;
   label: string;
+  kind: TokenGroupKind;
   tokens: Token[];
 }
 
@@ -20,6 +28,10 @@ export interface DesignSystem {
   themes?: { dark?: Token[] };
   createdAt: string;
   updatedAt: string;
+}
+
+export function coveragePercent(coverage: DesignSystem["coverage"]): number | null {
+  return coverage?.expected ? Math.round((coverage.present / coverage.expected) * 100) : null;
 }
 
 const SYSTEMS_KEY = "dsv.app.systems";
@@ -109,12 +121,29 @@ function seed(): DesignSystem[] {
   return [buildSystem({ name: "Aurora", css: SEED_CSS }) as DesignSystem];
 }
 
+/** Stored systems predate the id/kind type (or were hand-edited) — rebuild
+   their groups from source CSS instead of rendering a dispatch with no key. */
+function ensureGroups(sys: DesignSystem): DesignSystem {
+  const groups = sys.groups;
+  if (
+    Array.isArray(groups) &&
+    groups.length > 0 &&
+    groups.every((g) => typeof g.id === "string" && typeof g.kind === "string")
+  )
+    return sys;
+  try {
+    return { ...sys, groups: categorize(parseTokens(sys.css ?? "")) as TokenGroup[] };
+  } catch {
+    return sys;
+  }
+}
+
 function load(): DesignSystem[] {
   try {
     const raw = localStorage.getItem(SYSTEMS_KEY);
     if (raw) {
       const arr = JSON.parse(raw) as DesignSystem[];
-      if (Array.isArray(arr) && arr.length > 0) return arr;
+      if (Array.isArray(arr) && arr.length > 0) return arr.map(ensureGroups);
     }
   } catch {
     /* corrupted storage — fall through to seed */
@@ -130,7 +159,7 @@ function load(): DesignSystem[] {
 
 /** localStorage-only systems source. No /api, no systems/*.json. */
 export function useSystems() {
-  const [systems] = useState<DesignSystem[]>(load);
+  const [systems, setSystems] = useState<DesignSystem[]>(load);
   const [activeSlug, setActiveSlugState] = useState<string>(() => {
     try {
       const saved = localStorage.getItem(ACTIVE_KEY);
@@ -151,25 +180,67 @@ export function useSystems() {
   }, []);
 
   const active = systems.find((s) => s.slug === activeSlug) ?? systems[0] ?? null;
-  return { systems, active, activeSlug, setActiveSlug };
+
+  const persist = useCallback((list: DesignSystem[]) => {
+    try {
+      localStorage.setItem(SYSTEMS_KEY, JSON.stringify(list));
+    } catch {
+      /* private mode — run in-memory */
+    }
+  }, []);
+
+  /** Every mutation rebuilds through buildSystem/mergeSystem (groups +
+     coverage + warnings stay derived, never hand-edited) and persists. */
+  const addSystem = useCallback(
+    (name: string, css: string): DesignSystem => {
+      const built = buildSystem({ name, css }) as DesignSystem;
+      if (systems.some((s) => s.slug === built.slug))
+        throw new Error(`"${built.slug}" already exists — use Add Tokens to merge`);
+      const next = [...systems, built];
+      setSystems(next);
+      persist(next);
+      setActiveSlug(built.slug);
+      return built;
+    },
+    [systems, persist, setActiveSlug],
+  );
+
+  const mergeCss = useCallback(
+    (slug: string, css: string): DesignSystem => {
+      const existing = systems.find((s) => s.slug === slug);
+      if (!existing) throw new Error("system to merge not found");
+      const merged = mergeSystem(existing, css) as DesignSystem;
+      const next = systems.map((s) => (s.slug === slug ? merged : s));
+      setSystems(next);
+      persist(next);
+      return merged;
+    },
+    [systems, persist],
+  );
+
+  /** Single-token write — the inline editor's path. One bare line,
+     last-write-wins, same merge pipeline as a pasted block. */
+  const patchToken = useCallback(
+    (slug: string, name: string, value: string): DesignSystem =>
+      mergeCss(slug, `${name}: ${value};`),
+    [mergeCss],
+  );
+
+  const removeSystem = useCallback(
+    (slug: string) => {
+      const next = systems.filter((s) => s.slug !== slug);
+      setSystems(next);
+      persist(next);
+      if (activeSlug === slug) setActiveSlug(next[0]?.slug ?? "");
+    },
+    [systems, persist, activeSlug, setActiveSlug],
+  );
+
+  return { systems, active, activeSlug, setActiveSlug, addSystem, mergeCss, patchToken, removeSystem };
 }
 
-const STYLE_ID = "app-tokens";
-
-/** Single-system layer: active system's tokens on :root, so the header
-   (and later the whole shell) repaints with the system. */
-export function injectSystemTokens(system: DesignSystem | null) {
-  let el = document.getElementById(STYLE_ID);
-  if (!el) {
-    el = document.createElement("style");
-    el.id = STYLE_ID;
-  }
-  // Re-append to stay last in <head> — wins over the token root.
-  document.head.appendChild(el);
-  let css = "";
-  if (system?.groups) {
-    const tokens = system.groups.flatMap((g) => g.tokens);
-    if (tokens.length > 0) css = `:root{${tokens.map((t) => `${t.name}:${t.value}`).join(";")}}`;
-  }
-  el.textContent = css;
+/** Flat token list for a system. */
+export function resolveSystemTokens(system: DesignSystem | null): Token[] {
+  return system?.groups?.flatMap((g) => g.tokens) ?? [];
 }
+

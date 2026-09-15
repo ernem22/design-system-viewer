@@ -218,6 +218,11 @@ body {
   transition: width 260ms var(--ease-emphasized);
 }
 .dsv-rail-inner {
+  position: relative; /* containing block for .dsv-rail-indicator: its `top`
+    is measured in this scroller's content-space (delta + scrollTop), so it
+    must be positioned relative to the inner — otherwise the pill anchors to
+    .dsv-rail (sticky = positioned), never scrolls with the links, and sits
+    off by the inner's offset inside the rail */
   width: 208px; height: 100%; overflow-y: auto;
   padding: var(--space-2) var(--space-2-5) var(--space-5);
   transition: opacity 180ms var(--ease-out);

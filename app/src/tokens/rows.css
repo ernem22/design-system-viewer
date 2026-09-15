@@ -1,0 +1,161 @@
+/* Row renderers: token row shell, color swatches, and the per-kind demos
+   (bar/radius/shadow/motion/type/number). Table/group/empty primitives
+   shared with SchemaView.tsx live in TokenGroup.css. */
+
+.tok-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.tok-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.tok-row:hover {
+  background: var(--color-hover-overlay);
+}
+
+.tok-row[aria-selected="true"] {
+  background: var(--color-accent-subtle);
+  outline: 1px solid var(--color-accent-border);
+}
+
+.tok-row-label {
+  flex: 1 1 40%;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.tok-row-label b {
+  font-family: var(--font-mono);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.tok-row-label span {
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tok-ref {
+  color: var(--color-accent-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+.tok-row-demo {
+  flex: 1 1 60%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.tok-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+.tok-swatch {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  cursor: pointer;
+  background: var(--color-surface);
+}
+
+.tok-swatch:hover {
+  border-color: var(--color-border-strong);
+}
+
+.tok-swatch[aria-selected="true"] {
+  border-color: var(--color-accent-border);
+  outline: 1px solid var(--color-accent-border);
+}
+
+.tok-chip {
+  height: var(--space-10);
+  border-radius: var(--radius-sm);
+  background: var(--val);
+  border: 1px solid var(--color-border-subtle);
+  margin-bottom: var(--space-2);
+}
+
+.tok-swatch-name {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.tok-swatch-value {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tok-bar {
+  height: var(--space-3);
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+}
+
+.tok-radiusbox {
+  width: var(--space-10);
+  height: var(--space-10);
+  background: var(--color-accent-subtle);
+  border: 1px solid var(--color-accent-border);
+}
+
+.tok-shadowbox {
+  width: var(--space-10);
+  height: var(--space-10);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+}
+
+.tok-motionbox {
+  width: var(--space-10);
+  height: var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+}
+
+.tok-typespec {
+  font-size: var(--font-size-base);
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tok-lineheight {
+  white-space: normal;
+  background: var(--color-surface-raised);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.tok-num {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  background: var(--color-surface-raised);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}

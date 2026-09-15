@@ -1,0 +1,139 @@
+/* Tokens right rail: coverage summary + token inspector + warnings. */
+
+.tok-props {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-4);
+}
+
+.tok-props-block h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+  color: var(--color-text-muted);
+}
+
+.tok-cov {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.tok-cov-ring {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex: none;
+}
+
+.tok-cov-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(0deg);
+}
+
+.tok-rr-track {
+  fill: none;
+  stroke: var(--color-border);
+  stroke-width: 3;
+}
+
+.tok-rr-val {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.tok-cov-ok .tok-rr-val {
+  stroke: var(--color-success);
+}
+
+.tok-cov-warn .tok-rr-val {
+  stroke: var(--color-warning);
+}
+
+.tok-cov-bad .tok-rr-val {
+  stroke: var(--color-danger);
+}
+
+.tok-cov-ring b {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  padding-top: 12px;
+  font-size: var(--font-size-sm);
+}
+
+.tok-cov-ring b i {
+  font-style: normal;
+  font-size: 9px;
+  color: var(--color-text-muted);
+}
+
+.tok-cov-text {
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.tok-miss {
+  color: var(--color-warning);
+}
+
+.tok-extra {
+  color: var(--color-accent-text);
+}
+
+.tok-zero {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-regular);
+}
+
+.tok-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.tok-inspector-name,
+.tok-inspector-value {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  word-break: break-all;
+}
+
+.tok-inspector-value {
+  color: var(--color-text-secondary);
+}
+
+.tok-inspector-meta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.tok-props-empty {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.tok-warn-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.tok-warn-list code {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-warning);
+}

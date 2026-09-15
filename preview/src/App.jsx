@@ -247,8 +247,9 @@ function Gallery() {
   useLayoutEffect(() => {
     const measure = () => {
       const rail = railRef.current;
-      const link = rail?.querySelector(`a[href="#${CSS.escape(activeId || "")}"]`);
-      if (!rail || !link || !link.getClientRects().length) { setIndicator(null); return; }
+      if (!rail || !activeId) { setIndicator(null); return; }
+      const link = rail.querySelector(`a[href="#${CSS.escape(activeId)}"]`);
+      if (!link || !link.getClientRects().length) { setIndicator(null); return; }
       const railRect = rail.getBoundingClientRect();
       const linkRect = link.getBoundingClientRect();
       if (linkRect.height < 4) { setIndicator(null); return; }
@@ -256,8 +257,12 @@ function Gallery() {
     };
     measure();
     const raf = requestAnimationFrame(measure); // after this paint settles (collapse/filter reflow)
+    // Group expand/collapse animates grid-template-rows over ~200ms: the rAF
+    // above samples a mid-animation box, so sample once more after the
+    // transition lands instead of stranding the pill at a squashed offset.
+    const settled = setTimeout(measure, 250);
     window.addEventListener("resize", measure);
-    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", measure); };
+    return () => { cancelAnimationFrame(raf); clearTimeout(settled); window.removeEventListener("resize", measure); };
   }, [activeId, collapsedGroups, visibleGroups]);
 
   const covPct = system?.coverage

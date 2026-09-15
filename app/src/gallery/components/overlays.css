@@ -1,0 +1,10 @@
+/* Overlays section — the only pieces not already covered by the shared
+   floating-surface classes in gallery.css. Ported from
+   preview/src/styles/components.css. */
+
+.dsv-modal-actions--spaced { margin-top: var(--space-5); }
+.dsv-dialog-close { position: absolute; top: var(--space-3); right: var(--space-3); }
+.dsv-pop-heading { font-size: var(--font-size-sm); }
+.dsv-menu-subtrigger-chevron { margin-left: auto; }
+.dsv-mega-menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-4); }
+.dsv-mega-menu-link { display: block; padding: var(--space-1) 0; text-decoration: none; }

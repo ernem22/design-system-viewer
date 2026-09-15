@@ -1,0 +1,55 @@
+/* Tokens tab main column: lint row + toasts. Toolbar styles live in
+   TokenToolbar.css; demo/row styles in TokenGroup.css/rows.css; right-rail
+   styles in TokensProps.css. */
+
+.tok-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  max-width: 1100px;
+}
+
+.tok-warns {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+}
+
+.tok-warns summary {
+  cursor: pointer;
+  font-weight: var(--font-weight-medium);
+}
+
+.tok-warns code {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+}
+
+.tok-toasts {
+  position: fixed;
+  bottom: var(--space-5);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  z-index: var(--z-toast);
+}
+
+.tok-toast {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  box-shadow: var(--shadow-md);
+}
+
+.tok-toast-err {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
