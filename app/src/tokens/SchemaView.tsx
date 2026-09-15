@@ -1,5 +1,7 @@
 import { REFERENCE } from "../../../src/core/schema.js";
 import type { Token } from "../systems/store.ts";
+import { TokenEditControl } from "./InlineEditor.tsx";
+import "./InlineEditor.css";
 import { RefBadge } from "./rows.tsx";
 import { schemaAnchor, type TokensViewModel } from "./useTokensView.ts";
 import "./TokenGroup.css";
@@ -14,14 +16,21 @@ interface ReferenceGroup {
 /**
  * Schema checklist (old schemaView): every REFERENCE group with ✓/✗ per
  * token + the "Outside Schema" section for extras. Row click selects +
- * copies; Add/Update entry points arrive with the dialog pass.
+ * copies; Update (or double-click) edits a present token inline, Add creates
+ * a missing one — both through the same inline-editor popover.
  */
 export function SchemaView({
   view,
   onPick,
+  editingName,
+  onEdit,
+  onSave,
 }: {
   view: TokensViewModel;
   onPick: (token: Token) => void;
+  editingName: string | null;
+  onEdit: (token: Token | null) => void;
+  onSave: (name: string, value: string) => void;
 }) {
   const { cov, valueMap, matchTok, selected } = view;
   const groups = REFERENCE as ReferenceGroup[];
@@ -45,13 +54,15 @@ export function SchemaView({
               {names.map((name) => {
                 const value = valueMap.get(name);
                 const hit = value !== undefined;
+                const token: Token = { name, value: value ?? "" };
                 return (
                   <tr
                     key={name}
                     data-token={name}
                     aria-selected={selected?.name === name || undefined}
-                    title={hit ? "click to copy" : "missing — Add to create it"}
+                    title={hit ? "click to copy — double-click or Update to edit" : "missing — Add to create it"}
                     onClick={() => hit && onPick({ name, value: value as string })}
+                    onDoubleClick={() => onEdit(token)}
                   >
                     <td className={hit ? "tok-yes" : "tok-no"}>
                       {hit ? "✓" : "✗"} {name}
@@ -59,6 +70,15 @@ export function SchemaView({
                     <td>
                       {value ?? <span className="tok-missing-inline">— missing</span>}
                       {hit && <RefBadge value={value as string} />}
+                    </td>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <TokenEditControl
+                        token={token}
+                        label={hit ? "Update" : "Add"}
+                        open={editingName === name}
+                        onOpenChange={(next) => onEdit(next ? token : null)}
+                        onSave={onSave}
+                      />
                     </td>
                   </tr>
                 );

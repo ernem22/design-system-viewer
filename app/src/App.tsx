@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import Shell, { type ShellTab } from "./shell/Shell.tsx";
 import Brand from "./shell/Brand.tsx";
 import IconToggleButton from "./shell/IconToggleButton.tsx";
@@ -9,6 +9,8 @@ import { Icon } from "./lib/icons.tsx";
 import { useSystems, resolveSystemTokens } from "./systems/store.ts";
 import { usePanelOpen } from "./lib/panelStorage.ts";
 import SystemSwitcher from "./systems/SystemSwitcher.tsx";
+import { AddSystemDialog } from "./systems/AddSystemDialog.tsx";
+import "./systems/AddSystemDialog.css";
 import Rail from "./shell/Rail.tsx";
 import Props from "./shell/Props.tsx";
 import { COMPONENT_ENTRIES } from "./gallery/components/index.ts";
@@ -25,7 +27,8 @@ import "./gallery/gallery.css";
 const ENTRY_IDS = COMPONENT_ENTRIES.map((e) => e.id);
 
 function App() {
-  const { systems, active, activeSlug, setActiveSlug, removeSystem } = useSystems();
+  const { systems, active, activeSlug, setActiveSlug, addSystem, mergeCss, patchToken, removeSystem } =
+    useSystems();
   // Panel collapse lives here so the toggles can sit in the topbar —
   // no floating edge handle next to the main scrollbar. Same storage
   // keys as before, so persisted choices survive the move.
@@ -45,6 +48,22 @@ function App() {
   // down as props; no context).
   const tokensView = useTokensView(active);
 
+  // Slug-bound mutation callbacks — useCallback (not inline closures) so the
+  // memo()'d token rows downstream keep stable onSave/onMerge identities
+  // across unrelated App re-renders (e.g. filter keystrokes).
+  const handleMerge = useCallback(
+    (css: string) => {
+      if (active) mergeCss(active.slug, css);
+    },
+    [active, mergeCss],
+  );
+  const handlePatch = useCallback(
+    (name: string, value: string) => {
+      if (active) patchToken(active.slug, name, value);
+    },
+    [active, patchToken],
+  );
+
   useLayoutEffect(() => {
     const tokens = resolveSystemTokens(active);
     document.documentElement.style.cssText = tokens.map((t) => `${t.name}:${t.value};`).join("");
@@ -56,9 +75,18 @@ function App() {
       id: "tokens",
       label: "Tokens",
       content: active ? (
-        <TokensView system={active} view={tokensView} onDelete={removeSystem} />
+        <TokensView
+          system={active}
+          view={tokensView}
+          onDelete={removeSystem}
+          onMerge={handleMerge}
+          onPatch={handlePatch}
+        />
       ) : (
-        <p className="app-placeholder">No systems yet</p>
+        <div className="app-placeholder">
+          <p>No systems yet</p>
+          <AddSystemDialog onAdd={addSystem} onToast={tokensView.pushToast} />
+        </div>
       ),
       rail: <Rail groups={tokensView.railGroups} searching={tokensView.searching} open={railOpen} />,
       propsPanel: (
@@ -108,7 +136,14 @@ function App() {
         </>
       }
       systemSwitcher={
-        <SystemSwitcher systems={systems} active={active} activeSlug={activeSlug} onSelect={setActiveSlug} />
+        <SystemSwitcher
+          systems={systems}
+          active={active}
+          activeSlug={activeSlug}
+          onSelect={setActiveSlug}
+          onAddSystem={addSystem}
+          onToast={tokensView.pushToast}
+        />
       }
       actions={
         <>

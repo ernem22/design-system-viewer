@@ -1,5 +1,7 @@
 import * as Select from "@radix-ui/react-select";
 import { Icon } from "../lib/icons.tsx";
+import { AddSystemDialog } from "./AddSystemDialog.tsx";
+import "./AddSystemDialog.css";
 import { coveragePercent, type DesignSystem } from "./store.ts";
 
 interface SystemSwitcherProps {
@@ -7,18 +9,27 @@ interface SystemSwitcherProps {
   active: DesignSystem | null;
   activeSlug: string;
   onSelect: (slug: string) => void;
+  onAddSystem: (name: string, css: string) => void;
+  onToast: (msg: string, tone: "ok" | "err") => void;
 }
 
 /** Header system switcher — ported from the legacy dsv-topbar-sysbtn
    (preview/src/App.jsx), using Radix Select instead of a native <select>.
-   Unlike the legacy version, this always shows (even with one system) —
-   there's no add-system flow yet, so hiding it below 2 systems would make
-   it permanently invisible. */
-export default function SystemSwitcher({ systems, active, activeSlug, onSelect }: SystemSwitcherProps) {
-  if (systems.length === 0) return null;
+   Always shown (even with one system) so the Add-system affordance next to
+   it stays discoverable. */
+export default function SystemSwitcher({
+  systems,
+  active,
+  activeSlug,
+  onSelect,
+  onAddSystem,
+  onToast,
+}: SystemSwitcherProps) {
+  if (systems.length === 0) return <AddSystemDialog onAdd={onAddSystem} onToast={onToast} />;
   const activePct = coveragePercent(active?.coverage);
   return (
-    <Select.Root value={activeSlug} onValueChange={onSelect}>
+    <span className="app-syswrap">
+      <Select.Root value={activeSlug} onValueChange={onSelect}>
       <Select.Trigger className="app-sysbtn" aria-label="Active design system">
         <span className="app-sysbtn-name">
           <Select.Value placeholder="Select system" />
@@ -51,5 +62,7 @@ export default function SystemSwitcher({ systems, active, activeSlug, onSelect }
         </Select.Content>
       </Select.Portal>
     </Select.Root>
+      <AddSystemDialog onAdd={onAddSystem} onToast={onToast} />
+    </span>
   );
 }

@@ -31,6 +31,9 @@ export const TokenGroup = memo(function TokenGroup({
   showMissing,
   selectedName,
   onPick,
+  editingName,
+  onEdit,
+  onSave,
 }: {
   visible: VisibleGroup;
   showMissing: boolean;
@@ -42,7 +45,15 @@ export const TokenGroup = memo(function TokenGroup({
         {group.label}
         <span>{tokens.length}</span>
       </h2>
-      <GroupBody group={group} tokens={tokens} selectedName={selectedName} onPick={onPick} />
+      <GroupBody
+        group={group}
+        tokens={tokens}
+        selectedName={selectedName}
+        onPick={onPick}
+        editingName={editingName}
+        onEdit={onEdit}
+        onSave={onSave}
+      />
       {showMissing && missing.length > 0 && (
         <div className="tok-missing">
           missing ({missing.length}): {missing.map((n) => <code key={n}>{n}</code>)}
@@ -57,11 +68,14 @@ function GroupBody({
   tokens,
   selectedName,
   onPick,
+  editingName,
+  onEdit,
+  onSave,
 }: {
   group: TokenGroupData;
   tokens: Token[];
 } & RowCallbacks) {
-  const cb = { selectedName, onPick };
+  const cb = { selectedName, onPick, editingName, onEdit, onSave };
   const { id, kind } = group;
   if (kind === "color" || id === "gradient") return <ColorGrid tokens={tokens} {...cb} />;
   if (id === "font-size" || id === "font-display") return <TypeRow tokens={tokens} {...cb} />;
