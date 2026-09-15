@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import type { DesignSystem } from "../systems/store.ts";
 import { download, systemToCss } from "./export.ts";
+import { ContrastSection } from "./ContrastSection.tsx";
 import { SchemaView } from "./SchemaView.tsx";
 import { TokenGroup } from "./TokenGroup.tsx";
 import { TokenToolbar } from "./TokenToolbar.tsx";
@@ -122,6 +123,10 @@ export function TokensView({
               No tokens matching “<b>{filter.trim()}</b>”.
             </div>
           )}
+          {/* Contrast is global to the system, not to the filter — legacy
+              appendContrast only ran filter-less (and never in schema mode,
+              which this branch already excludes). */}
+          {!searching && <ContrastSection tokens={view.tokens} />}
         </div>
       )}
       <div className="tok-toasts" aria-live="polite">
