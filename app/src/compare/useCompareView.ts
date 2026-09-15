@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { resolveSystemTokens } from "../systems/store.ts";
 import type { DesignSystem } from "../systems/store.ts";
+import { readViewUrl } from "../lib/urlState.ts";
 import { BASIC_OPTIONS, COMPONENT_OPTIONS, EXTRA_OPTIONS, SCREEN_OPTIONS } from "./registry.tsx";
 import type { ComparableOption } from "./registry.tsx";
 
@@ -16,13 +17,34 @@ export interface OptionGroup {
 
 const MAX_COLUMNS = 4;
 
+/** Default comparable (legacy's `?c=` default was "button", same first entry
+ *  here) — shared by the state initializer below and App's URL writer so the
+ *  default is omitted from links instead of hardcoded in two places. */
+export const DEFAULT_COMPONENT_ID = BASIC_OPTIONS[0]?.id ?? "";
+
+/** Every comparable id, for validating a deep-linked component param. */
+const KNOWN_COMPONENT_IDS = new Set(
+  [...BASIC_OPTIONS, ...COMPONENT_OPTIONS, ...EXTRA_OPTIONS, ...SCREEN_OPTIONS].map((o) => o.id),
+);
+
 /** Compare tab view model — mirrors useTokensView's shape (state + derived
    data, lifted to App.tsx, no Context/Redux). `systems` comes from
    useSystems() in App.tsx, same source the rest of the app reads. */
 export function useCompareView(systems: DesignSystem[]) {
-  const [picked, setPicked] = useState<string[]>(() => systems.slice(0, 2).map((s) => s.slug));
-  const [mode, setMode] = useState<CompareMode>("component");
-  const [componentId, setComponentId] = useState<string>(BASIC_OPTIONS[0]?.id ?? "");
+  // Deep-link init (legacy's compare.jsx read cmp/v/c the same way): unknown
+  // values fall back to today's defaults, and the repair effect below drops
+  // picked slugs with no matching system — so no querystring, same as before.
+  const [picked, setPicked] = useState<string[]>(() => {
+    const linked = readViewUrl().cmp;
+    return linked.length > 0 ? linked : systems.slice(0, 2).map((s) => s.slug);
+  });
+  const [mode, setMode] = useState<CompareMode>(() =>
+    readViewUrl().view === "diff" ? "diff" : "component",
+  );
+  const [componentId, setComponentId] = useState<string>(() => {
+    const linked = readViewUrl().component;
+    return linked && KNOWN_COMPONENT_IDS.has(linked) ? linked : DEFAULT_COMPONENT_ID;
+  });
 
   // Systems can be added/removed elsewhere (SystemSwitcher, Tokens tab) while
   // Compare sits inactive-but-mounted (Shell forceMounts every tab) — drop

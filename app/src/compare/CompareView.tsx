@@ -10,10 +10,9 @@ import "./compare.css";
  * side-by-side column per picked system. Which systems and which component
  * are picked lives in the rail (CompareRail.tsx) — this just renders the
  * result. Ported from preview/src/compare.jsx's Compare screen, minus the
- * iframe postMessage bridge (preview/-only, see app/CLAUDE.md) and the
- * querystring mirroring (separate URL-state issue — TODO once that lands,
- * mirror `mode`/`picked`/`componentId` the way useTokensView will for its
- * own tab).
+ * iframe postMessage bridge (preview/-only, see app/CLAUDE.md). Querystring
+ * mirroring lives in lib/urlState.ts: useCompareView inits picked/mode/
+ * componentId from it and App's sync effect writes them back.
  */
 export function CompareView({ view }: { view: CompareViewModel }) {
   const { mode, setMode, cols, active, styleFor, picked, maxColumns } = view;

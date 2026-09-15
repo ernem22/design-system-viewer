@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as Accordion from "@radix-ui/react-accordion";
 import { Icon } from "../lib/icons.tsx";
 import { useScrollSpy } from "../lib/scrollspy.ts";
+import { writeSectionHash } from "../lib/urlState.ts";
 import type { RailGroups } from "../lib/railTypes.ts";
 
 export interface RailProps {
@@ -14,13 +15,20 @@ export interface RailProps {
   /** Whole-panel collapse state, owned by the parent (toggled from the
      topbar) so no floating edge handle sits next to the main scrollbar. */
   open: boolean;
+  /** Mirror the current section into location.hash (deep-link section sync,
+     ported from preview/src/App.jsx's scrollspy). True only for the visible
+     tab's Rail — inactive tabs stay forceMounted (display:none) where every
+     rect measures ~0 and the scan would report a bogus first section — and
+     only after App's initial #hash restore, so the first scan can't clobber
+     a deep link before it lands. */
+  syncSection?: boolean;
 }
 
 /** Sidebar: shows sections grouped (collapse via Radix Accordion) and tracks
    which section is on screen — the active link gets `aria-current` plus a
    sliding highlight, and its group opens automatically if the user had
    collapsed it. Whole-panel collapse is owned by the parent via `open`. */
-export default function Rail({ groups, searching = false, open }: RailProps) {
+export default function Rail({ groups, searching = false, open, syncSection = false }: RailProps) {
   // Memoized so `searching` mode (which uses this array as-is, see below)
   // doesn't hand Accordion/useLayoutEffect a new array identity every render.
   const labels = useMemo(() => groups.map(([label]) => label), [groups]);
@@ -40,6 +48,12 @@ export default function Rail({ groups, searching = false, open }: RailProps) {
     if (owner)
       setOpenGroups((current) => (current.includes(owner) ? current : [...current, owner]));
   }, [activeId, groups]);
+
+  // Deep-link section sync via replaceState — no history entry per scroll,
+  // and the querystring half of the URL is preserved (App owns that half).
+  useEffect(() => {
+    if (syncSection && activeId) writeSectionHash(activeId);
+  }, [syncSection, activeId]);
 
   const effectiveOpenGroups = searching ? labels : openGroups;
 
