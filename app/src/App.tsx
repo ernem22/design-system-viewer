@@ -5,6 +5,7 @@ import IconToggleButton from "./shell/IconToggleButton.tsx";
 import IconActionButton from "./shell/IconActionButton.tsx";
 import { SectionSearch } from "./shell/SectionSearch.tsx";
 import { copyLinkToView } from "./lib/copyLink.ts";
+import { useGoogleFonts } from "./lib/googleFonts.ts";
 import { Icon } from "./lib/icons.tsx";
 import { useSystems, resolveSystemTokens } from "./systems/store.ts";
 import { usePanelOpen } from "./lib/panelStorage.ts";
@@ -75,6 +76,11 @@ function App() {
     const tokens = resolveSystemTokens(active);
     document.documentElement.style.cssText = tokens.map((t) => `${t.name}:${t.value};`).join("");
   }, [active]);
+
+  // Dynamic Google Fonts for the active system's --font-* families (keyed on
+  // raw css so token edits that change a family also swap fonts). Stale
+  // links from the previous system are removed inside loadGoogleFonts.
+  useGoogleFonts(active?.css ?? "");
 
   // Each tab supplies its own rail/props content, not just its main content.
   const tabs: ShellTab[] = [
