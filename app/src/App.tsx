@@ -18,6 +18,10 @@ import { TokensProps } from "./tokens/TokensProps.tsx";
 import { TokensView } from "./tokens/TokensView.tsx";
 import { useTokensView } from "./tokens/useTokensView.ts";
 import { useGalleryOutline } from "./lib/galleryOutline.ts";
+import { CompareView } from "./compare/CompareView.tsx";
+import { CompareRail } from "./compare/CompareRail.tsx";
+import { CompareProps } from "./compare/CompareProps.tsx";
+import { useCompareView } from "./compare/useCompareView.ts";
 import "./gallery/gallery.css";
 
 // Stable across renders — buildRailGroups reads this by entry id, and
@@ -44,6 +48,10 @@ function App() {
   // left-rail group nav and its right-rail inspector (lifted to App, passed
   // down as props; no context).
   const tokensView = useTokensView(active);
+
+  // Compare tab view model — same lifted-to-App.tsx shape as tokensView,
+  // fed its own tab's rail/content/props (see Scope note in issue #1).
+  const compareView = useCompareView(systems);
 
   useLayoutEffect(() => {
     const tokens = resolveSystemTokens(active);
@@ -87,9 +95,13 @@ function App() {
     {
       id: "compare",
       label: "Compare",
-      content: <p className="app-placeholder">Compare columns go here</p>,
-      rail: <p className="app-placeholder">No sections yet</p>,
-      propsPanel: <p className="app-placeholder">Nothing to inspect yet</p>,
+      content: <CompareView view={compareView} />,
+      rail: <CompareRail systems={systems} view={compareView} open={railOpen} />,
+      propsPanel: (
+        <Props open={propsOpen}>
+          <CompareProps view={compareView} />
+        </Props>
+      ),
     },
   ];
 
