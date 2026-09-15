@@ -1,0 +1,8 @@
+/* Navigation extras section — ported from preview/src/styles/components.css. */
+.dsv-btn-group { display: inline-flex; }
+
+.dsv-btn-group > .dsv-btn { border-radius: 0; margin-left: calc(-1 * var(--border-width-thin)); }
+
+.dsv-btn-group > .dsv-btn:first-child { border-radius: var(--radius-md) 0 0 var(--radius-md); margin-left: 0; }
+
+.dsv-btn-group > .dsv-btn:last-child { border-radius: 0 var(--radius-md) var(--radius-md) 0; }
