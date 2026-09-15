@@ -1,4 +1,6 @@
 import { Fragment, useMemo, useState } from "react";
+import * as Checkbox from "@radix-ui/react-checkbox";
+import { Icon } from "../lib/icons.tsx";
 import type { DesignSystem } from "../systems/store.ts";
 
 const isColor = (v: string) => /^(#|rgb|hsl|oklch|color\()/i.test(v.trim()) || /^[a-z]+$/i.test(v.trim());
@@ -40,7 +42,6 @@ export function DiffTable({ cols }: { cols: DesignSystem[] }) {
       }
       return m;
     });
-    for (const [name, label] of nameCat) byCat.get(label)?.add(name);
     return { catOrder, byCat, valueMaps };
   }, [cols]);
 
@@ -70,7 +71,11 @@ export function DiffTable({ cols }: { cols: DesignSystem[] }) {
           <b>{total}</b> tokens · <b>{diffs}</b> different · <b>{total - diffs}</b> same
         </span>
         <label className="dsv-control-label" style={{ fontSize: "var(--font-size-sm)" }}>
-          <input type="checkbox" checked={onlyDiff} onChange={(e) => setOnlyDiff(e.target.checked)} />
+          <Checkbox.Root className="dsv-check" checked={onlyDiff} onCheckedChange={(checked) => setOnlyDiff(checked === true)}>
+            <Checkbox.Indicator>
+              <Icon name="check" size={14} />
+            </Checkbox.Indicator>
+          </Checkbox.Root>
           only differences
         </label>
       </div>

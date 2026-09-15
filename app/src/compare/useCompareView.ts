@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ComponentType } from "react";
 import { COMPONENT_ENTRIES } from "../gallery/components/index.ts";
 import { resolveSystemTokens } from "../systems/store.ts";
 import type { DesignSystem } from "../systems/store.ts";
@@ -44,7 +43,7 @@ export function useCompareView(systems: DesignSystem[]) {
       { label: "Basics", items: BASIC_OPTIONS },
       {
         label: "Components",
-        items: COMPONENT_ENTRIES.map((e) => ({ id: `gallery-${e.id}`, label: e.label, Render: e.Body as ComponentType })),
+        items: COMPONENT_ENTRIES.map((e) => ({ id: `gallery-${e.id}`, label: e.label, Render: e.Body })),
       },
       // TODO: add "Extras" / "Screens" groups once that gallery port lands.
     ],

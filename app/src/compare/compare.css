@@ -32,8 +32,8 @@
   padding: var(--control-padding-y-sm) var(--control-padding-x-md);
   border-radius: var(--radius-full); cursor: pointer;
 }
-.cmp-seg button:hover:not(.on) { color: var(--color-text); }
-.cmp-seg button.on { background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-sm); }
+.cmp-seg button:hover:not([data-state="on"]) { color: var(--color-text); }
+.cmp-seg button[data-state="on"] { background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-sm); }
 
 .cmp-cols {
   flex: 1; display: grid; gap: var(--space-4);
@@ -107,17 +107,13 @@ tr.is-diff td { background: color-mix(in srgb, var(--color-warning) 8%, transpar
 }
 .cmp-chip:hover { border-color: var(--color-border-strong); color: var(--color-text); }
 .cmp-chip.on { background: var(--color-accent-subtle); border-color: var(--color-accent-border); color: var(--color-accent-text); }
-.cmp-chip input { position: absolute; opacity: 0; pointer-events: none; }
-.cmp-chip:has(input:focus-visible) { outline: var(--focus-ring-width) solid var(--color-focus-ring); outline-offset: var(--focus-ring-offset); }
+.cmp-chip:has(.dsv-check:focus-visible) { outline: var(--focus-ring-width) solid var(--color-focus-ring); outline-offset: var(--focus-ring-offset); }
 .cmp-dot { width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--color-border-strong); flex: none; }
 .cmp-chip.on .cmp-dot { background: var(--color-accent); }
 .cmp-pct { margin-left: auto; font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-muted); background: var(--color-surface-sunken); border-radius: var(--radius-full); padding: 1px var(--space-2); }
 .cmp-chip.on .cmp-pct { color: var(--color-accent-text); background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
 .cmp-chip[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 .cmp-chip[aria-disabled="true"]:hover { border-color: var(--color-border-subtle); color: var(--color-text-secondary); }
-
-/* ── rail: option-group picker (Basics / Components) ── */
-.cmp-rail-note { margin: 0 0 var(--space-2); font-size: var(--font-size-xs); color: var(--color-text-muted); }
 
 /* ── props panel ── */
 .cmp-props-block + .cmp-props-block { margin-top: var(--space-4); }

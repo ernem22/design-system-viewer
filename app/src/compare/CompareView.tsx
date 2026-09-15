@@ -1,3 +1,4 @@
+import * as Toggle from "@radix-ui/react-toggle";
 import { CompareColumn } from "./CompareColumn.tsx";
 import { DiffTable } from "./DiffTable.tsx";
 import { coveragePercent } from "../systems/store.ts";
@@ -21,12 +22,12 @@ export function CompareView({ view }: { view: CompareViewModel }) {
     <div className="cmp-wrap">
       <header className="cmp-toolbar">
         <div className="cmp-seg">
-          <button type="button" className={mode === "component" ? "on" : ""} onClick={() => setMode("component")}>
+          <Toggle.Root pressed={mode === "component"} onPressedChange={(on) => on && setMode("component")}>
             Component
-          </button>
-          <button type="button" className={mode === "diff" ? "on" : ""} onClick={() => setMode("diff")}>
+          </Toggle.Root>
+          <Toggle.Root pressed={mode === "diff"} onPressedChange={(on) => on && setMode("diff")}>
             Token diff
-          </button>
+          </Toggle.Root>
         </div>
         <span className="cmp-hint">
           {picked.length}/{maxColumns} selected

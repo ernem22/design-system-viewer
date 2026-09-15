@@ -1,4 +1,5 @@
 import * as Accordion from "@radix-ui/react-accordion";
+import * as Checkbox from "@radix-ui/react-checkbox";
 import { Icon } from "../lib/icons.tsx";
 import { coveragePercent } from "../systems/store.ts";
 import type { DesignSystem } from "../systems/store.ts";
@@ -51,7 +52,17 @@ export function CompareRail({
                       aria-disabled={locked || undefined}
                       title={locked ? `Max ${maxColumns} systems — unpick one first` : undefined}
                     >
-                      <input type="checkbox" checked={isOn} disabled={locked} onChange={() => toggle(s.slug)} aria-label={s.name} />
+                      <Checkbox.Root
+                        className="dsv-check"
+                        checked={isOn}
+                        disabled={locked}
+                        onCheckedChange={() => toggle(s.slug)}
+                        aria-label={s.name}
+                      >
+                        <Checkbox.Indicator>
+                          <Icon name="check" size={14} />
+                        </Checkbox.Indicator>
+                      </Checkbox.Root>
                       <span className="cmp-dot" aria-hidden="true" />
                       {s.name}
                       {pct != null && <span className="cmp-pct">{pct}%</span>}
