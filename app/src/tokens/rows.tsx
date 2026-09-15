@@ -1,5 +1,7 @@
 import { memo, type CSSProperties } from "react";
 import type { Token } from "../systems/store.ts";
+import { TokenEditControl } from "./InlineEditor.tsx";
+import "./InlineEditor.css";
 import { isRef } from "./tokenUtils.ts";
 import "./rows.css";
 
@@ -15,6 +17,11 @@ export function RefBadge({ value }: { value: string }) {
 export interface RowCallbacks {
   selectedName: string | null;
   onPick: (token: Token) => void;
+  /** Name of the token whose inline editor is open (single-open, lifted so
+     double-click and the Update button drive the same Popover). */
+  editingName: string | null;
+  onEdit: (token: Token | null) => void;
+  onSave: (name: string, value: string) => void;
 }
 
 export interface RendererProps extends RowCallbacks {
@@ -25,29 +32,41 @@ const varOf = (name: string) => `var(${name})`;
 
 /**
  * Shared row shell: label (name + value + ref badge) on the left, the
- * kind-specific demo on the right. Click = copy + inspect (old copy-on-click
- * + Update buttons collapse into one gesture until the editor lands).
+ * kind-specific demo plus the Update affordance on the right. Click = copy +
+ * inspect; Update button or double-click = inline edit (no copy).
  */
 export const TokenRow = memo(function TokenRow({
   token,
   demo,
   selectedName,
   onPick,
+  editingName,
+  onEdit,
+  onSave,
 }: { token: Token; demo: React.ReactNode } & RowCallbacks) {
   return (
     <div
       className="tok-row"
       data-token={token.name}
       aria-selected={token.name === selectedName || undefined}
-      title="click to copy"
+      title="click to copy — double-click or Update to edit"
       onClick={() => onPick(token)}
+      onDoubleClick={() => onEdit(token)}
     >
       <div className="tok-row-label">
         <b>{token.name}</b>
         <span>{token.value}</span>
         <RefBadge value={token.value} />
       </div>
-      <div className="tok-row-demo">{demo}</div>
+      <div className="tok-row-demo">
+        {demo}
+        <TokenEditControl
+          token={token}
+          open={editingName === token.name}
+          onOpenChange={(next) => onEdit(next ? token : null)}
+          onSave={onSave}
+        />
+      </div>
     </div>
   );
 });
@@ -57,11 +76,23 @@ const Rows = memo(function Rows({
   render,
   selectedName,
   onPick,
+  editingName,
+  onEdit,
+  onSave,
 }: RendererProps & { render: (t: Token) => React.ReactNode }) {
   return (
     <div className="tok-rows">
       {tokens.map((t) => (
-        <TokenRow key={t.name} token={t} demo={render(t)} selectedName={selectedName} onPick={onPick} />
+        <TokenRow
+          key={t.name}
+          token={t}
+          demo={render(t)}
+          selectedName={selectedName}
+          onPick={onPick}
+          editingName={editingName}
+          onEdit={onEdit}
+          onSave={onSave}
+        />
       ))}
     </div>
   );
@@ -69,7 +100,7 @@ const Rows = memo(function Rows({
 
 /** Swatch grid for color kinds (old colorGrid). */
 export const ColorGrid = memo(function ColorGrid(props: RendererProps) {
-  const { tokens, selectedName, onPick } = props;
+  const { tokens, selectedName, onPick, editingName, onEdit, onSave } = props;
   return (
     <div className="tok-swatches">
       {tokens.map((t) => (
@@ -78,8 +109,9 @@ export const ColorGrid = memo(function ColorGrid(props: RendererProps) {
           className="tok-swatch"
           data-token={t.name}
           aria-selected={t.name === selectedName || undefined}
-          title="click to copy"
+          title="click to copy — double-click or Update to edit"
           onClick={() => onPick(t)}
+          onDoubleClick={() => onEdit(t)}
         >
           <div className="tok-chip" style={{ "--val": varOf(t.name) } as CSSProperties} />
           <div className="tok-swatch-name">
@@ -87,6 +119,12 @@ export const ColorGrid = memo(function ColorGrid(props: RendererProps) {
             <RefBadge value={t.value} />
           </div>
           <div className="tok-swatch-value">{t.value}</div>
+          <TokenEditControl
+            token={t}
+            open={editingName === t.name}
+            onOpenChange={(next) => onEdit(next ? t : null)}
+            onSave={onSave}
+          />
         </div>
       ))}
     </div>
@@ -207,7 +245,7 @@ export const BreakpointRow = memo(function BreakpointRow(props: RendererProps) {
 });
 
 /** Fallback table for kinds with no visual demo (old rawTable). */
-export const RawTable = memo(function RawTable({ tokens, selectedName, onPick }: RendererProps) {
+export const RawTable = memo(function RawTable({ tokens, selectedName, onPick, editingName, onEdit, onSave }: RendererProps) {
   return (
     <div className="tok-tablewrap">
       <table className="tok-raw">
@@ -217,13 +255,22 @@ export const RawTable = memo(function RawTable({ tokens, selectedName, onPick }:
               key={t.name}
               data-token={t.name}
               aria-selected={t.name === selectedName || undefined}
-              title="click to copy"
+              title="click to copy — double-click or Update to edit"
               onClick={() => onPick(t)}
+              onDoubleClick={() => onEdit(t)}
             >
               <td>{t.name}</td>
               <td>
                 {t.value}
                 <RefBadge value={t.value} />
+              </td>
+              <td>
+                <TokenEditControl
+                  token={t}
+                  open={editingName === t.name}
+                  onOpenChange={(next) => onEdit(next ? t : null)}
+                  onSave={onSave}
+                />
               </td>
             </tr>
           ))}

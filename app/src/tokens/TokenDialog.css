@@ -1,0 +1,6 @@
+/* Add Tokens dialog: shared .tok-dialog form/preview styles live with the
+   dialog primitives in TokenToolbar.css — only dialog-specific tweaks here. */
+
+.tok-dialog .tok-textarea {
+  margin-bottom: var(--space-2);
+}

@@ -4,25 +4,29 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Toggle from "@radix-ui/react-toggle";
 import { Icon } from "../lib/icons.tsx";
 import type { DesignSystem } from "../systems/store.ts";
+import { TokenDialog } from "./TokenDialog.tsx";
+import "./TokenDialog.css";
 import type { TokensViewModel } from "./useTokensView.ts";
 import "./TokenToolbar.css";
 
 /**
  * Tokens toolbar (old .toolbar, minus the coverage ring — that lives in the
  * right rail now): filter + clear/Esc, Show missing (gallery only),
- * Schema/Gallery toggle, Export (Radix menu instead of the old
- * fixed-position div) and Delete (Radix AlertDialog instead of confirm()).
- * Add tokens arrives with the dialog pass, so no dead button sits here.
+ * Schema/Gallery toggle, Add tokens (Radix dialog with live coverage
+ * preview), Export (Radix menu instead of the old fixed-position div) and
+ * Delete (Radix AlertDialog instead of confirm()).
  */
 export function TokenToolbar({
   view,
   system,
+  onMerge,
   onExportCss,
   onExportJson,
   onDelete,
 }: {
   view: TokensViewModel;
   system: DesignSystem;
+  onMerge: (css: string) => void;
   onExportCss: () => void;
   onExportJson: () => void;
   onDelete: () => void;
@@ -80,6 +84,7 @@ export function TokenToolbar({
         )}
       </div>
       <div className="tok-actions">
+        <TokenDialog system={system} onMerge={onMerge} onToast={view.pushToast} />
         <Toggle.Root
           className="tok-btn"
           title="Toggle schema view"
