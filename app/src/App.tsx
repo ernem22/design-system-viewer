@@ -24,6 +24,7 @@ import { CompareView } from "./compare/CompareView.tsx";
 import { CompareRail } from "./compare/CompareRail.tsx";
 import { CompareProps } from "./compare/CompareProps.tsx";
 import { useCompareView } from "./compare/useCompareView.ts";
+import { PreviewProps, PreviewScopeDialog } from "./preview/PreviewProps.tsx";
 import "./gallery/gallery.css";
 
 // Stable across renders — buildRailGroups reads this by entry id, and
@@ -110,12 +111,13 @@ function App() {
           {COMPONENT_ENTRIES.map((entry) => (
             <GallerySection key={entry.id} {...entry} />
           ))}
+          <PreviewScopeDialog system={active} onPatch={handlePatch} />
         </>
       ),
       rail: <Rail groups={railGroups} searching={searching} open={railOpen} />,
       propsPanel: (
         <Props open={propsOpen}>
-          <p className="app-placeholder">Select a component to inspect it here.</p>
+          <PreviewProps system={active} onPatch={handlePatch} />
         </Props>
       ),
     },
