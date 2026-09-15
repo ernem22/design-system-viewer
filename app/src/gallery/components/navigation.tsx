@@ -2,7 +2,7 @@ import * as Menubar from "@radix-ui/react-menubar";
 import * as NavigationMenu from "@radix-ui/react-navigation-menu";
 import * as Tabs from "@radix-ui/react-tabs";
 import * as Toolbar from "@radix-ui/react-toolbar";
-import { Button, Demo } from "../ui.tsx";
+import { Button, Demo, usePortalContainer } from "../ui.tsx";
 import { Icon } from "../../lib/icons.tsx";
 import "./navigation.css";
 
@@ -18,6 +18,7 @@ const MENUBAR_MENUS: MenuBarMenu[] = [
 ];
 
 export default function NavigationBody() {
+  const portalContainer = usePortalContainer();
   return (
     <>
       <Demo title="Menubar">
@@ -25,7 +26,7 @@ export default function NavigationBody() {
           {MENUBAR_MENUS.map((menu) => (
             <Menubar.Menu key={menu.label}>
               <Menubar.Trigger className="dsv-nav-trigger">{menu.label}</Menubar.Trigger>
-              <Menubar.Portal>
+              <Menubar.Portal container={portalContainer}>
                 <Menubar.Content className="dsv-menu" sideOffset={6}>
                   {menu.items.map((item) => (
                     <Menubar.Item key={item} className="dsv-menu-item">

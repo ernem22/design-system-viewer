@@ -115,6 +115,7 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
   border-radius: var(--card-radius); padding: var(--card-padding-md); box-shadow: var(--card-shadow);
 }
 .dsv-card--dashed { border-style: dashed; display: grid; place-items: center; width: var(--space-56); height: var(--space-24); }
+.dsv-card--raised { background: var(--color-surface-raised); box-shadow: var(--shadow-md); }
 
 /* ── floating surfaces (dialog / popover / menu / tooltip / hovercard) —
    shared by Overlays and Navigation (Menubar reuses .dsv-menu*) ── */
@@ -247,6 +248,8 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
 .dsv-callout .ico { flex: none; width: var(--size-icon-lg); height: var(--size-icon-lg); display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-full); }
 .dsv-callout--danger { background: var(--color-danger-subtle); border-color: var(--color-danger-border); color: var(--color-danger-text); }
 .dsv-callout--danger .ico { background: var(--color-danger-muted); }
+.dsv-callout--info { background: var(--color-info-subtle); border-color: var(--color-info-border); color: var(--color-info-text); }
+.dsv-callout--info .ico { background: var(--color-info-muted); }
 .dsv-callout a { color: inherit; font-weight: var(--font-weight-medium); }
 .dsv-empty { text-align: center; padding: var(--space-12) var(--space-6); color: var(--color-text-muted); }
 .dsv-empty .glyph {

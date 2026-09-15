@@ -30,8 +30,9 @@ export default defineConfig([
   },
   {
     // Gallery files co-export section data + demo components by design
-    // (section lists live next to the demos they describe).
-    files: ['src/gallery/**/*.{ts,tsx}'],
+    // (section lists live next to the demos they describe). Compare's
+    // registry.tsx does the same for its own local comparable renderers.
+    files: ['src/gallery/**/*.{ts,tsx}', 'src/compare/registry.tsx'],
     rules: {
       'react-refresh/only-export-components': 'off',
     },

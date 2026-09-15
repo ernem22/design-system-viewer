@@ -1,11 +1,24 @@
 // Shared, read-only gallery chrome — ported from preview/src/ui.jsx, stripped
 // of the live token-editing machinery (SwapPicker/ValueEditor/TokenDrawer/
-// TokenScopeTrigger/usePortalContainer): this pass renders demos styled by
-// whatever the active system's tokens currently resolve to, nothing more.
+// TokenScopeTrigger): this pass renders demos styled by whatever the active
+// system's tokens currently resolve to, nothing more.
 import { createContext, forwardRef, useContext } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { GalleryEntry } from "./registry.ts";
 import { slugify } from "../lib/slug.ts";
+
+/** DOM node Radix `*.Portal` content should mount into instead of
+   `document.body` — restored from preview/src/ui.jsx's PortalContainerContext
+   for the Compare tab, which needs every column's portalled content (Select,
+   Dialog, Popover…) to land inside that column's own token scope. Elsewhere
+   (Preview, Tokens) no provider is set, so this resolves to `undefined` and
+   Radix falls back to its own document.body default — unchanged behavior.
+   This is DOM plumbing for where a portal renders, not app state, so it sits
+   outside the "no Context for state" rule in app/CLAUDE.md. */
+export const PortalContainerContext = createContext<HTMLElement | undefined>(undefined);
+export function usePortalContainer() {
+  return useContext(PortalContainerContext);
+}
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "solid" | "soft" | "outline" | "ghost" | "danger";
