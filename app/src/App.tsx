@@ -1,5 +1,5 @@
-import { useCallback, useLayoutEffect, useMemo, useState } from "react";
-import Shell, { type ShellTab } from "./shell/Shell.tsx";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import Shell, { type AppTab, type ShellTab } from "./shell/Shell.tsx";
 import Brand from "./shell/Brand.tsx";
 import IconToggleButton from "./shell/IconToggleButton.tsx";
 import IconActionButton from "./shell/IconActionButton.tsx";
@@ -24,8 +24,9 @@ import { useGalleryOutline } from "./lib/galleryOutline.ts";
 import { CompareView } from "./compare/CompareView.tsx";
 import { CompareRail } from "./compare/CompareRail.tsx";
 import { CompareProps } from "./compare/CompareProps.tsx";
-import { useCompareView } from "./compare/useCompareView.ts";
+import { useCompareView, DEFAULT_COMPONENT_ID } from "./compare/useCompareView.ts";
 import { PreviewProps, PreviewScopeDialog } from "./preview/PreviewProps.tsx";
+import { initialSectionHash, readViewUrl, scrollToSection, writeViewUrl } from "./lib/urlState.ts";
 import "./gallery/gallery.css";
 
 // Stable across renders — buildRailGroups reads this by entry id, and
@@ -40,6 +41,13 @@ function App() {
   // keys as before, so persisted choices survive the move.
   const [railOpen, toggleRail] = usePanelOpen("dsv.app.rail");
   const [propsOpen, toggleProps] = usePanelOpen("dsv.app.props");
+  // Active tab lives here (not in Shell) so the URL sync below sees every
+  // switch — Shell stays a controlled chrome shell. A deep-linked ?tab=
+  // wins; otherwise this is "tokens", exactly as before.
+  const [tab, setTab] = useState<AppTab>(() => readViewUrl().tab ?? "tokens");
+  // Section-hash sync stays off until the initial deep-link restore lands,
+  // so the first scrollspy scan can't clobber a #section before it scrolls.
+  const [sectionSyncArmed, setSectionSyncArmed] = useState(false);
   const [query, setQuery] = useState("");
 
   const searching = query.trim().length > 0;
@@ -83,6 +91,45 @@ function App() {
   // links from the previous system are removed inside loadGoogleFonts.
   useGoogleFonts(active?.css ?? "");
 
+  // Querystring half of the deep link (tab/system/compare picks) — one
+  // replaceState writer, so switches never spam back/forward and never
+  // reload. The section-hash half is owned by the active Rail; both halves
+  // preserve each other, and copyLinkToView captures their union for free.
+  // Compare params are scoped to the compare tab, like legacy's syncUrl.
+  const { picked, mode, componentId } = compareView;
+  useEffect(() => {
+    writeViewUrl({
+      tab,
+      sys: activeSlug || null,
+      cmp: tab === "compare" ? picked : null,
+      view: tab === "compare" && mode === "diff" ? mode : null,
+      component:
+        tab === "compare" && componentId !== DEFAULT_COMPONENT_ID ? componentId : null,
+    });
+  }, [tab, activeSlug, picked, mode, componentId]);
+
+  // Hash half restore: client-rendered sections miss the browser's native
+  // initial jump, so redo it once layout settles (double rAF, like legacy's
+  // gallery). Unknown ids are a no-op — scrollspy then self-heals the hash.
+  useEffect(() => {
+    const id = initialSectionHash();
+    if (!id || !scrollToSection(id)) {
+      setSectionSyncArmed(true);
+      return;
+    }
+    let inner = 0;
+    const raf = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => {
+        scrollToSection(id);
+        setSectionSyncArmed(true);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      cancelAnimationFrame(inner);
+    };
+  }, []);
+
   // Each tab supplies its own rail/props content, not just its main content.
   const tabs: ShellTab[] = [
     {
@@ -102,7 +149,14 @@ function App() {
           <AddSystemDialog onAdd={addSystem} onToast={tokensView.pushToast} />
         </div>
       ),
-      rail: <Rail groups={tokensView.railGroups} searching={tokensView.searching} open={railOpen} />,
+      rail: (
+        <Rail
+          groups={tokensView.railGroups}
+          searching={tokensView.searching}
+          open={railOpen}
+          syncSection={sectionSyncArmed && tab === "tokens"}
+        />
+      ),
       propsPanel: (
         <Props open={propsOpen}>
           <TokensProps view={tokensView} />
@@ -120,7 +174,14 @@ function App() {
           <PreviewScopeDialog system={active} onPatch={handlePatch} />
         </>
       ),
-      rail: <Rail groups={railGroups} searching={searching} open={railOpen} />,
+      rail: (
+        <Rail
+          groups={railGroups}
+          searching={searching}
+          open={railOpen}
+          syncSection={sectionSyncArmed && tab === "preview"}
+        />
+      ),
       propsPanel: (
         <Props open={propsOpen}>
           <PreviewProps system={active} onPatch={handlePatch} />
@@ -182,6 +243,8 @@ function App() {
         </>
       }
       tabs={tabs}
+      tab={tab}
+      onTabChange={setTab}
     />
   );
 }

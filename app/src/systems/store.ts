@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { buildSystem, mergeSystem, parseTokens } from "../../../src/core/parse.js";
 import { categorize } from "../../../src/core/taxonomy.js";
+import { readViewUrl } from "../lib/urlState.ts";
 
 export interface Token {
   name: string;
@@ -162,6 +163,10 @@ export function useSystems() {
   const [systems, setSystems] = useState<DesignSystem[]>(load);
   const [activeSlug, setActiveSlugState] = useState<string>(() => {
     try {
+      // A deep-linked ?sys= wins over the persisted choice (unknown slugs
+      // fall through); with no querystring this behaves exactly as before.
+      const linked = readViewUrl().sys;
+      if (linked && systems.some((s) => s.slug === linked)) return linked;
       const saved = localStorage.getItem(ACTIVE_KEY);
       if (saved && systems.some((s) => s.slug === saved)) return saved;
     } catch {

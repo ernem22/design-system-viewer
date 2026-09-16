@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
+import { readViewUrl, type UrlTab } from "../lib/urlState.ts";
 import "./shell.css";
 
-export type AppTab = "tokens" | "preview" | "compare";
+export type AppTab = UrlTab;
 
 /** One tab's trigger label plus everything that swaps with it when it
    becomes active — main content, and optionally its own Rail/Props content.
@@ -21,6 +22,11 @@ export interface ShellSlots {
   systemSwitcher?: ReactNode;
   actions?: ReactNode;
   tabs: ShellTab[];
+  /** Controlled tab state — App.tsx lifts this so its URL-sync effect sees
+     every switch. Shell still owns layout; this is chrome state passed down
+     as props, same shape as railOpen/propsOpen. Absent = uncontrolled. */
+  tab?: AppTab;
+  onTabChange?: (tab: AppTab) => void;
 }
 
 /** Narrows Radix's raw `string` callback value to `AppTab` by checking it
@@ -40,14 +46,28 @@ function isKnownTab(value: string, tabs: ShellTab[]): value is AppTab {
  * shell.css) instead of unmounting it — Rail keeps its scroll position and
  * open/collapsed groups when you tab away and back.
  */
-export default function Shell({ brand, systemSwitcher, actions, tabs }: ShellSlots) {
-  const [tab, setTab] = useState<AppTab>("tokens");
+export default function Shell({
+  brand,
+  systemSwitcher,
+  actions,
+  tabs,
+  tab: controlledTab,
+  onTabChange,
+}: ShellSlots) {
+  // Uncontrolled fallback still honors a deep-linked ?tab= on mount (the
+  // controlled path gets it from App instead — same reader either way).
+  // Shell never writes the URL: App owns the single replaceState writer so
+  // tab switches can't clobber the system/compare params mid-write.
+  const [innerTab, setInnerTab] = useState<AppTab>(() => readViewUrl().tab ?? "tokens");
+  const tab = controlledTab ?? innerTab;
 
   return (
     <Tabs.Root
       value={tab}
       onValueChange={(v) => {
-        if (isKnownTab(v, tabs)) setTab(v);
+        if (!isKnownTab(v, tabs)) return;
+        if (controlledTab === undefined) setInnerTab(v);
+        onTabChange?.(v);
       }}
       asChild
     >
