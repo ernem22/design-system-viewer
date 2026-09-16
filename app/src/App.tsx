@@ -86,10 +86,21 @@ function App() {
     document.documentElement.style.cssText = tokens.map((t) => `${t.name}:${t.value};`).join("");
   }, [active]);
 
-  // Dynamic Google Fonts for the active system's --font-* families (keyed on
-  // raw css so token edits that change a family also swap fonts). Stale
-  // links from the previous system are removed inside loadGoogleFonts.
-  useGoogleFonts(active?.css ?? "");
+  // Dynamic Google Fonts for the active system plus every compared system
+  // (keyed on raw css so token edits that change a family also swap fonts).
+  // Every tab stays mounted (Shell forceMounts) and shares one document.head
+  // link set, so an active-only call here would run after CompareView's own
+  // useGoogleFonts and delete compare-only families — cover the union here.
+  // Stale links from removed systems are removed inside loadGoogleFonts.
+  const compareCss = useMemo(
+    () => compareView.cols.map((s) => s.css).join("\n"),
+    [compareView.cols],
+  );
+  const fontCss = useMemo(
+    () => [active?.css ?? "", compareCss].filter(Boolean).join("\n"),
+    [active, compareCss],
+  );
+  useGoogleFonts(fontCss);
 
   // Querystring half of the deep link (tab/system/compare picks) — one
   // replaceState writer, so switches never spam back/forward and never

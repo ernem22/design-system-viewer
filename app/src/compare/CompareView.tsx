@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import * as Toggle from "@radix-ui/react-toggle";
 import { CompareColumn } from "./CompareColumn.tsx";
 import { DiffTable } from "./DiffTable.tsx";
+import { useGoogleFonts } from "../lib/googleFonts.ts";
 import { coveragePercent } from "../systems/store.ts";
 import type { CompareViewModel } from "./useCompareView.ts";
 import "./compare.css";
@@ -16,6 +18,14 @@ import "./compare.css";
  */
 export function CompareView({ view }: { view: CompareViewModel }) {
   const { mode, setMode, cols, active, styleFor, picked, maxColumns } = view;
+
+  // Dynamic Google Fonts for the compared systems' --font-* families (keyed
+  // on the picked columns' raw css so switching/adding compare systems — or
+  // token edits that change a family — swaps fonts). Stale links are removed
+  // inside loadGoogleFonts, like the main view's useGoogleFonts in App.tsx.
+  // Ported from preview/src/compare.jsx (never import preview/).
+  const compareCss = useMemo(() => cols.map((s) => s.css).join("\n"), [cols]);
+  useGoogleFonts(compareCss);
 
   return (
     <div className="cmp-wrap">
