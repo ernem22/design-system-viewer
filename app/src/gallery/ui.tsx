@@ -2,12 +2,17 @@
 // carries a token-count badge (see tokenInspector.tsx) that docks the demo's
 // statically-detected token usage into the Preview tab's props panel; the
 // badge's swap state is applied as an inline custom-property style on the
-// demo's own node, so scoped swaps never leak into other demos.
+// demo's own node, so scoped swaps never leak into other demos. Gallery
+// sections carry the same badge in their own header (keyed by entry id,
+// tokens from the Body source scan) — screen entries render a whole Body
+// with no <Demo> blocks, so the section badge is their only inspector
+// entry point.
 import { createContext, forwardRef, useContext } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { GalleryEntry } from "./registry.ts";
 import { slugify } from "../lib/slug.ts";
-import { TokenScopeTrigger, useScopeStyle } from "./tokenInspector.tsx";
+import { tokensForBody } from "../lib/tokenUsage.ts";
+import { SectionScopeTrigger, TokenScopeTrigger, useScopeStyle, useSectionScopeStyle } from "./tokenInspector.tsx";
 
 /** DOM node Radix `*.Portal` content should mount into instead of
    `document.body` — restored from preview/src/ui.jsx's PortalContainerContext
@@ -87,9 +92,19 @@ export function Demo({ title, children }: { title: string; children: ReactNode }
 }
 
 export function GallerySection({ id, label, desc, Body }: GalleryEntry) {
+  // Body-name lookup in the same globbed sources tokenUsage already scans —
+  // no per-section registry to edit when a screen is added. The scope id is
+  // the stable entry id (not a slugified title), matching the legacy
+  // tokensForScreen keying; swaps land on this node so they inherit across
+  // the whole Body without leaking into sibling sections.
+  const tokens = tokensForBody((Body as unknown as { name?: string }).name ?? "");
+  const swapStyle = useSectionScopeStyle(id);
   return (
-    <section className="dsv-section" id={id}>
-      <h2>{label}</h2>
+    <section className="dsv-section" id={id} style={swapStyle}>
+      <div className="dsv-section-head">
+        <h2>{label}</h2>
+        <SectionScopeTrigger id={id} title={label} tokens={tokens} />
+      </div>
       <p>{desc}</p>
       <SectionIdContext.Provider value={id}>
         <Body />

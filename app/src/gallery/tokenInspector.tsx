@@ -394,14 +394,33 @@ export function ScopePanel({
   );
 }
 
-/** The small "N tokens" badge that opens a scope's inspector — shared by
-    every Demo. Renders nothing for untracked output (and never in Compare,
-    whose renderers don't mount Demo at all). */
+/** The small "N tokens" badge that opens a scope's inspector — one per Demo,
+ * plus one per gallery section (screens have no Demos, so the section badge
+ * is their only entry point). Renders nothing for untracked output (and
+ * never in Compare, whose renderers don't mount Demo at all). */
 export function TokenScopeTrigger({ title }: { title: string }) {
-  const { selected, swaps } = useInspector();
   const tokens = tokensForDemo(title);
   if (tokens.length === 0) return null;
-  const id = demoId(title);
+  return <SectionScopeTrigger id={demoId(title)} title={title} tokens={tokens} />;
+}
+
+/** Section-level twin of the Demo badge above, keyed by the gallery entry id
+ * instead of a Demo title — this is what gives screen entries (whole-Body,
+ * zero <Demo> blocks) the same badge / drawer / swap / value-edit flow.
+ * Tokens come from the caller (GallerySection resolves them via
+ * tokensForBody); scoping + panel plumbing is identical because ScopePanel
+ * and the swap store are already id-agnostic. */
+export function SectionScopeTrigger({
+  id,
+  title,
+  tokens,
+}: {
+  id: string;
+  title: string;
+  tokens: string[];
+}) {
+  const { selected, swaps } = useInspector();
+  if (tokens.length === 0) return null;
   const hasEdits = Object.keys(swaps[id] ?? {}).length > 0;
   const isActive = selected?.id === id;
 
@@ -423,12 +442,19 @@ export function TokenScopeTrigger({ title }: { title: string }) {
     each swap becomes `target: var(source)` on the Demo node, so only that
     node's descendants pick it up via inheritance. */
 export function useScopeStyle(title: string): CSSProperties | undefined {
+  return useSectionScopeStyle(demoId(title));
+}
+
+/** Section-level twin, keyed by gallery entry id — applied on the
+    GallerySection node so screen swaps inherit across the whole Body
+    without leaking into sibling sections. */
+export function useSectionScopeStyle(id: string): CSSProperties | undefined {
   const { swaps } = useInspector();
   return useMemo(() => {
-    const demo = swaps[demoId(title)];
-    if (!demo || Object.keys(demo).length === 0) return undefined;
+    const scope = swaps[id];
+    if (!scope || Object.keys(scope).length === 0) return undefined;
     return Object.fromEntries(
-      Object.entries(demo).map(([target, source]) => [target, `var(${source})`]),
+      Object.entries(scope).map(([target, source]) => [target, `var(${source})`]),
     ) as CSSProperties;
-  }, [swaps, title]);
+  }, [swaps, id]);
 }

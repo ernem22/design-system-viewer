@@ -33,7 +33,11 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
    on .app-shell in shell.css) or an anchor-scrolled heading lands partly
    underneath it. */
 .dsv-section { margin-bottom: var(--desktop-section-spacing); scroll-margin-top: calc(var(--app-topbar-height) + var(--space-4)); }
-.dsv-section > h2 { font-size: var(--font-size-2xl); font-weight: var(--font-weight-semibold); margin: 0 0 var(--space-1); }
+/* Section header row: title on the left, token-count badge on the right
+   (same badge flow as .dsv-block-head, one level up — screens have no Demo
+   blocks, so this is their inspector entry point). */
+.dsv-section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin: 0 0 var(--space-1); }
+.dsv-section-head h2 { font-size: var(--font-size-2xl); font-weight: var(--font-weight-semibold); margin: 0; }
 .dsv-section > p { color: var(--color-text-muted); margin: 0 0 var(--space-6); }
 /* Anchor-scroll target for Rail's per-demo links: without this, clicking
    one lands its top flush with .app-main's edge — above the scrollspy band

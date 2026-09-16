@@ -11,9 +11,9 @@
 // every time a gallery section was added), this uses `import.meta.glob` so
 // new bodies and stylesheets under gallery/ are picked up automatically.
 //
-// Screens have no separate map here (unlike the legacy tokensForScreen):
-// app/ renders every section — components and screens alike — through the
-// same <Demo title="…"> blocks, so one title-keyed map covers everything.
+// Screen sections hold no <Demo> blocks, so the title-keyed map above never
+// covers them: each screen entry's tokens come from a body-source scan
+// (tokensForBody) over the same import.meta.glob sources instead.
 
 const tsxSources = import.meta.glob<string>("../gallery/components/**/*.tsx", {
   query: "?raw",
@@ -194,4 +194,40 @@ const DEMO_TOKENS = buildDemoTokenMap();
 /** Tokens a given `<Demo title="…">` block references, sorted; [] if unknown. */
 export function tokensForDemo(title: string): string[] {
   return DEMO_TOKENS.get(title) ?? [];
+}
+
+// Section-level (screen) coverage. Screen entries render a whole Body with no
+// <Demo> blocks, so there is no title to look up — instead scan the Body
+// function's own source (found by name in the same globbed sources above).
+// The lookup map merges every file's top-level functions, so a screen that
+// renders a shared helper from another file (<Avat/>, <SettingRow/>, …)
+// still gets that helper's classes counted — the same one-level expansion
+// tokensForSlice already does, just across files like the legacy single-file
+// screens.jsx did implicitly.
+const CLASS_TOKENS = buildClassTokenMap(Object.values(cssSources).join("\n"));
+const ALL_FNS = (() => {
+  const merged = new Map<string, string>();
+  for (const src of Object.values(tsxSources)) {
+    for (const [name, body] of extractFunctionBodies(src)) {
+      if (!merged.has(name)) merged.set(name, body);
+    }
+  }
+  return merged;
+})();
+
+const BODY_TOKEN_CACHE = new Map<string, string[]>();
+
+/** Tokens a gallery section Body references, by component function name
+ * (e.g. `DashboardBody`), sorted; [] if unknown. The GallerySection trigger
+ * scopes these under the entry id, so screens get the same badge / drawer /
+ * swap / value-edit flow Demo blocks get. */
+export function tokensForBody(fnName: string): string[] {
+  if (!fnName) return [];
+  const cached = BODY_TOKEN_CACHE.get(fnName);
+  if (cached) return cached;
+  const body = ALL_FNS.get(fnName);
+  if (!body) return [];
+  const tokens = tokensForSlice(body, ALL_FNS, CLASS_TOKENS);
+  BODY_TOKEN_CACHE.set(fnName, tokens);
+  return tokens;
 }
