@@ -6,7 +6,7 @@ import * as Slider from "@radix-ui/react-slider";
 import * as Switch from "@radix-ui/react-switch";
 import { Toggle } from "@radix-ui/react-toggle";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
-import { Button, Demo, Field } from "../ui.tsx";
+import { Button, Demo, Field, usePortalContainer } from "../ui.tsx";
 import { Icon } from "../../lib/icons.tsx";
 import "./forms.css";
 
@@ -31,6 +31,7 @@ export default function FormsBody() {
   const [switchOn, setSwitchOn] = useState(true);
   const [slider, setSlider] = useState([40]);
   const [range, setRange] = useState([25, 75]);
+  const portalContainer = usePortalContainer();
 
   return (
     <>
@@ -210,7 +211,7 @@ export default function FormsBody() {
               <Icon name="chevronDown" size={14} />
             </Select.Icon>
           </Select.Trigger>
-          <Select.Portal>
+          <Select.Portal container={portalContainer}>
             <Select.Content className="dsv-select-content" position="popper" sideOffset={6}>
               <Select.Viewport>
                 <Select.Group>

@@ -62,8 +62,8 @@ let toastId = 0;
 const trLower = (s: string) => s.toLocaleLowerCase("tr");
 
 /**
- * Tokens tab view model. Filter/showMissing/schemaMode/selected are
- * view-local (nothing here persists — the old viewer kept them in module
+ * Tokens tab view model. Filter/showMissing/schemaMode/selected/editingName
+ * are view-local (nothing here persists — the old viewer kept them in module
  * state too); systems data itself lives in systems/store.ts.
  */
 export function useTokensView(system: DesignSystem | null) {
@@ -71,6 +71,9 @@ export function useTokensView(system: DesignSystem | null) {
   const [showMissing, setShowMissing] = useState(true);
   const [schemaMode, setSchemaMode] = useState(false);
   const [selectedName, setSelectedName] = useState<string | null>(null);
+  // Token whose inline editor popover is open (single-open; only one
+  // TokenEditControl renders open at a time).
+  const [editingName, setEditingName] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   // Switching systems resets the view, like the old selectSystem did.
@@ -79,6 +82,7 @@ export function useTokensView(system: DesignSystem | null) {
     setFilter("");
     setSchemaMode(false);
     setSelectedName(null);
+    setEditingName(null);
   }, [slug]);
 
   const css = system?.css ?? "";
@@ -194,6 +198,13 @@ export function useTokensView(system: DesignSystem | null) {
     [pushToast],
   );
 
+  /** Inline-editor target: Update button or double-click opens the token's
+     Popover, closing it (or opening another) clears the target. Stable
+     identity so the memo()'d row renderers don't repaint every keystroke. */
+  const onEdit = useCallback((token: Token | null) => {
+    setEditingName(token?.name ?? null);
+  }, []);
+
   return {
     filter,
     setFilter,
@@ -213,6 +224,8 @@ export function useTokensView(system: DesignSystem | null) {
     railGroups,
     selected,
     setSelectedName,
+    editingName,
+    onEdit,
     toasts,
     pushToast,
     copyToken,

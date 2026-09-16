@@ -191,3 +191,93 @@
   justify-content: flex-end;
   gap: var(--space-2);
 }
+
+/* Shared Add-dialog language (AddSystemDialog + TokenDialog): wide layout,
+   name/css fields, live preview and row/error helpers. The .tok-dialog +
+   overlay/title/desc/actions primitives above stay the single base. */
+
+.tok-dialog-wide {
+  width: min(560px, 94vw);
+}
+
+.tok-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.tok-input,
+.tok-textarea {
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-md);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font-size: var(--font-size-sm);
+  padding: var(--space-2) var(--space-3);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tok-textarea {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  resize: vertical;
+}
+
+.tok-dialog-meta {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.tok-dialog-error {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+}
+
+.tok-btn-primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.tok-dialog-preview {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.tok-dialog-preview .ok {
+  color: var(--color-success);
+}
+
+.tok-dialog-preview .warn {
+  color: var(--color-warning);
+}
+
+.tok-dialog-preview details {
+  margin-top: var(--space-2);
+}
+
+.tok-dialog-preview summary {
+  cursor: pointer;
+  font-weight: var(--font-weight-medium);
+}
+
+.tok-dialog-preview code {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-warning);
+  margin-inline-end: var(--space-2);
+}
+
+.tok-dialog-row {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}

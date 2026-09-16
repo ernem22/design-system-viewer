@@ -1,0 +1,14 @@
+/* Switcher + Add-system row in the topbar (SystemSwitcher owns no css file
+   of its own, so the wrapper lives here next to its dialog). Shared dialog
+   form styles live with the .tok-dialog primitives in TokenToolbar.css. */
+.app-syswrap {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.app-syswrap .tok-btn {
+  height: 30px;
+  flex: none;
+}

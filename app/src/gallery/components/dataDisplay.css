@@ -1,0 +1,10 @@
+/* Data display section — ported from preview/src/styles/components.css. */
+.dsv-check--static { width: var(--size-icon-md); height: var(--size-icon-md); }
+
+.dsv-check--static[data-state="unchecked"] svg { visibility: hidden; }
+
+.dsv-neutral-chip {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  font-size: var(--font-size-xs); font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+}
