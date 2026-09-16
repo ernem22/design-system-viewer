@@ -1,11 +1,13 @@
-// Shared, read-only gallery chrome — ported from preview/src/ui.jsx, stripped
-// of the live token-editing machinery (SwapPicker/ValueEditor/TokenDrawer/
-// TokenScopeTrigger): this pass renders demos styled by whatever the active
-// system's tokens currently resolve to, nothing more.
+// Shared gallery chrome — ported from preview/src/ui.jsx. Each <Demo> header
+// carries a token-count badge (see tokenInspector.tsx) that docks the demo's
+// statically-detected token usage into the Preview tab's props panel; the
+// badge's swap state is applied as an inline custom-property style on the
+// demo's own node, so scoped swaps never leak into other demos.
 import { createContext, forwardRef, useContext } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { GalleryEntry } from "./registry.ts";
 import { slugify } from "../lib/slug.ts";
+import { TokenScopeTrigger, useScopeStyle } from "./tokenInspector.tsx";
 
 /** DOM node Radix `*.Portal` content should mount into instead of
    `document.body` — restored from preview/src/ui.jsx's PortalContainerContext
@@ -70,10 +72,14 @@ const SectionIdContext = createContext("");
 export function Demo({ title, children }: { title: string; children: ReactNode }) {
   const sectionId = useContext(SectionIdContext);
   const id = `${sectionId}-${slugify(title)}`;
+  // Per-demo token swaps resolve through this node's own custom properties
+  // (see tokenInspector.tsx) — descendants inherit them, siblings don't.
+  const swapStyle = useScopeStyle(title);
   return (
-    <div className="dsv-block" id={id} data-demo-title={title}>
+    <div className="dsv-block" id={id} data-demo-title={title} style={swapStyle}>
       <div className="dsv-block-head">
         <h3>{title}</h3>
+        <TokenScopeTrigger title={title} />
       </div>
       <div className="dsv-row">{children}</div>
     </div>
