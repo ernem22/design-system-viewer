@@ -38,6 +38,9 @@ async function mountProbe(): Promise<void> {
   // Imported lazily so react-dom never observes a document-less environment
   // at module scope under the node test environment.
   const { createRoot } = await import('react-dom/client');
+  // happy-dom's element type doesn't satisfy react-dom's DOM Node param —
+  // a targeted any bridges the test-env type gap (runtime shape matches).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const container = window.document.createElement("div") as any;
   window.document.body.appendChild(container);
   const mounted = createRoot(container);
