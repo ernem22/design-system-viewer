@@ -4,7 +4,7 @@ import * as RadioGroup from "@radix-ui/react-radio-group";
 import * as Select from "@radix-ui/react-select";
 import * as Slider from "@radix-ui/react-slider";
 import * as Switch from "@radix-ui/react-switch";
-import { Toggle } from "@radix-ui/react-toggle";
+import * as Toggle from "@radix-ui/react-toggle";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import { Button, Demo, Field, usePortalContainer } from "../ui.tsx";
 import { Icon } from "../../lib/icons.tsx";
@@ -232,9 +232,9 @@ export default function FormsBody() {
       </Demo>
 
       <Demo title="Toggle / Toggle Group">
-        <Toggle className="dsv-toggle" aria-label="Bold">
+        <Toggle.Root className="dsv-toggle" aria-label="Bold">
           <Icon name="bold" size={14} />
-        </Toggle>
+        </Toggle.Root>
         <ToggleGroup.Root className="dsv-toggle-group" type="single" defaultValue="center" aria-label="Align">
           <ToggleGroup.Item className="dsv-toggle" value="left">
             <Icon name="alignLeft" size={14} />

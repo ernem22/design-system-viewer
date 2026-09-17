@@ -1,6 +1,6 @@
 import * as HoverCard from "@radix-ui/react-hover-card";
 import * as Progress from "@radix-ui/react-progress";
-import { Separator } from "@radix-ui/react-separator";
+import * as Separator from "@radix-ui/react-separator";
 import { Button } from "../../ui.tsx";
 import { Icon } from "../../../lib/icons.tsx";
 import { Avat } from "./screenBits.tsx";
@@ -57,7 +57,7 @@ export default function DashboardBody() {
         <Progress.Root className="dsv-progress" value={66} style={{ width: "100%" }}>
           <Progress.Indicator className="dsv-progress-indicator" style={{ width: "66%" }} />
         </Progress.Root>
-        <Separator className="dsv-sep" />
+        <Separator.Root className="dsv-sep" />
         <div className="dsv-inline" style={{ justifyContent: "space-between", fontSize: "var(--font-size-xs)" }}>
           <span className="dsv-muted">Deploy succeeded · 2m ago</span>
           <span className="dsv-badge dsv-badge--success">Live</span>

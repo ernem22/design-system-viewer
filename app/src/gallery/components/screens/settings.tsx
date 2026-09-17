@@ -4,7 +4,7 @@ import * as Select from "@radix-ui/react-select";
 import * as Slider from "@radix-ui/react-slider";
 import * as Switch from "@radix-ui/react-switch";
 import * as Tabs from "@radix-ui/react-tabs";
-import { Separator } from "@radix-ui/react-separator";
+import * as Separator from "@radix-ui/react-separator";
 import type { ReactNode } from "react";
 import { Button } from "../../ui.tsx";
 import { Icon } from "../../../lib/icons.tsx";
@@ -59,7 +59,7 @@ export default function SettingsBody() {
                   <Switch.Thumb className="dsv-switch-thumb" />
                 </Switch.Root>
               </SettingRow>
-              <Separator className="dsv-sep" />
+              <Separator.Root className="dsv-sep" />
               <SettingRow title="Language" desc="Interface language">
                 <Select.Root defaultValue="tr">
                   <Select.Trigger className="dsv-select-trigger" aria-label="Language">
@@ -84,7 +84,7 @@ export default function SettingsBody() {
                   </Select.Portal>
                 </Select.Root>
               </SettingRow>
-              <Separator className="dsv-sep" />
+              <Separator.Root className="dsv-sep" />
               <SettingRow title="Density" desc="Line spacing">
                 <RadioGroup.Root className="dsv-inline" value={density} onValueChange={setDensity}>
                   {["compact", "comfortable"].map((v) => (
@@ -97,7 +97,7 @@ export default function SettingsBody() {
                   ))}
                 </RadioGroup.Root>
               </SettingRow>
-              <Separator className="dsv-sep" />
+              <Separator.Root className="dsv-sep" />
               <SettingRow title="Volume" desc={`${vol[0]}%`}>
                 <Slider.Root className="dsv-slider" value={vol} onValueChange={setVol} max={100}>
                   <Slider.Track className="dsv-slider-track">
@@ -106,7 +106,7 @@ export default function SettingsBody() {
                   <Slider.Thumb className="dsv-slider-thumb" aria-label="Volume" />
                 </Slider.Root>
               </SettingRow>
-              <Separator className="dsv-sep" />
+              <Separator.Root className="dsv-sep" />
               <SettingRow title="Delete workspace" desc="Permanent, cannot be undone">
                 <Button variant="danger" size="sm">
                   Delete…
@@ -136,7 +136,7 @@ export default function SettingsBody() {
                   <Switch.Thumb className="dsv-switch-thumb" />
                 </Switch.Root>
               </SettingRow>
-              <Separator className="dsv-sep" />
+              <Separator.Root className="dsv-sep" />
               <SettingRow title="Push notifications" desc="Mentions and comments">
                 <Switch.Root
                   className="dsv-switch"
@@ -146,7 +146,7 @@ export default function SettingsBody() {
                   <Switch.Thumb className="dsv-switch-thumb" />
                 </Switch.Root>
               </SettingRow>
-              <Separator className="dsv-sep" />
+              <Separator.Root className="dsv-sep" />
               <SettingRow title="Weekly digest" desc="Summary every Monday">
                 <Switch.Root
                   className="dsv-switch"
@@ -177,7 +177,7 @@ export default function SettingsBody() {
                   ))}
                 </RadioGroup.Root>
               </SettingRow>
-              <Separator className="dsv-sep" />
+              <Separator.Root className="dsv-sep" />
               <SettingRow title="Motion" desc="Reduce animations">
                 <Switch.Root className="dsv-switch">
                   <Switch.Thumb className="dsv-switch-thumb" />

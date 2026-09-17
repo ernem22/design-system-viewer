@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Separator } from "@radix-ui/react-separator";
+import * as Separator from "@radix-ui/react-separator";
 import "./screens.css";
 
 const BARS = [40, 65, 52, 80, 72, 95, 60, 88, 74, 92, 68, 100];
@@ -54,7 +54,7 @@ export default function AnalyticsBody() {
             />
           ))}
         </div>
-        <Separator className="dsv-sep" />
+        <Separator.Root className="dsv-sep" />
         <div className="dsv-inline" style={{ gap: "var(--space-6)", alignItems: "center" }}>
           <svg width="140" height="48" viewBox="0 0 140 48" role="img" aria-label="trend">
             <path
@@ -83,7 +83,7 @@ export default function AnalyticsBody() {
             line + donut share the bar palette
           </span>
         </div>
-        <Separator className="dsv-sep" />
+        <Separator.Root className="dsv-sep" />
         <dl className="dsv-datalist">
           <dt>Total visits</dt>
           <dd>128.402</dd>
