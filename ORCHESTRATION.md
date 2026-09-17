@@ -326,18 +326,40 @@ NOT be attributed to the worker's personal/model identity:
   this in every Task spec's commit instruction — it is not optional and not
   left to the worker's own commit-message judgment.
 - **Commit author**: never let a worker commit under its own OpenCode/model
-  identity or a personal name. Set `git config user.name`/`user.email` in
-  each worker's worktree before it commits (or instruct the worker to do so
+  identity or a personal name. Set `git config --worktree user.name`/`user.email`
+  in each worker's worktree before it commits (or instruct the worker to do so
   itself as its first step) to a fixed, role-scoped identity such as
   `orca-coder <orca-coder@localhost>` / `orca-fixer <orca-fixer@localhost>` —
-  not `ernem22`, not a model name. This keeps `git log --author` and GitHub's
-  commit-author UI honestly reflecting "an automated worker did this", not a
-  specific human or model brand.
+  not `ernem22`, not a model name. **Use `--worktree` scope, never bare
+  `git config user.name`** (which is `--local` and lives in the shared
+  `.git/config` that every worktree of the same repo reads) — a bare `git
+  config user.name` set in one worktree silently overwrites the identity
+  every other worktree of the same repo sees, including the coordinator's own
+  main worktree. This requires `git config extensions.worktreeConfig true`
+  once per repo (checked once at the start of a run; it is durable repo
+  state, not per-worktree). This exact leak happened once in this project: a
+  Coder worktree's identity got overwritten mid-run when the coordinator
+  later set its own `git config user.name` without `--worktree`, and a
+  Coder's already-pushed commit landed under the coordinator's identity
+  instead of `orca-coder`. The coordinator's own commits directly to the
+  coordinator worktree (e.g. editing this file) use the **real human/GitHub
+  identity** (`ernem22`, not a synthetic `orca-orchestrator` identity) —
+  Hermes acting as coordinator on the user's main worktree is not an
+  anonymous autonomous worker the same way Coder/Reviewer/Tester/Fixer are;
+  only dispatched worker roles get the `orca-<role>` synthetic identity
+  treatment.
 - Verify this the same way the integrity check already works: `git log -1
-  --format='%an %s'` after a Coder/Fixer `worker_done`, alongside the
+  --format='%an <%ae> %s'` after a Coder/Fixer `worker_done`, alongside the
   existing SHA check — a commit with the wrong author or missing role tag is
-  a policy violation even if the SHA is real and tests pass, and should be
-  routed back to the same worker (or its fallback) to amend before advancing.
+  a policy violation even if the SHA is real and tests pass. If caught before
+  merge (PR still open), amend and force-push
+  (`git commit --amend --author="orca-<role> <orca-<role>@localhost>"
+  --no-edit && git push --force-with-lease`) rather than leaving it wrong —
+  cosmetic-looking author metadata is still worth fixing when the fix is
+  cheap and pre-merge. If already merged into the shared branch with other
+  work stacked on top, leave the historical commit as-is (rewriting shared
+  history with active dependents is not worth the disruption) and just
+  ensure the identity is correct going forward.
 
 ## Continuous Operation Mode
 
