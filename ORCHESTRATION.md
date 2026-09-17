@@ -360,18 +360,32 @@ migration-complete). A running pipeline that is healthy produces no chat
 output at all between cycles — this document and the PR history are the
 audit trail, not a running commentary.
 
-**Task Creator is not mandatory every cycle.** Before dispatching a new
-Task Creator, run `orca orchestration task-list --run <id>` once and check
-for an existing Task whose `status` is still `ready` (created, never
-successfully dispatched to completion) with a real, non-superseded spec. If
-one exists, dispatch a Coder directly against it instead of spawning another
-Task Creator — there is no value in generating more proposals than the
-pipeline can consume. Only dispatch a fresh Task Creator when the backlog of
-`ready` Tasks is empty. A `ready` Task from an abandoned/superseded retry
-(e.g. a spec that says `MISSING` because its source file was already cleaned
-up, or a dispatch that failed on a since-demoted rate-limited model) is not
-real backlog — recognize and skip/ignore it rather than treating stale
-noise as usable work.
+**Task Creator is not mandatory every cycle.** The real backlog lives in
+**GitHub Issues** (`gh issue list --repo <owner>/<repo> --state open --label
+agent`), not in Orca's internal `orchestration task-list` — Orca Tasks are
+per-dispatch plumbing, not the durable backlog. Before dispatching a new
+Task Creator, run `gh issue list --state open --label agent` once and check
+for an open issue not already claimed by an in-flight Coder this run. If one
+exists, skip Task Creator for this cycle and dispatch a Coder directly
+against that issue (its number, title, and body become the Coder Task's
+spec) instead of spawning another Task Creator — there is no value in
+generating more proposals when dozens are already open and unclaimed. Only
+dispatch a fresh Task Creator when the open-and-unclaimed issue backlog is
+empty.
+
+**Issue lifecycle**: Task Creator's job, when run, is to open a new GitHub
+issue (`gh issue create`, labelled `agent` + `bug`/`enhancement` as
+appropriate) for a task it identifies — not to write a local `NEXT_TASK.md`
+that only this run can see (a prior cycle's NEXT_TASK.md-in-worktree approach
+does not survive worktree cleanup and is not discoverable by future runs;
+GitHub Issues are the durable, cross-run store). When a Coder starts work on
+an issue, comment on it (`gh issue comment <n> --body "..."`) so a concurrent
+or future run does not duplicate the pick. When the fix's PR merges, close
+the issue with a reference (`gh pr merge ... ` already auto-closes via a
+`Closes #<n>` line in the PR body — always include that line in every Coder
+PR body). An Orca Task whose spec merely says `MISSING` or targets a
+since-superseded local file (an artifact of a stale worktree, not a GitHub
+issue) is not real backlog — recognize and ignore it.
 
 - Coder/Fixer commits and pushes its own branch — Reviewer/Tester worktrees
   cannot see uncommitted changes in a sibling worktree; `--base-branch` off a
