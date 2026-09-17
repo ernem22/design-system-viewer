@@ -1,6 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { buildSystem, mergeSystem, parseTokens } from "../../../src/core/parse.js";
 import { categorize } from "../../../src/core/taxonomy.js";
+import { coverage } from "../../../src/core/schema.js";
 import { readViewUrl } from "../lib/urlState.ts";
 
 export interface Token {
@@ -31,15 +32,16 @@ export interface DesignSystem {
   updatedAt: string;
 }
 
-export function coveragePercent(coverage: DesignSystem["coverage"]): number | null {
-  return coverage?.expected ? Math.round((coverage.present / coverage.expected) * 100) : null;
+export function coveragePercent(cov: DesignSystem["coverage"]): number | null {
+  return cov?.expected ? Math.round((cov.present / cov.expected) * 100) : null;
 }
 
 const SYSTEMS_KEY = "dsv.app.systems";
 const ACTIVE_KEY = "dsv.app.active";
+const LEGACY_SYSTEMS_KEY = "dsv.systems";
 
-/* Placeholder seed so the header switcher has something to select on first
-   boot. Real add/edit/save flows come later — this is not the template. */
+/* Offline fallback only — first boot normally loads the bundled repo
+   systems (see fetchBundled). */
 const SEED_CSS = `
 --color-bg: #0a0a0f;
 --color-surface: #14141a;
@@ -139,41 +141,82 @@ function ensureGroups(sys: DesignSystem): DesignSystem {
   }
 }
 
-function load(): DesignSystem[] {
-  try {
-    const raw = localStorage.getItem(SYSTEMS_KEY);
-    if (raw) {
-      const arr = JSON.parse(raw) as DesignSystem[];
-      if (Array.isArray(arr) && arr.length > 0) return arr.map(ensureGroups);
-    }
-  } catch {
-    /* corrupted storage — fall through to seed */
-  }
-  const seeded = seed();
-  try {
-    localStorage.setItem(SYSTEMS_KEY, JSON.stringify(seeded));
-  } catch {
-    /* private mode — run in-memory */
-  }
-  return seeded;
+function isPristineSeed(list: DesignSystem[]): boolean {
+  if (list.length !== 1) return false;
+  const [only] = list;
+  return only.createdAt === only.updatedAt && only.css === seed()[0].css;
 }
 
-/** localStorage-only systems source. No /api, no systems/*.json. */
-export function useSystems() {
-  const [systems, setSystems] = useState<DesignSystem[]>(load);
-  const [activeSlug, setActiveSlugState] = useState<string>(() => {
+/** null = never saved in this browser (boot from the bundled index);
+   [] = the user deleted everything, which must survive a reload. The
+   legacy viewer's key is read once so its saved systems carry over. */
+function readStored(): DesignSystem[] | null {
+  for (const key of [SYSTEMS_KEY, LEGACY_SYSTEMS_KEY]) {
     try {
-      // A deep-linked ?sys= wins over the persisted choice (unknown slugs
-      // fall through); with no querystring this behaves exactly as before.
-      const linked = readViewUrl().sys;
-      if (linked && systems.some((s) => s.slug === linked)) return linked;
-      const saved = localStorage.getItem(ACTIVE_KEY);
-      if (saved && systems.some((s) => s.slug === saved)) return saved;
+      const raw = localStorage.getItem(key);
+      if (raw === null) continue;
+      const arr: unknown = JSON.parse(raw);
+      if (!Array.isArray(arr)) continue;
+      // Earlier builds auto-persisted the seed on first boot; an untouched
+      // copy means "never saved", or the bundled systems would never load.
+      if (key === SYSTEMS_KEY && isPristineSeed(arr as DesignSystem[])) return null;
+      return (arr as DesignSystem[]).map(ensureGroups);
     } catch {
-      /* ignore */
+      /* corrupted entry — try the next source */
     }
-    return systems[0]?.slug ?? "";
-  });
+  }
+  return null;
+}
+
+/** The repo's systems, served/emitted by the vite plugin in vite.config.ts.
+   Unreachable (plain file://, stripped deploy) → the built-in seed. */
+async function fetchBundled(): Promise<DesignSystem[]> {
+  try {
+    const res = await fetch(`${import.meta.env.BASE_URL}systems/index.json`);
+    if (res.ok) {
+      const arr: unknown = await res.json();
+      if (Array.isArray(arr) && arr.length > 0) return (arr as DesignSystem[]).map(ensureGroups);
+    }
+  } catch {
+    /* offline / no index — fall through */
+  }
+  return seed();
+}
+
+function readActive(list: DesignSystem[]): string {
+  try {
+    // A deep-linked ?sys= wins over the persisted choice (unknown slugs
+    // fall through).
+    const linked = readViewUrl().sys;
+    if (linked && list.some((s) => s.slug === linked)) return linked;
+    const saved = localStorage.getItem(ACTIVE_KEY);
+    if (saved && list.some((s) => s.slug === saved)) return saved;
+  } catch {
+    /* ignore */
+  }
+  return list[0]?.slug ?? "";
+}
+
+/** localStorage-backed systems source, first booted from the bundled index. */
+export function useSystems() {
+  const [stored] = useState(readStored);
+  const [systems, setSystems] = useState<DesignSystem[]>(() => stored ?? []);
+  const [loading, setLoading] = useState(stored === null);
+  const [activeSlug, setActiveSlugState] = useState<string>(() => readActive(systems));
+
+  useEffect(() => {
+    if (stored !== null) return;
+    let alive = true;
+    fetchBundled().then((list) => {
+      if (!alive) return;
+      setSystems(list);
+      setActiveSlugState(readActive(list));
+      setLoading(false);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [stored]);
 
   const setActiveSlug = useCallback((slug: string) => {
     setActiveSlugState(slug);
@@ -190,7 +233,7 @@ export function useSystems() {
     try {
       localStorage.setItem(SYSTEMS_KEY, JSON.stringify(list));
     } catch {
-      /* private mode — run in-memory */
+      /* private mode / quota — run in-memory */
     }
   }, []);
 
@@ -236,16 +279,47 @@ export function useSystems() {
       const next = systems.filter((s) => s.slug !== slug);
       setSystems(next);
       persist(next);
-      if (activeSlug === slug) setActiveSlug(next[0]?.slug ?? "");
+      if (active?.slug === slug) setActiveSlug(next[0]?.slug ?? "");
     },
-    [systems, persist, activeSlug, setActiveSlug],
+    [systems, persist, active, setActiveSlug],
   );
 
-  return { systems, active, activeSlug, setActiveSlug, addSystem, mergeCss, patchToken, removeSystem };
+  return {
+    systems,
+    loading,
+    active,
+    activeSlug: active?.slug ?? "",
+    setActiveSlug,
+    addSystem,
+    mergeCss,
+    patchToken,
+    removeSystem,
+  };
 }
 
-/** Flat token list for a system. */
-export function resolveSystemTokens(system: DesignSystem | null): Token[] {
-  return system?.groups?.flatMap((g) => g.tokens) ?? [];
+/** Coverage is recomputed from the CSS, never read from the stored
+   snapshot: those go stale when the schema grows and report bogus numbers. */
+const pctCache = new Map<string, number | null>();
+export function systemCoveragePercent(system: DesignSystem | null | undefined): number | null {
+  if (!system) return null;
+  const hit = pctCache.get(system.css);
+  if (hit !== undefined) return hit;
+  let pct: number | null = null;
+  try {
+    const names = (parseTokens(system.css) as Token[]).map((t) => t.name);
+    pct = coveragePercent(coverage(names) as DesignSystem["coverage"]);
+  } catch {
+    /* unparsable — no badge */
+  }
+  if (pctCache.size > 200) pctCache.clear();
+  pctCache.set(system.css, pct);
+  return pct;
 }
 
+/** Flat token list for a system — base values, plus its dark variant on
+   top (later wins) when `dark` is on and the system ships one. */
+export function resolveSystemTokens(system: DesignSystem | null, dark = false): Token[] {
+  const base = system?.groups?.flatMap((g) => g.tokens) ?? [];
+  const darkTokens = dark ? (system?.themes?.dark ?? []) : [];
+  return darkTokens.length ? [...base, ...darkTokens] : base;
+}

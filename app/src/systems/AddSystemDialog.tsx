@@ -1,41 +1,73 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { parseTokens } from "../../../src/core/parse.js";
-import type { Token } from "./store.ts";
+import * as ToggleGroup from "@radix-ui/react-toggle-group";
+import { REFERENCE, templateCss } from "../../../src/core/schema.js";
+import type { AppTab } from "../shell/Shell.tsx";
+import type { PushToast } from "../lib/toasts.ts";
+import { CssPreview } from "../tokens/CssPreview.tsx";
+import { countTokens } from "../tokens/tokenUtils.ts";
+import { CssSourceBar } from "../tokens/CssSourceBar.tsx";
 // Dialog primitives (.tok-dialog*) + shared add-dialog language live with
-// the toolbar — imported here (not just in TokenToolbar) so the trigger and
-// dialog stay styled even with zero systems, when no toolbar renders.
+// the toolbar — imported here (not just in TokenToolbar) so the dialog stays
+// styled even with zero systems, when no toolbar renders.
 import "../tokens/TokenToolbar.css";
 import "./AddSystemDialog.css";
 
+const AFTER_SAVE_KEY = "dsv.app.afterSave";
+const AFTER_SAVE_TABS: [AppTab, string][] = [
+  ["tokens", "Tokens"],
+  ["preview", "Preview"],
+  ["compare", "Compare"],
+];
+const FULL_TEMPLATE_COUNT = (REFERENCE as { tokens: string[] }[]).reduce((n, g) => n + g.tokens.length, 0);
+
+function readAfterSave(): AppTab {
+  try {
+    const saved = localStorage.getItem(AFTER_SAVE_KEY);
+    if (AFTER_SAVE_TABS.some(([id]) => id === saved)) return saved as AppTab;
+  } catch {
+    /* storage unreachable */
+  }
+  return "preview";
+}
+
 /**
- * Add System dialog: name + CSS textarea calling `addSystem`. Surfaces the
- * "already exists" error from `addSystem` inline (and as a toast) instead of
- * throwing into the header. Live token count reuses `parseTokens` so an
- * empty paste can't be saved by accident.
+ * Add System dialog (controlled — the header button, the empty-state cards
+ * and a page-level file drop all open the same instance). Name + CSS with
+ * file/URL sources, a full-schema template, live coverage preview, and the
+ * legacy "Open in" choice of where to land after saving.
  */
 export function AddSystemDialog({
+  open,
+  initialCss,
+  onOpenChange,
   onAdd,
   onToast,
+  onSaved,
 }: {
+  open: boolean;
+  /** Pre-filled CSS (a dropped file); read each time the dialog opens. */
+  initialCss?: string;
+  onOpenChange: (open: boolean) => void;
   onAdd: (name: string, css: string) => void;
-  onToast: (msg: string, tone: "ok" | "err") => void;
+  onToast: PushToast;
+  onSaved: (tab: AppTab) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [css, setCss] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [afterSave, setAfterSave] = useState<AppTab>(readAfterSave);
 
-  const parsed = parseTokens(css) as Token[];
-
-  const reset = () => {
+  // Fresh form per open (a drop pre-fills it).
+  useEffect(() => {
+    if (!open) return;
     setName("");
-    setCss("");
+    setCss(initialCss ?? "");
     setError(null);
-  };
+  }, [open, initialCss]);
 
   const save = () => {
-    if (!parsed.length) {
+    if (!countTokens(css)) {
       setError("CSS block is empty — paste at least one `--token: value;` line.");
       return;
     }
@@ -48,35 +80,23 @@ export function AddSystemDialog({
       return;
     }
     onToast("System added", "ok");
-    reset();
-    setOpen(false);
+    onOpenChange(false);
+    onSaved(afterSave);
   };
 
   return (
-    <Dialog.Root
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) reset();
-      }}
-    >
-      <Dialog.Trigger asChild>
-        <button className="tok-btn" title="Add a new design system">
-          + Add system
-        </button>
-      </Dialog.Trigger>
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="tok-dialog-overlay" />
         <Dialog.Content
           className="tok-dialog tok-dialog-wide"
-          aria-describedby={undefined}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
           }}
         >
           <Dialog.Title className="tok-dialog-title">Add System</Dialog.Title>
           <Dialog.Description className="tok-dialog-desc">
-            Paste a block of <code>--token: value;</code> lines. It persists in this browser and becomes
+            Paste a block of <code>--token: value;</code> lines. It stays in this browser and becomes
             selectable in the switcher.
           </Dialog.Description>
           <label className="tok-field">
@@ -86,10 +106,28 @@ export function AddSystemDialog({
               value={name}
               autoComplete="off"
               placeholder="Untitled"
-              aria-label="System name"
               onChange={(e) => setName(e.target.value)}
             />
           </label>
+          <CssSourceBar
+            onToast={onToast}
+            onLoad={(text) => {
+              setCss(text);
+              setError(null);
+            }}
+          />
+          <div className="tok-dialog-row">
+            <button
+              type="button"
+              className="tok-btn"
+              onClick={() => {
+                setCss(templateCss());
+                setError(null);
+              }}
+            >
+              Fill full template ({FULL_TEMPLATE_COUNT})
+            </button>
+          </div>
           <label className="tok-field">
             <span>CSS</span>
             <textarea
@@ -98,21 +136,43 @@ export function AddSystemDialog({
               rows={10}
               spellCheck={false}
               placeholder="--color-accent: #6366f1;"
-              aria-label="System CSS"
-              onChange={(e) => setCss(e.target.value)}
+              onChange={(e) => {
+                setCss(e.target.value);
+                setError(null);
+              }}
             />
           </label>
-          <p className="tok-dialog-meta" aria-live="polite">
-            {css.trim()
-              ? `${parsed.length} token${parsed.length === 1 ? "" : "s"} pasted`
-              : "Awaiting CSS block…"}
-          </p>
+          <CssPreview css={css} />
           {error && (
             <p className="tok-dialog-error" role="alert">
               {error}
             </p>
           )}
           <div className="tok-dialog-actions">
+            <span className="tok-segment">
+              Open in
+              <ToggleGroup.Root
+                type="single"
+                className="tok-seg"
+                value={afterSave}
+                aria-label="Tab to open after saving"
+                onValueChange={(v) => {
+                  if (!v) return;
+                  setAfterSave(v as AppTab);
+                  try {
+                    localStorage.setItem(AFTER_SAVE_KEY, v);
+                  } catch {
+                    /* storage unreachable */
+                  }
+                }}
+              >
+                {AFTER_SAVE_TABS.map(([id, label]) => (
+                  <ToggleGroup.Item key={id} value={id} className="tok-seg-item">
+                    {label}
+                  </ToggleGroup.Item>
+                ))}
+              </ToggleGroup.Root>
+            </span>
             <Dialog.Close className="tok-btn">Cancel</Dialog.Close>
             <button className="tok-btn tok-btn-primary" onClick={save}>
               Save system

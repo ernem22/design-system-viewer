@@ -116,7 +116,16 @@ tr.is-diff td { background: color-mix(in srgb, var(--color-warning) 8%, transpar
 .cmp-chip[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 .cmp-chip[aria-disabled="true"]:hover { border-color: var(--color-border-subtle); color: var(--color-text-secondary); }
 
+/* Component picker rows are <button>s reusing the rail's link look — reset
+   native button chrome, and mark the pick without Rail's sliding indicator. */
+button.app-rail-link {
+  appearance: none; width: 100%; border: 0; background: none;
+  font-family: inherit; text-align: left; cursor: pointer;
+}
+button.app-rail-link[aria-current="true"] { background: var(--color-accent-subtle); }
+
 /* ── props panel ── */
+.cmp-props { padding: var(--space-4); }
 .cmp-props-block + .cmp-props-block { margin-top: var(--space-4); }
 .cmp-props-block h3 { margin: 0 0 var(--space-2); font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: var(--letter-spacing-wide); color: var(--color-text-muted); }
 .cmp-props-list { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }

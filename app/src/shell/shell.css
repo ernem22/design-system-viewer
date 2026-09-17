@@ -577,3 +577,79 @@
     top 220ms var(--ease-emphasized),
     height 220ms var(--ease-emphasized);
 }
+
+.app-loading {
+  padding: var(--space-5);
+}
+
+/* Scoped-swap counter (legacy dsv-topbar-pill): click resets them all. */
+.app-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  height: 26px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--color-accent-border);
+  border-radius: var(--radius-full);
+  background: var(--color-accent-subtle);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.app-pill-reset {
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: 11px;
+}
+
+/* Dark-variant switch — only rendered for systems shipping themes.dark. */
+.app-dark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.app-dark-switch {
+  appearance: none;
+  position: relative;
+  width: 30px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-border-strong);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.app-dark-switch[data-state="checked"] {
+  background: var(--color-accent);
+}
+
+.app-dark-switch:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.app-dark-thumb {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+  background: var(--color-on-accent);
+  transform: translateX(2px);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.app-dark-switch[data-state="checked"] .app-dark-thumb {
+  transform: translateX(14px);
+}

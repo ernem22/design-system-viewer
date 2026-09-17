@@ -1,7 +1,7 @@
 import * as HoverCard from "@radix-ui/react-hover-card";
 import * as Progress from "@radix-ui/react-progress";
 import * as Separator from "@radix-ui/react-separator";
-import { Button } from "../../ui.tsx";
+import { Button, usePortalContainer } from "../../ui.tsx";
 import { Icon } from "../../../lib/icons.tsx";
 import { Avat } from "./screenBits.tsx";
 import "./screens.css";
@@ -14,6 +14,7 @@ const STATS: [string, string, string, string][] = [
 ];
 
 export default function DashboardBody() {
+  const portalContainer = usePortalContainer();
   return (
     <div className="dsv-stack">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -74,7 +75,7 @@ export default function DashboardBody() {
                   <Avat n={n} />
                 </span>
               </HoverCard.Trigger>
-              <HoverCard.Portal>
+              <HoverCard.Portal container={portalContainer}>
                 <HoverCard.Content className="dsv-pop" sideOffset={6}>
                   <div className="dsv-hovercard">
                     <div>

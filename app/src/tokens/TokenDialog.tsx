@@ -1,16 +1,14 @@
 import { useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { lintTokens, parseTokens } from "../../../src/core/parse.js";
+import { parseTokens } from "../../../src/core/parse.js";
 import { coverage, templateCss } from "../../../src/core/schema.js";
 import type { DesignSystem, Token } from "../systems/store.ts";
-import type { CoverageInfo, LintWarning } from "./useTokensView.ts";
+import type { CoverageInfo } from "./useTokensView.ts";
+import { CssPreview } from "./CssPreview.tsx";
+import { countTokens } from "./tokenUtils.ts";
+import { CssSourceBar } from "./CssSourceBar.tsx";
+import type { PushToast } from "../lib/toasts.ts";
 import "./TokenDialog.css";
-
-interface MergePreview {
-  added: number;
-  cov: CoverageInfo;
-  lint: LintWarning[];
-}
 
 /**
  * Add Tokens dialog: paste/merge a CSS block into the active system via
@@ -27,7 +25,7 @@ export function TokenDialog({
 }: {
   system: DesignSystem;
   onMerge: (css: string) => void;
-  onToast: (msg: string, tone: "ok" | "err") => void;
+  onToast: PushToast;
 }) {
   const [open, setOpen] = useState(false);
   const [css, setCss] = useState("");
@@ -41,18 +39,6 @@ export function TokenDialog({
     return cov.groups.flatMap((g) => g.missing);
   }, [system]);
 
-  const preview = useMemo<MergePreview | null>(() => {
-    if (!css.trim()) return null;
-    const base = parseTokens(system.css) as Token[];
-    const pasted = parseTokens(css) as Token[];
-    const names = new Set([...base, ...pasted].map((t) => t.name));
-    return {
-      added: pasted.length,
-      cov: coverage([...names]) as CoverageInfo,
-      lint: lintTokens(pasted) as LintWarning[],
-    };
-  }, [css, system]);
-
   const reset = () => {
     setCss("");
     setHint(null);
@@ -60,7 +46,7 @@ export function TokenDialog({
   };
 
   const save = () => {
-    if (!css.trim() || !preview || !preview.added) {
+    if (!countTokens(css)) {
       setError("CSS block is empty — paste at least one `--token: value;` line.");
       return;
     }
@@ -131,6 +117,13 @@ export function TokenDialog({
               Copy template
             </button>
           </div>
+          <CssSourceBar
+            onToast={onToast}
+            onLoad={(text) => {
+              setCss(text);
+              setError(null);
+            }}
+          />
           {hint && <p className="tok-dialog-meta">{hint}</p>}
           <textarea
             className="tok-textarea"
@@ -144,54 +137,7 @@ export function TokenDialog({
               setError(null);
             }}
           />
-          <div className="tok-dialog-preview" aria-live="polite">
-            {!preview ? (
-              <p className="tok-dialog-meta">Awaiting CSS block…</p>
-            ) : (
-              <>
-                <b>{preview.added}</b> tokens pasted · coverage{" "}
-                <b className={preview.cov.missing ? "" : "ok"}>
-                  {preview.cov.present}/{preview.cov.expected}
-                </b>{" "}
-                {preview.cov.missing ? (
-                  <span className="warn">{preview.cov.missing} missing</span>
-                ) : (
-                  <span className="ok">complete</span>
-                )}
-                {preview.cov.extraCount > 0 && (
-                  <span className="warn"> · {preview.cov.extraCount} extra</span>
-                )}
-                {preview.lint.length > 0 && (
-                  <span className="warn"> · {preview.lint.length} value warnings</span>
-                )}
-                {preview.cov.extraCount > 0 && (
-                  <details>
-                    <summary className="warn">extra — won&apos;t render in Preview</summary>
-                    <div>
-                      Preview only reads the {preview.cov.expected} schema names (see Schema view).
-                      Rename these to match, or they&apos;ll just sit unused:
-                    </div>
-                    {preview.cov.extra.map((n) => (
-                      <code key={n}>{n}</code>
-                    ))}
-                  </details>
-                )}
-                {preview.lint.length > 0 && (
-                  <details open>
-                    <summary className="warn">value warnings</summary>
-                    {preview.lint.map((w) => (
-                      <div key={w.name}>
-                        <code>
-                          {w.name}: {w.value}
-                        </code>{" "}
-                        — {w.msg}
-                      </div>
-                    ))}
-                  </details>
-                )}
-              </>
-            )}
-          </div>
+          <CssPreview css={css} baseCss={system.css} />
           {error && (
             <p className="tok-dialog-error" role="alert">
               {error}

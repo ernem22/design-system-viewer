@@ -1,0 +1,362 @@
+# Orchestration — Source of Truth
+
+Hermes/Orca autonomous pipeline for this repository. Scope: `app/` (React +
+TS, `refactor/full-react-migration` branch) only, unless a task explicitly
+widens it. This document is the operational contract — Hermes reads it before
+touching orchestration, and it is corrected in place, not duplicated, when
+reality diverges from it.
+
+## Objective
+
+Hermes is a **control plane**, not a worker. It spawns, tracks, and retires
+OpenCode workers through Orca; it never writes code, reviews code, or narrates
+what a worker did. Every optimization in this doc exists to cut Hermes's own
+token and tool-call cost without weakening the verified pipeline below.
+
+## Current Verified Architecture
+
+```
+Hermes (coordinator) → Orca CLI (task-create, worker-start, check --wait) → OpenCode worker (child worktree)
+```
+
+No second orchestration layer. A prior `pipeline.py` (Python state machine
+wrapping `orca` via subprocess) was built, found to duplicate Orca's own
+task/dispatch state, and removed — do not recreate it or anything like it.
+Every lifecycle action is a direct Orca CLI tool-call from the coordinator
+turn.
+
+Verified pipeline shape:
+
+```
+TaskCreator → Coder → Reviewer → Tester → PR → Hermes merge
+                 ↑___________________________|
+                 (failure at any stage → fresh worker, fallback model)
+```
+
+## Hermes Responsibilities
+
+- Create Orca Tasks with a scoped, self-contained spec (target, change,
+  constraints, acceptance).
+- Create one child worktree per worker; write that worktree's `opencode.json`
+  before starting the terminal.
+- Start the worker terminal, wait for `tui-idle`, bind it with
+  `orchestration worker-start`.
+- Block on `orchestration check --wait` for the settlement message.
+- Read the **structured status line** the worker returns (see Worker
+  Communication Protocol) — nothing else.
+- Decide: pass → advance stage; fail → fresh worker + fallback model (capped
+  attempts); ambiguous → escalate to the user.
+- Open the PR and perform the merge once Reviewer PASS + Tester PASS are both
+  in hand.
+- Release/close settled workers; clean up worktrees created for a
+  since-finished or abandoned attempt.
+
+## Hermes Forbidden Responsibilities
+
+Hermes does **not**:
+
+- Write or edit application code.
+- Perform its own code review of a worker's diff (Reviewer's job).
+- Re-run a worker's reasoning or "double-check" a PASS verdict by re-reading
+  the full diff line-by-line.
+- Read a worker's full terminal transcript or chain-of-thought once a
+  structured status line has arrived.
+- Re-summarize a worker's output back to the user in prose (report the
+  structured line; expand only on explicit user request).
+- Poll status in a tight loop (`check` without `--wait`, repeated).
+- Re-inspect the repository (`git log`, `ls`, full-tree reads) once scope and
+  branch are already established for the run.
+- Guess or widen Task Creator's scope when it is ambiguous — escalate instead.
+- Invent a second state-tracking layer (file, script, in-context ledger) that
+  duplicates what `orca orchestration task-list` / `worker-list` already hold.
+
+One narrow exception: a single `git status --porcelain` (or `git log -1`) after
+a Coder/Fixer `worker_done` is allowed as a cheap non-negotiable integrity
+check before advancing to Reviewer — it is O(1) tool-calls and catches
+"worker lied about outcome" class failures that the structured protocol
+cannot self-report. Use `git status --porcelain`/`git log -1`, not
+`git diff --stat` alone: a worker that never actually committed can still
+report a `commit: <sha>` line by echoing the worktree's starting HEAD, and
+`git diff --stat` against an untracked new file shows nothing (untracked
+files don't appear in a diff) — it looks clean when it is not. Compare the
+reported SHA against the worktree's pre-dispatch HEAD; identical means no
+commit happened despite the claim. This exact gap was caught once in this
+project's measurement run.
+
+## Worker Roles & Responsibilities
+
+| Role | Does | Does not |
+|---|---|---|
+| Task Creator | Inspects `app/` inside its fixed scope, proposes one small independent task, writes it (e.g. `NEXT_TASK.md`) | Implement anything |
+| Coder | Implements the task in its child worktree, runs the relevant tests itself, commits + pushes | Review or test-suite-wide validation |
+| Reviewer (`--agent plan`) | Read-only diff/code review, returns PASS/FAIL + fix list | Edit any file, implement fixes |
+| Tester | Runs the full test suite (+ type-check) in a fresh worktree off the Coder's pushed branch, may add/adjust test files | Fix production source |
+| Fixer | Applies exactly the fix Reviewer/Tester reported, nothing else | Re-scope or re-design the change |
+
+## Model Assignment & Fallback
+
+Verified working IDs (via `opencode models` on this host and live
+`opencode debug config` resolution):
+
+| Role | Primary | Fallback |
+|---|---|---|
+| Coder | `openrouter/nex-agi/nex-n2.5-pro:free` | `opencode/muse-spark-1.3-contributor-free` |
+| Reviewer | `opencode/nemotron-3-ultra-free` | `opencode/nemotron-3.5-lightning-free` |
+| Tester | `opencode/nemotron-3.5-lightning-free` | `openrouter/nex-agi/nex-n2.5-mini:free` |
+| Fixer | `opencode/muse-spark-1.3-contributor-free` | `openrouter/nex-agi/nex-n2.5-mini:free` |
+| Task Creator | `opencode/nemotron-3-ultra-free` | `openrouter/openrouter/free` |
+
+Model selection mechanism (verified, see the `orca-opencode-worker-pipelines`
+skill for the exact command sequence and its edge cases):
+
+1. `orca worktree create` the child worktree first.
+2. Write **project-level** `<worktree>/opencode.json` with
+   `{"model": "<id>"}` — this overrides the user's global OpenCode config.
+   Never pass `orca worker-start --model` for an `opencode` agent; it is
+   rejected (`Agent opencode does not support launch-time model selection`).
+3. Start the terminal with a bare `opencode` command.
+4. Verify (not assume) the model actually resolved — `opencode debug config`
+   and/or the terminal header line — before trusting the dispatch.
+
+## Task Lifecycle
+
+```
+created → coding → review → testing → pr → merging → completed
+```
+
+Failure transitions:
+
+```
+review_failed → fixing → review
+test_failed   → fixing → testing
+merge_failed  → fixing → pr
+```
+
+A stage only advances on a structured PASS/succeeded signal; it never
+advances on Hermes's own inference from partial output.
+
+## Failure & Recovery Policy
+
+Verified sequence (see skill for full detail and the exact rejected
+`--retry-of` error):
+
+1. Primary worker fails — `worker_done outcome: failed`, an `escalation`
+   message, or a **stalled** worker (identical terminal tail across two reads
+   separated by real time, with no settlement — one read never proves a
+   stall).
+2. Start a **fresh** child worktree + terminal with the fallback model's
+   `opencode.json`. Do not reuse the failed worktree/terminal.
+3. Re-dispatch the **same Task ID** with plain `orchestration worker-start`
+   (no `--retry-of`) — this works because the Task itself is normally still
+   `status: ready` after one dispatch failure.
+4. `--retry-of <dispatch_id>` is **not** interchangeable with step 3. It was
+   tested and rejected (`task_not_startable`) when the Task was still `ready`
+   after a single failed dispatch — Orca requires the Task itself to already
+   be `failed`/`blocked` before `--retry-of` is accepted. Do not document or
+   rely on `--retry-of` as the first-line fallback mechanism; it is an
+   escalation-tier action for a Task Orca's own circuit breaker has already
+   given up on, not a per-attempt tool.
+5. Cap attempts at 3 total per Task; after that, Orca's own dispatch circuit
+   breaker marks the Task `failed` — do not layer a second retry counter on
+   top of it. On that point, escalate to the user; do not keep retrying.
+6. Never re-run a worker that already succeeded "to compare" or "to be sure."
+
+## Token Optimization Rules
+
+- One `check --wait` per worker attempt, not a poll loop. If the client-side
+  subprocess wait times out before Orca's own wait resolves, re-issue a
+  single **non-blocking** `check` (no `--wait`) — Orca replays the durably
+  queued settlement; nothing is lost, and no new worker-side work happened.
+- Consume only the structured status line of a `worker_done`/`escalation`
+  message; do not read the rest of `body` unless it signals `failed` and the
+  reason needs a fix Task written.
+- Never call `worker-read`/terminal-read for a worker that already produced
+  `worker_done` — that message *is* the report.
+- Do not re-run `git log`, `worktree list`, or full-repo scans mid-run once
+  the target branch/worktree is established; carry the IDs forward in-turn
+  instead of rediscovering them.
+- Do not restate a worker's PASS/FAIL verdict back to the user in expanded
+  prose during the run — accumulate it, report once, at pipeline end (or on
+  failure/escalation).
+
+## Tool-Call Optimization
+
+- `task-create` once per stage, `worktree create` once per worker attempt,
+  `terminal create` + `terminal wait` + `worker-start` as the fixed 3-call
+  dispatch sequence, `check --wait` once (see above), `worker-release` once
+  on settlement. That is the whole per-worker call budget outside of
+  fallback.
+- Skip `opencode debug config` verification for routine dispatches once a
+  role/model pairing has been verified working in this run — re-verify only
+  after a config change, a new role, or a suspected model-resolution failure
+  (e.g. an unexpected terminal header).
+- Batch independent read-only Orca calls (e.g. `worker-list` + `task-list`)
+  into the same turn when both are genuinely needed; do not fetch one, decide
+  you need the other, and fetch it next turn.
+- PR creation and merge are single `gh pr create` / `gh pr merge` calls with
+  no intermediate `gh pr view` unless a merge conflict or failed check needs
+  diagnosing.
+
+## Worker Communication Protocol
+
+Every worker's `worker_done`/`escalation` must lead with a **structured
+status line** as its first line, machine-parseable, before any prose. Hermes
+reads only this line to decide the state transition; prose after it is for
+human audit trail only and is not re-read by Hermes.
+
+```
+status: succeeded | failed
+role: coder | reviewer | tester | fixer | task_creator
+task: <task_id>
+commit: <sha | none>
+tests: pass | fail | n/a
+```
+
+Reviewer specifically:
+
+```
+status: pass | fail
+reason: <short reason, only if fail>
+fix_required: <short actionable instruction, only if fail>
+```
+
+Failure:
+
+```
+status: failed
+role: <role>
+reason: <short structured reason>
+retryable: true | false
+```
+
+Encode this line format directly in each Task's spec (the "OBSERVABLE
+ACCEPTANCE" / "OUTPUT" clause) — it is the contract, not a suggestion.
+
+Known gap: `--agent plan` (Reviewer) does not automatically send
+`worker_done` when it finishes talking — verified in this session. If a
+dispatch sits `ready`/`activity: done` after the model has visibly produced
+its verdict, one nudge (`orchestration send --to dispatch:<id>`) is required
+and the worker complies. This is a real per-Reviewer-dispatch cost; it is not
+eliminated by this document, only accounted for.
+
+## State & Context Management
+
+- **Durable state** (lives in Orca, not in Hermes's context): Run ID, Task
+  IDs, dispatch IDs, worktree IDs/paths, task status. Always re-fetch these
+  from `orca orchestration task-list --run <id>` / `worker-list --run <id>`
+  if a new coordinator turn needs them and they are not already in the
+  current turn's context — do not ask the user to repeat them, and do not
+  keep a parallel note of them in a file.
+- **Ephemeral runtime state** (fine to hold only in-turn, discard after):
+  worker terminal tail excerpts used to diagnose a stall, verification
+  command output (`opencode debug config`, `git status --porcelain`).
+- Do not persist either kind of state in a bespoke file/DB — that is exactly
+  the second-orchestrator anti-pattern this document forbids.
+
+## Scope Control
+
+Task Creator's spec must state the scope boundary explicitly and literally
+(e.g. "app/ only, not src/core, not preview/") — an unscoped "find something
+small and independent" prompt lets the model choose, which may not match what
+the user meant (this happened once in this project: an unscoped Task Creator
+picked `src/core` when the user meant `app/`). If a task's target scope is
+ambiguous from the user's request, Hermes asks the user (or blocks/escalates
+in a headless context) rather than guessing a boundary.
+
+## PR & Merge Policy
+
+- Coder/Fixer commits and pushes its own branch — Reviewer/Tester worktrees
+  cannot see uncommitted changes in a sibling worktree; `--base-branch` off a
+  branch with only uncommitted work silently falls back to that branch's last
+  real commit.
+- PR opens only after Reviewer PASS **and** Tester PASS are both held.
+- Hermes performs the merge (`gh pr merge`) directly — this is a control-plane
+  decision, not implementation, and is explicitly in-scope for Hermes.
+- Squash-merge unless the repository's existing convention says otherwise.
+
+## Safety / Guardrails
+
+- Never write directly to the coordinator/main worktree — all Coder/Fixer
+  work happens in a dedicated child worktree.
+- Never delete or reset uncommitted work in a worktree Hermes did not create
+  for this run.
+- Never fabricate a model ID, a test result, or a "verified" claim — see
+  Observability below.
+- A garbled/invalid `opencode.json` model ID does not error cleanly; OpenCode
+  silently substitutes a different model and the worker can hang. Detect this
+  by the terminal header (`Build · <model>`) showing the wrong name, not by
+  waiting for an error.
+
+## Observability & Minimal Reporting
+
+Hermes reports to the user only:
+
+- Per completed pipeline run: role → model used → PASS/FAIL, final PR/merge
+  link or failure reason. One line per stage, not a transcript.
+- On failure/escalation: the structured failure line plus the concrete next
+  action (fallback triggered / user input needed / capped-out and blocked).
+- Never a re-narration of a worker's implementation reasoning.
+- Every claim of "verified" must have been actually observed this run
+  (command output, terminal header, re-run test result) — otherwise it is
+  labeled `not verified` / `assumed`, never asserted as fact.
+
+## Known Limitations
+
+- `--retry-of` has not been verified to work as a first-attempt fallback
+  mechanism (see Failure & Recovery Policy §4) — only plain re-dispatch on
+  the same Task ID has been verified.
+- Reviewer (`--agent plan`) requires a manual nudge to emit `worker_done`;
+  this is a known, unfixed per-dispatch cost, not a solved problem.
+- No CI/status-check integration exists on this repo's PRs yet
+  (`statusCheckRollup` was empty in the verified run) — merge decisions
+  currently rest entirely on Reviewer + Tester worker verdicts.
+- Token/tool-call savings from this document are only measured for the one
+  comparison run recorded in the project history; they are not a guaranteed
+  percentage for arbitrary future tasks.
+
+## Operational Checklist
+
+Before dispatching any worker:
+
+- [ ] Task spec states target, change, constraints, and the structured
+      output-line format.
+- [ ] Child worktree created from the correct base branch (verify with one
+      `git log -1` in the new worktree if this is the first worker of the
+      run on that branch — skip on subsequent workers of the same run).
+- [ ] `opencode.json` written with the correct primary model for the role.
+- [ ] Terminal started, `tui-idle` reached, `worker-start` bound.
+
+Before advancing a stage:
+
+- [ ] Settlement message received with a structured status line.
+- [ ] `status: succeeded`/`pass` — advance. `failed` — fallback per policy.
+      Ambiguous — escalate, do not guess.
+
+Before merge:
+
+- [ ] Reviewer PASS held.
+- [ ] Tester PASS held.
+- [ ] PR mergeable (`gh pr view --json mergeable,mergeStateStatus`).
+
+## Optimization Targets
+
+Concrete, checkable claims — not aspirational numbers:
+
+- Per-worker dispatch: fixed at 5 Orca tool-calls (worktree create, terminal
+  create, terminal wait, worker-start, check --wait) + 1 release = 6, plus at
+  most 1 verification call (`opencode debug config` or
+  `git status --porcelain`) when warranted. No polling loop.
+- Zero full-transcript reads (`worker-read`) on the happy path — only on a
+  suspected stall.
+- Zero repo-wide re-scans per worker once the run's branch/scope is fixed.
+
+## Future Improvements
+
+- Wire real CI/status checks into the PR so merge decisions are not solely
+  worker-verdict-based.
+- Investigate whether Orca's Task-level circuit breaker state can be queried
+  cheaply enough to replace the "check task-list status before choosing
+  --retry-of vs plain re-dispatch" step with a single call instead of two.
+- If OpenCode ever ships native model fallback, re-evaluate whether the
+  coordinator-level fallback in this document is still needed or can be
+  simplified.

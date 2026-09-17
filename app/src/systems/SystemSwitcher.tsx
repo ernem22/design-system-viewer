@@ -1,16 +1,14 @@
 import * as Select from "@radix-ui/react-select";
 import { Icon } from "../lib/icons.tsx";
-import { AddSystemDialog } from "./AddSystemDialog.tsx";
 import "./AddSystemDialog.css";
-import { coveragePercent, type DesignSystem } from "./store.ts";
+import { systemCoveragePercent, type DesignSystem } from "./store.ts";
 
 interface SystemSwitcherProps {
   systems: DesignSystem[];
   active: DesignSystem | null;
   activeSlug: string;
   onSelect: (slug: string) => void;
-  onAddSystem: (name: string, css: string) => void;
-  onToast: (msg: string, tone: "ok" | "err") => void;
+  onAddClick: () => void;
 }
 
 /** Header system switcher — ported from the legacy dsv-topbar-sysbtn
@@ -22,11 +20,15 @@ export default function SystemSwitcher({
   active,
   activeSlug,
   onSelect,
-  onAddSystem,
-  onToast,
+  onAddClick,
 }: SystemSwitcherProps) {
-  if (systems.length === 0) return <AddSystemDialog onAdd={onAddSystem} onToast={onToast} />;
-  const activePct = coveragePercent(active?.coverage);
+  const addButton = (
+    <button type="button" className="tok-btn" title="Add a new design system" onClick={onAddClick}>
+      + Add system
+    </button>
+  );
+  if (systems.length === 0) return <span className="app-syswrap">{addButton}</span>;
+  const activePct = systemCoveragePercent(active);
   return (
     <span className="app-syswrap">
       <Select.Root value={activeSlug} onValueChange={onSelect}>
@@ -47,7 +49,7 @@ export default function SystemSwitcher({
         <Select.Content className="app-select-content app-sysmenu" position="popper" sideOffset={6} align="start">
           <Select.Viewport>
             {systems.map((s) => {
-              const pct = coveragePercent(s.coverage);
+              const pct = systemCoveragePercent(s);
               return (
                 <Select.Item key={s.slug} value={s.slug} className="app-select-item">
                   <Select.ItemIndicator className="app-select-item-indicator">
@@ -62,7 +64,7 @@ export default function SystemSwitcher({
         </Select.Content>
       </Select.Portal>
     </Select.Root>
-      <AddSystemDialog onAdd={onAddSystem} onToast={onToast} />
+      {addButton}
     </span>
   );
 }

@@ -1,7 +1,7 @@
 import * as Accordion from "@radix-ui/react-accordion";
 import * as Checkbox from "@radix-ui/react-checkbox";
 import { Icon } from "../lib/icons.tsx";
-import { coveragePercent } from "../systems/store.ts";
+import { systemCoveragePercent } from "../systems/store.ts";
 import type { DesignSystem } from "../systems/store.ts";
 import type { CompareViewModel } from "./useCompareView.ts";
 
@@ -44,7 +44,7 @@ export function CompareRail({
                 {systems.map((s) => {
                   const isOn = picked.includes(s.slug);
                   const locked = !isOn && picked.length >= maxColumns;
-                  const pct = coveragePercent(s.coverage);
+                  const pct = systemCoveragePercent(s);
                   return (
                     <label
                       key={s.slug}

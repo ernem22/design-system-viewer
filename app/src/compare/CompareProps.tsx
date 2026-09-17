@@ -1,4 +1,4 @@
-import { coveragePercent } from "../systems/store.ts";
+import { systemCoveragePercent } from "../systems/store.ts";
 import type { CompareViewModel } from "./useCompareView.ts";
 
 /** Compare tab's right rail: coverage of each picked system, at a glance —
@@ -13,7 +13,7 @@ export function CompareProps({ view }: { view: CompareViewModel }) {
         {cols.length ? (
           <ul className="cmp-props-list">
             {cols.map((s) => {
-              const pct = coveragePercent(s.coverage);
+              const pct = systemCoveragePercent(s);
               return (
                 <li key={s.slug}>
                   <span>{s.name}</span>

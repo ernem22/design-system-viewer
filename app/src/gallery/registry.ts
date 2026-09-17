@@ -13,6 +13,9 @@ export interface GalleryEntry {
    lib/galleryOutline.ts, which discovers these from the DOM. */
 export type EntryOutline = Record<string, RailLink[]>;
 
+/** Turkish-aware fold (legacy preview search), so "İ"/"ı" queries match. */
+const searchKey = (s: string) => s.trim().toLocaleLowerCase("tr");
+
 /** Folds entries + their discovered Demo children into the `[parentLabel,
    children][]` shape Rail expects — one entry per parent, its Demo blocks
    as children. Empty `query` keeps everything; otherwise a parent whose
@@ -24,14 +27,20 @@ export function buildRailGroups(
   outline: EntryOutline,
   query: string,
 ): RailGroups {
-  const q = query.trim().toLowerCase();
-  if (!q) return entries.map((e) => [e.label, outline[e.id] ?? []]);
+  // Screens hold no <Demo> blocks — link the section itself, or it would be
+  // unreachable from the rail and invisible to scrollspy.
+  const childrenOf = (e: GalleryEntry): RailLink[] => {
+    const demos = outline[e.id] ?? [];
+    return demos.length ? demos : [{ id: e.id, label: e.label }];
+  };
+  const q = searchKey(query);
+  if (!q) return entries.map((e) => [e.label, childrenOf(e)]);
 
   const groups: RailGroups = [];
   for (const e of entries) {
-    const children = outline[e.id] ?? [];
-    const parentMatches = e.label.toLowerCase().includes(q);
-    const visible = parentMatches ? children : children.filter((c) => c.label.toLowerCase().includes(q));
+    const children = childrenOf(e);
+    const parentMatches = searchKey(e.label).includes(q);
+    const visible = parentMatches ? children : children.filter((c) => searchKey(c.label).includes(q));
     if (parentMatches || visible.length > 0) groups.push([e.label, visible]);
   }
   return groups;

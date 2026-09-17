@@ -34,6 +34,15 @@ export default function Rail({ groups, searching = false, open, syncSection = fa
   const labels = useMemo(() => groups.map(([label]) => label), [groups]);
   // Every group open by default. Not persisted: a fresh session always starts here.
   const [openGroups, setOpenGroups] = useState<string[]>(() => labels);
+  // Groups that appear later (systems load async, schema/gallery switch)
+  // start open too; only a group the user has seen and collapsed stays shut.
+  const seenLabels = useRef(new Set(labels));
+  useEffect(() => {
+    const fresh = labels.filter((l) => !seenLabels.current.has(l));
+    if (!fresh.length) return;
+    for (const l of fresh) seenLabels.current.add(l);
+    setOpenGroups((current) => [...current, ...fresh.filter((l) => !current.includes(l))]);
+  }, [labels]);
 
   const linkIds = useMemo(() => groups.flatMap(([, links]) => links.map((l) => l.id)), [groups]);
   // pinTo: clicking a link owns the highlight until the user's next own

@@ -50,9 +50,13 @@ export function useCompareView(systems: DesignSystem[]) {
   // Compare sits inactive-but-mounted (Shell forceMounts every tab) — drop
   // any picked slug that no longer exists, same fallback as legacy's
   // fetchSystems().then(...) picked-repair.
+  // Skipped while the list is still empty (first boot fetches it async) so a
+  // deep-linked ?cmp= isn't wiped before the systems it names arrive.
   useEffect(() => {
+    if (systems.length === 0) return;
     setPicked((cur) => {
       const valid = cur.filter((slug) => systems.some((s) => s.slug === slug));
+      if (valid.length === cur.length) return cur;
       if (valid.length) return valid;
       return systems.slice(0, 2).map((s) => s.slug);
     });

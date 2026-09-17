@@ -4,6 +4,7 @@ import { categorize } from "../../../src/core/taxonomy.js";
 import { coverage } from "../../../src/core/schema.js";
 import type { DesignSystem, Token, TokenGroup, TokenGroupKind } from "../systems/store.ts";
 import type { RailGroups, RailLink } from "../lib/railTypes.ts";
+import type { PushToast } from "../lib/toasts.ts";
 
 /** Anchor ids — Rail links point at these, so both sides share the builders. */
 export const groupAnchor = (id: string) => `tok-group-${id}`;
@@ -49,14 +50,6 @@ export interface VisibleGroup {
   missing: string[];
 }
 
-export interface Toast {
-  id: number;
-  msg: string;
-  tone: "ok" | "err";
-}
-
-let toastId = 0;
-
 /** Turkish-locale match — the old viewer used plain toLowerCase, the
    preview side already had toLocaleLowerCase("tr"); the port carries it. */
 const trLower = (s: string) => s.toLocaleLowerCase("tr");
@@ -66,7 +59,7 @@ const trLower = (s: string) => s.toLocaleLowerCase("tr");
  * are view-local (nothing here persists — the old viewer kept them in module
  * state too); systems data itself lives in systems/store.ts.
  */
-export function useTokensView(system: DesignSystem | null) {
+export function useTokensView(system: DesignSystem | null, pushToast: PushToast) {
   const [filter, setFilter] = useState("");
   const [showMissing, setShowMissing] = useState(true);
   const [schemaMode, setSchemaMode] = useState(false);
@@ -74,7 +67,6 @@ export function useTokensView(system: DesignSystem | null) {
   // Token whose inline editor popover is open (single-open; only one
   // TokenEditControl renders open at a time).
   const [editingName, setEditingName] = useState<string | null>(null);
-  const [toasts, setToasts] = useState<Toast[]>([]);
 
   // Switching systems resets the view, like the old selectSystem did.
   const slug = system?.slug ?? "";
@@ -130,7 +122,9 @@ export function useTokensView(system: DesignSystem | null) {
     if (!showMissing) return [];
     const seen = new Set(groups.map((g) => g.id));
     return cov.groups
-      .filter((g) => !seen.has(g.id) || g.present.length === 0)
+      // Both conditions (legacy skipped `seen || present`): a category the
+      // gallery already renders gets its missing row there, not twice.
+      .filter((g) => !seen.has(g.id) && g.present.length === 0)
       .map((g) => ({ ...g, missing: g.missing.filter(matchTok) }))
       .filter((g) => g.missing.length > 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -172,12 +166,6 @@ export function useTokensView(system: DesignSystem | null) {
   // Stable identities: TokenGroup/rows.tsx renderers are memo()'d so 432+
   // token systems don't repaint every keystroke — a callback recreated each
   // render would defeat that memo for every row.
-  const pushToast = useCallback((msg: string, tone: Toast["tone"] = "ok") => {
-    const id = ++toastId;
-    setToasts((cur) => [...cur, { id, msg, tone }]);
-    setTimeout(() => setToasts((cur) => cur.filter((t) => t.id !== id)), 2600);
-  }, []);
-
   /** Click-a-token: select it for the inspector + copy `--name: value;`
      (old copy-on-click, with the "Copy failed" fallback toast). */
   const copyToken = useCallback(
@@ -226,7 +214,6 @@ export function useTokensView(system: DesignSystem | null) {
     setSelectedName,
     editingName,
     onEdit,
-    toasts,
     pushToast,
     copyToken,
   };

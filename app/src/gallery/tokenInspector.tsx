@@ -408,7 +408,7 @@ export function TokenScopeTrigger({ title }: { title: string }) {
  * instead of a Demo title — this is what gives screen entries (whole-Body,
  * zero <Demo> blocks) the same badge / drawer / swap / value-edit flow.
  * Tokens come from the caller (GallerySection resolves them via
- * tokensForBody); scoping + panel plumbing is identical because ScopePanel
+ * tokensForEntry); scoping + panel plumbing is identical because ScopePanel
  * and the swap store are already id-agnostic. */
 export function SectionScopeTrigger({
   id,

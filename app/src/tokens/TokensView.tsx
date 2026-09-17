@@ -10,7 +10,7 @@ import { groupAnchor } from "./useTokensView.ts";
 import "./TokensView.css";
 
 /**
- * Tokens tab main column: lint row + toolbar + gallery/schema + toasts.
+ * Tokens tab main column: lint row + toolbar + gallery/schema.
  * Click a token = copy + select it for the right-rail inspector; Update (or
  * double-click) opens the inline editor popover for that row.
  */
@@ -35,7 +35,6 @@ export function TokensView({
     searching,
     schemaMode,
     filter,
-    toasts,
     pushToast,
     copyToken,
     editingName,
@@ -129,13 +128,6 @@ export function TokensView({
           {!searching && <ContrastSection tokens={view.tokens} />}
         </div>
       )}
-      <div className="tok-toasts" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} className={`tok-toast tok-toast-${t.tone}`}>
-            {t.msg}
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

@@ -5,13 +5,13 @@ Root `CLAUDE.md` still applies.
 
 ## Commands
 
-`npm run dev|build|lint|preview` (from `app/`). No test script.
+`npm run dev|build|lint|test|preview` (from `app/`).
 
 ## Structure
 
 - `gallery/registry.ts` + `gallery/components/index.ts` (`COMPONENT_ENTRIES`) — single source for rail nav + demos. No separate section-metadata files.
 - `shell/` — chrome only, slot-based; `Shell` owns layout/tabs, never content.
-- `systems/store.ts` — system data (+ mutations). `tokens/` — Tokens tab (`useTokensView` model + view). `tokens/tokens.css` — only token source. `lib/` — shared utils.
+- `systems/store.ts` — system data (+ mutations). First boot loads `systems/index.json`, served/emitted by the plugin in `vite.config.ts` from repo `systems/*.json`; after any write, localStorage (`dsv.app.systems`) wins, `[]` included. `tokens/` — Tokens tab (`useTokensView` model + view). `tokens/tokens.css` — only token source. `lib/` — shared utils.
 
 ## State
 
@@ -37,8 +37,9 @@ Root `src/core/*` imported untyped on purpose (`allowJs`).
 
 Explain why, not what.
 
-## Not yet implemented
+## Notes
 
-- Compare tab is a placeholder in `App.tsx`. Tokens tab is implemented (gallery + schema + write flows: `AddSystemDialog`, `TokenDialog`, `InlineEditor` popover).
-- Tokens applied via `document.documentElement.style` (`App.tsx`), not postMessage — unlike `preview/`'s iframe bridge.
-- Port from `preview/`, don't import it; `preview/` stays untouched. `lib/systemStorage.ts` is unused, reserved for the Tokens port (`app/docs/tokens-port-plan.md`).
+- Tokens applied via `document.documentElement.style` (`App.tsx`), not postMessage — unlike `preview/`'s iframe bridge. Compare columns scope tokens as inline styles; gallery portals must pass `usePortalContainer()`.
+- Token inspector is Preview-only (`InCompareContext` hides it in Compare). Section token scans key by entry id (`tokensForEntry`) — never rely on `Body.name`, it's minified in builds.
+- Coverage is always recomputed from CSS (`systemCoveragePercent`), never read from stored snapshots.
+- Port from `preview/`, don't import it; `preview/` stays untouched. `lib/systemStorage.ts` is unused.

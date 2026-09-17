@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import * as Avatar from "@radix-ui/react-avatar";
 import * as Popover from "@radix-ui/react-popover";
-import { Button, Demo } from "../ui.tsx";
+import { Button, Demo, usePortalContainer } from "../ui.tsx";
 import { Icon } from "../../lib/icons.tsx";
 import "./patterns.css";
 
@@ -85,6 +85,7 @@ function CalendarDemo() {
 }
 
 function ComboboxDemo() {
+  const portalContainer = usePortalContainer();
   const all = ["Design tokens", "Component preview", "Compare mode", "Dark variant", "Command palette", "Analytics"];
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState(["Compare mode"]);
@@ -119,7 +120,7 @@ function ComboboxDemo() {
             />
           </div>
         </Popover.Trigger>
-        <Popover.Portal>
+        <Popover.Portal container={portalContainer}>
           <Popover.Content
             className="dsv-menu"
             sideOffset={6}

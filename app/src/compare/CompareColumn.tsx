@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
-import { PortalContainerContext } from "../gallery/ui.tsx";
+import { InCompareContext, PortalContainerContext } from "../gallery/ui.tsx";
 import type { ComparableOption } from "./registry.tsx";
 
 /** One column = one CSS-variable scope. Radix `*.Portal` content (selects,
@@ -25,9 +25,11 @@ export function CompareColumn({
   const [node, setNode] = useState<HTMLElement | null>(null);
   const { Render } = option;
   const body = (
-    <div className="cmp-col-body">
-      <Render />
-    </div>
+    <InCompareContext.Provider value={true}>
+      <div className="cmp-col-body">
+        <Render />
+      </div>
+    </InCompareContext.Provider>
   );
   return (
     <section ref={setNode} className="cmp-col" style={style}>

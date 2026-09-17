@@ -6,7 +6,7 @@ import * as Switch from "@radix-ui/react-switch";
 import * as Tabs from "@radix-ui/react-tabs";
 import * as Separator from "@radix-ui/react-separator";
 import type { ReactNode } from "react";
-import { Button } from "../../ui.tsx";
+import { Button, usePortalContainer } from "../../ui.tsx";
 import { Icon } from "../../../lib/icons.tsx";
 import "./screens.css";
 
@@ -33,6 +33,7 @@ const LANGUAGES: [string, string][] = [
 ];
 
 export default function SettingsBody() {
+  const portalContainer = usePortalContainer();
   const [vol, setVol] = useState([60]);
   const [density, setDensity] = useState("comfortable");
   const [notif, setNotif] = useState({ email: true, push: true, digest: false });
@@ -68,7 +69,7 @@ export default function SettingsBody() {
                       <Icon name="chevronDown" size={14} />
                     </Select.Icon>
                   </Select.Trigger>
-                  <Select.Portal>
+                  <Select.Portal container={portalContainer}>
                     <Select.Content className="dsv-select-content" position="popper" sideOffset={6}>
                       <Select.Viewport>
                         {LANGUAGES.map(([v, l]) => (

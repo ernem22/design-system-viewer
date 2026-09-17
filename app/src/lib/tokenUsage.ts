@@ -13,9 +13,16 @@
 //
 // Screen sections hold no <Demo> blocks, so the title-keyed map above never
 // covers them: each screen entry's tokens come from a body-source scan
-// (tokensForBody) over the same import.meta.glob sources instead.
+// (tokensForEntry) over the same import.meta.glob sources instead.
 
 const tsxSources = import.meta.glob<string>("../gallery/components/**/*.tsx", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+});
+// The entry list itself, so a section's Body resolves to its function name by
+// source text — Body.name can't be trusted once the build minifies it.
+const entriesSource = import.meta.glob<string>("../gallery/components/index.ts", {
   query: "?raw",
   import: "default",
   eager: true,
@@ -198,7 +205,7 @@ export function tokensForDemo(title: string): string[] {
 
 // Section-level (screen) coverage. Screen entries render a whole Body with no
 // <Demo> blocks, so there is no title to look up — instead scan the Body
-// function's own source (found by name in the same globbed sources above).
+// function's own source (found via the entry list, see ENTRY_BODIES).
 // The lookup map merges every file's top-level functions, so a screen that
 // renders a shared helper from another file (<Avat/>, <SettingRow/>, …)
 // still gets that helper's classes counted — the same one-level expansion
@@ -215,19 +222,28 @@ const ALL_FNS = (() => {
   return merged;
 })();
 
-const BODY_TOKEN_CACHE = new Map<string, string[]>();
+// entry id -> Body function name, read from `{ id: "…", …, Body: XxxBody }`
+// literals in gallery/components/index.ts.
+const ENTRY_BODIES = (() => {
+  const map = new Map<string, string>();
+  for (const src of Object.values(entriesSource)) {
+    for (const m of src.matchAll(/id:\s*"([^"]+)"[^}]*?Body:\s*(\w+)/g)) map.set(m[1], m[2]);
+  }
+  return map;
+})();
 
-/** Tokens a gallery section Body references, by component function name
- * (e.g. `DashboardBody`), sorted; [] if unknown. The GallerySection trigger
+const ENTRY_TOKEN_CACHE = new Map<string, string[]>();
+
+/** Tokens a gallery section's Body references, by entry id (e.g.
+ * `screen-dashboard`), sorted; [] if unknown. The GallerySection trigger
  * scopes these under the entry id, so screens get the same badge / drawer /
  * swap / value-edit flow Demo blocks get. */
-export function tokensForBody(fnName: string): string[] {
-  if (!fnName) return [];
-  const cached = BODY_TOKEN_CACHE.get(fnName);
+export function tokensForEntry(entryId: string): string[] {
+  const cached = ENTRY_TOKEN_CACHE.get(entryId);
   if (cached) return cached;
-  const body = ALL_FNS.get(fnName);
-  if (!body) return [];
-  const tokens = tokensForSlice(body, ALL_FNS, CLASS_TOKENS);
-  BODY_TOKEN_CACHE.set(fnName, tokens);
+  const fnName = ENTRY_BODIES.get(entryId);
+  const body = fnName ? ALL_FNS.get(fnName) : undefined;
+  const tokens = body ? tokensForSlice(body, ALL_FNS, CLASS_TOKENS) : [];
+  ENTRY_TOKEN_CACHE.set(entryId, tokens);
   return tokens;
 }

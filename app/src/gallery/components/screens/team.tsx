@@ -1,5 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { Button, Field } from "../../ui.tsx";
+import { Button, Field, usePortalContainer } from "../../ui.tsx";
 import { Icon } from "../../../lib/icons.tsx";
 import { Avat } from "./screenBits.tsx";
 import "./screens.css";
@@ -11,6 +11,7 @@ const ROWS: [string, string, string][] = [
 ];
 
 export default function TeamBody() {
+  const portalContainer = usePortalContainer();
   return (
     <div style={{ maxWidth: 640, margin: "0 auto" }}>
       <div className="dsv-inline" style={{ justifyContent: "space-between", marginBottom: "var(--space-4)" }}>
@@ -26,7 +27,7 @@ export default function TeamBody() {
               <Icon name="plus" size={14} /> Invite
             </Button>
           </Dialog.Trigger>
-          <Dialog.Portal>
+          <Dialog.Portal container={portalContainer}>
             <Dialog.Overlay className="dsv-overlay" />
             <Dialog.Content className="dsv-modal">
               <Dialog.Title asChild>

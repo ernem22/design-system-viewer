@@ -12,6 +12,9 @@
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,
+    /* vite.config imports the plain-JS core parser — transpile only */
+    "allowJs": true,
+    "checkJs": false,
 
     /* Linting */
     "strict": true,

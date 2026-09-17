@@ -11,7 +11,7 @@ import { createContext, forwardRef, useContext } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { GalleryEntry } from "./registry.ts";
 import { slugify } from "../lib/slug.ts";
-import { tokensForBody } from "../lib/tokenUsage.ts";
+import { tokensForEntry } from "../lib/tokenUsage.ts";
 import { SectionScopeTrigger, TokenScopeTrigger, useScopeStyle, useSectionScopeStyle } from "./tokenInspector.tsx";
 
 /** DOM node Radix `*.Portal` content should mount into instead of
@@ -26,6 +26,13 @@ export const PortalContainerContext = createContext<HTMLElement | undefined>(und
 export function usePortalContainer() {
   return useContext(PortalContainerContext);
 }
+
+/** True inside a Compare column. The token inspector (badges, scoped swaps)
+   is Preview-only — an edit there would be ambiguous about which column it
+   targets — and Compare renders the same Bodies once per column, so Demo
+   ids would collide too. Legacy got this for free from its missing context
+   provider; this is the explicit equivalent. Rendering mode, not state. */
+export const InCompareContext = createContext(false);
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "solid" | "soft" | "outline" | "ghost" | "danger";
@@ -76,31 +83,38 @@ const SectionIdContext = createContext("");
 
 export function Demo({ title, children }: { title: string; children: ReactNode }) {
   const sectionId = useContext(SectionIdContext);
+  const inCompare = useContext(InCompareContext);
   const id = `${sectionId}-${slugify(title)}`;
   // Per-demo token swaps resolve through this node's own custom properties
   // (see tokenInspector.tsx) — descendants inherit them, siblings don't.
   const swapStyle = useScopeStyle(title);
   return (
-    <div className="dsv-block" id={id} data-demo-title={title} style={swapStyle}>
+    <div
+      className="dsv-block"
+      id={inCompare ? undefined : id}
+      data-demo-title={inCompare ? undefined : title}
+      style={inCompare ? undefined : swapStyle}
+    >
       <div className="dsv-block-head">
         <h3>{title}</h3>
-        <TokenScopeTrigger title={title} />
+        {!inCompare && <TokenScopeTrigger title={title} />}
       </div>
       <div className="dsv-row">{children}</div>
     </div>
   );
 }
 
-export function GallerySection({ id, label, desc, Body }: GalleryEntry) {
-  // Body-name lookup in the same globbed sources tokenUsage already scans —
-  // no per-section registry to edit when a screen is added. The scope id is
-  // the stable entry id (not a slugified title), matching the legacy
-  // tokensForScreen keying; swaps land on this node so they inherit across
-  // the whole Body without leaking into sibling sections.
-  const tokens = tokensForBody((Body as unknown as { name?: string }).name ?? "");
+export function GallerySection({ id, label, desc, Body, hidden = false }: GalleryEntry & { hidden?: boolean }) {
+  // Keyed by entry id, not Body.name (minified in production builds). The
+  // scope id is the same stable id, matching the legacy tokensForScreen
+  // keying; swaps land on this node so they inherit across the whole Body
+  // without leaking into sibling sections.
+  const tokens = tokensForEntry(id);
   const swapStyle = useSectionScopeStyle(id);
   return (
-    <section className="dsv-section" id={id} style={swapStyle}>
+    // Search hides (not unmounts) non-matching sections: the rail outline is
+    // read from this DOM once, and demo state survives a query change.
+    <section className="dsv-section" id={id} style={swapStyle} hidden={hidden}>
       <div className="dsv-section-head">
         <h2>{label}</h2>
         <SectionScopeTrigger id={id} title={label} tokens={tokens} />

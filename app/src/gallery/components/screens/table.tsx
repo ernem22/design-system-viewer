@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Button, Field } from "../../ui.tsx";
+import { Button, Field, usePortalContainer } from "../../ui.tsx";
 import { Icon } from "../../../lib/icons.tsx";
 import "./screens.css";
 
@@ -16,6 +16,7 @@ const ROWS: [string, string, string, string][] = [
 const BADGE: Record<string, string> = { Paid: "success", Pending: "warning", Overdue: "danger" };
 
 export default function TableBody() {
+  const portalContainer = usePortalContainer();
   return (
     <div className="dsv-card" style={{ padding: 0, overflow: "hidden" }}>
       <div
@@ -48,7 +49,7 @@ export default function TableBody() {
               <Icon name="plus" size={14} /> Invoice
             </Button>
           </Dialog.Trigger>
-          <Dialog.Portal>
+          <Dialog.Portal container={portalContainer}>
             <Dialog.Overlay className="dsv-overlay" />
             <Dialog.Content className="dsv-modal">
               <Dialog.Title asChild>
@@ -102,7 +103,7 @@ export default function TableBody() {
                         <Icon name="dots" size={14} />
                       </Button>
                     </DropdownMenu.Trigger>
-                    <DropdownMenu.Portal>
+                    <DropdownMenu.Portal container={portalContainer}>
                       <DropdownMenu.Content className="dsv-menu" align="end" sideOffset={4}>
                         <DropdownMenu.Item className="dsv-menu-item">View</DropdownMenu.Item>
                         <DropdownMenu.Item className="dsv-menu-item">Copy</DropdownMenu.Item>

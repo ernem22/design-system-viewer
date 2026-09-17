@@ -7,7 +7,7 @@
 // (private tab, disabled site data, etc.) this silently falls back to
 // `defaultOpen` — the panel's operation shouldn't depend on it.
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 export type PanelStorageKey = "dsv.app.rail" | "dsv.app.props";
 
@@ -32,16 +32,23 @@ export function writePanelOpen(key: PanelStorageKey, open: boolean): void {
 
 /** Persisted panel open/close state. `App` uses this for both panels
  *  (toggles live in the topbar, state flows down to `Rail`/`Props` as props):
- *  restored via `readPanelOpen` on first render, `toggle` writes every
- *  change to both state and localStorage. */
-export function usePanelOpen(key: PanelStorageKey, defaultOpen = true): [boolean, () => void] {
+ *  restored via `readPanelOpen` on first render; `toggle` and `reveal` write
+ *  every change to both state and localStorage. */
+export function usePanelOpen(
+  key: PanelStorageKey,
+  defaultOpen = true,
+): [open: boolean, toggle: () => void, reveal: () => void] {
   const [open, setOpen] = useState(() => readPanelOpen(key, defaultOpen));
-  const toggle = () => {
+  const toggle = useCallback(() => {
     setOpen((v) => {
       const next = !v;
       writePanelOpen(key, next);
       return next;
     });
-  };
-  return [open, toggle];
+  }, [key]);
+  const reveal = useCallback(() => {
+    writePanelOpen(key, true);
+    setOpen(true);
+  }, [key]);
+  return [open, toggle, reveal];
 }
