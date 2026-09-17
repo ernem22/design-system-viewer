@@ -1,5 +1,5 @@
 import * as Checkbox from "@radix-ui/react-checkbox";
-import { Separator } from "@radix-ui/react-separator";
+import * as Separator from "@radix-ui/react-separator";
 import { Button, Field } from "../../ui.tsx";
 import { Icon } from "../../../lib/icons.tsx";
 import "./screens.css";
@@ -73,7 +73,7 @@ export default function CheckoutBody() {
             <dt>VAT 20%</dt>
             <dd>₺50.40</dd>
           </dl>
-          <Separator className="dsv-sep" />
+          <Separator.Root className="dsv-sep" />
           <div
             className="dsv-inline"
             style={{ justifyContent: "space-between", fontWeight: "var(--font-weight-semibold)" }}

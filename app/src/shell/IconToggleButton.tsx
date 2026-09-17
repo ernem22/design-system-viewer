@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Toggle } from "@radix-ui/react-toggle";
+import * as Toggle from "@radix-ui/react-toggle";
 
 export interface IconToggleButtonProps {
   pressed: boolean;
@@ -16,8 +16,8 @@ export interface IconToggleButtonProps {
 export default function IconToggleButton({ pressed, onPressedChange, icon, labelWhenOn, labelWhenOff }: IconToggleButtonProps) {
   const label = pressed ? labelWhenOn : labelWhenOff;
   return (
-    <Toggle className="app-iconbtn" pressed={pressed} onPressedChange={onPressedChange} title={label} aria-label={label}>
+    <Toggle.Root className="app-iconbtn" pressed={pressed} onPressedChange={onPressedChange} title={label} aria-label={label}>
       {icon}
-    </Toggle>
+    </Toggle.Root>
   );
 }

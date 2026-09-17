@@ -71,7 +71,7 @@
 
 .dsv-hero-orb--b {
   width: 380px; height: 380px; bottom: -180px; right: -100px; opacity: 0.45;
-  background: radial-gradient(circle, var(--color-accent-secondary, #f472b6), transparent 65%);
+  background: radial-gradient(circle, var(--color-accent-secondary), transparent 65%);
 }
 
 .dsv-hero-panel .dsv-display { color: #fff; text-wrap: balance; }
@@ -79,7 +79,7 @@
 .dsv-hero-panel .dsv-lede { color: rgb(255 255 255 / 0.88); text-wrap: pretty; }
 
 .dsv-hero-cta {
-  background: #fff; color: var(--color-text, #111);
+  background: #fff; color: var(--color-text);
   box-shadow: var(--glow-md); transition: box-shadow var(--motion-page), transform var(--motion-page);
 }
 

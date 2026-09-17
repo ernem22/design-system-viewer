@@ -36,8 +36,9 @@
 .cmp-seg button[data-state="on"] { background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-sm); }
 
 .cmp-cols {
+  --cmp-n: 2;
   flex: 1; display: grid; gap: var(--space-4);
-  grid-template-columns: repeat(var(--cmp-n, 2), minmax(240px, 1fr));
+  grid-template-columns: repeat(var(--cmp-n), minmax(240px, 1fr));
   padding: var(--space-5); align-items: start; overflow-x: auto;
 }
 .cmp-cols[data-count="2"] { --cmp-n: 2; }

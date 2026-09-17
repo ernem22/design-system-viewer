@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { AspectRatio } from "@radix-ui/react-aspect-ratio";
+import * as AspectRatio from "@radix-ui/react-aspect-ratio";
 import * as Accordion from "@radix-ui/react-accordion";
 import * as Avatar from "@radix-ui/react-avatar";
 import * as Collapsible from "@radix-ui/react-collapsible";
 import * as ScrollArea from "@radix-ui/react-scroll-area";
-import { Separator } from "@radix-ui/react-separator";
+import * as Separator from "@radix-ui/react-separator";
 import { Button, Demo } from "../ui.tsx";
 import { Icon } from "../../lib/icons.tsx";
 import "./layout.css";
@@ -89,12 +89,12 @@ export default function LayoutBody() {
         <div className="dsv-sep-demo">
           <div className="dsv-sep-demo-title">Design System Viewer</div>
           <div className="dsv-muted dsv-sep-demo-subtitle">Visualize tokens</div>
-          <Separator className="dsv-sep" />
+          <Separator.Root className="dsv-sep" />
           <div className="dsv-inline dsv-sep-demo-links">
             <span>Blog</span>
-            <Separator className="dsv-sep" orientation="vertical" decorative />
+            <Separator.Root className="dsv-sep" orientation="vertical" decorative />
             <span>Docs</span>
-            <Separator className="dsv-sep" orientation="vertical" decorative />
+            <Separator.Root className="dsv-sep" orientation="vertical" decorative />
             <span>Source</span>
           </div>
           <div className="dsv-inline dsv-sep-demo-ramp">
@@ -228,7 +228,7 @@ export default function LayoutBody() {
 
       <Demo title="Aspect Ratio (16:9)">
         <div className="dsv-aspect">
-          <AspectRatio ratio={16 / 9}>
+          <AspectRatio.Root ratio={16 / 9}>
             <img
               src="https://images.unsplash.com/photo-1503264116251-35a269479413?w=400&q=60"
               alt=""
@@ -238,7 +238,7 @@ export default function LayoutBody() {
                 e.currentTarget.style.display = "none";
               }}
             />
-          </AspectRatio>
+          </AspectRatio.Root>
         </div>
       </Demo>
     </>

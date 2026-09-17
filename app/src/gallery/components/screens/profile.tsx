@@ -1,4 +1,4 @@
-import { Separator } from "@radix-ui/react-separator";
+import * as Separator from "@radix-ui/react-separator";
 import { Button } from "../../ui.tsx";
 import { Avat } from "./screenBits.tsx";
 import "./screens.css";
@@ -45,7 +45,7 @@ export default function ProfileBody() {
             <span className="dsv-tag">FR</span>
           </dd>
         </dl>
-        <Separator className="dsv-sep" />
+        <Separator.Root className="dsv-sep" />
         <div
           style={{
             fontSize: "var(--font-size-sm)",
