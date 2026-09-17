@@ -480,7 +480,13 @@ Gaps.
   time. Added 2026-09-18 (commits `d73f482`, `2982eec`); all three commands
   verified green locally at that point.
 - The job's `name: app` **is** the required-status-check context string.
-  Renaming the job silently un-gates the branch.
+  Verified on PR #47: `gh pr checks` reports the context as `app`. Renaming the
+  job silently un-gates the branch.
+- The workflow only has to exist on the **base** branch. A `pull_request` event
+  evaluates workflows from the PR's merge ref (base + head), so a Coder branch
+  cut before the workflow landed is still checked — verified on PR #48, whose
+  head predates `pr-check.yml` and was checked anyway. Do not rebase an
+  in-flight branch just to pick up a CI change.
 - PR opens after the Coder pushes. Merge requires **CI green** (`gh pr checks
   <pr>`) **and Reviewer PASS**. Both, always.
 - Prefer `gh pr merge --squash --auto` so GitHub merges when checks pass and
@@ -583,10 +589,35 @@ Cleanup is three distinct steps, not one:
       the pushed commit. Releasing and closing do **not** remove the worktree
       from disk.
 - [ ] If the `worktree rm` result includes `preservedBranch`, git refused to
-      delete the branch. Compare `git log --oneline -1 <branch>` against
-      `origin/<branch>`; if identical (no unique local commits),
-      `git branch -D <branch>`. Otherwise dangling local branches accumulate
-      across a long session.
+      delete the branch. **Do not use an ancestry or SHA comparison to decide
+      whether it is safe to delete** — this pipeline squash-merges, so the
+      merge commit on the base branch is a brand-new SHA and the branch's own
+      commit is never an ancestor of it. `git log -1 <branch>` vs
+      `origin/<branch>` therefore *never* matches after a squash merge, and a
+      rule built on it would preserve every branch forever. Ask the question
+      that actually matters instead: is the PR for this branch merged?
+
+      ```
+      gh pr list --head <branch> --state merged --json number,mergedAt
+      ```
+
+      A merged PR means the content landed regardless of SHA — then
+      `git branch -D <branch>` (force, because `-d` applies the same
+      ancestry test and will refuse) and
+      `git push origin --delete <branch>`.
+- [ ] **Delete the remote branch too.** `gh pr merge --delete-branch` does not
+      always get there: it deletes the remote branch *after* trying to switch
+      the local checkout, and in a worktree setup that switch fails
+      (`'<base>' is already checked out at ...`), taking the branch deletion
+      down with it. Verified on PR #47. When that happens the merge itself has
+      still succeeded — check `gh pr view <n> --json state` before treating it
+      as a failure — and the remote branch needs an explicit
+      `git push origin --delete <branch>`.
+- [ ] This has already been missed for a while: `ernem22/coder-1`,
+      `coder-2b`, `coder-3`, `coder-4`, `coder-5`, `fixer-1`,
+      `app-coder-9d668e`, `fix-isref-nullish` and three `issue-*` branches are
+      all still on the remote from earlier cycles. Drain them the same way —
+      merged PR → delete; no PR → leave it and ask.
 
 ## Failure Ledger
 
@@ -605,7 +636,9 @@ the rules do not have to carry their narrative.
 | Bare `git config user.name` in one worktree overwrote every worktree's identity; a Coder commit landed as the coordinator | `--worktree` scope always; `extensions.worktreeConfig true` |
 | Dispatch settled and next stage started, but `worker-release` never called — terminal leaked | Ack and release are one atomic pair |
 | Worktree left on disk after release + terminal close | `worktree rm` is a separate third step |
-| `worktree rm` preserved `ernem22/coder-3` and `coder-5` branches | Check `preservedBranch`, then `git branch -D` when no unique commits |
+| `worktree rm` preserved `ernem22/coder-3` and `coder-5` branches | Check `preservedBranch`, then decide by merged-PR state, not by SHA ancestry |
+| Squash merge made the branch's commit a non-ancestor, so an ancestry check said "unique commits, do not delete" for fully-merged work | Ask `gh pr list --head <branch> --state merged`, never `git log -1` vs `origin/<branch>` |
+| `gh pr merge --delete-branch` left the remote branch alive: the local checkout switch failed first in a worktree setup | Verify `state: MERGED` separately; delete the remote branch explicitly |
 | Tester dispatched to run `tsc`/`npm test` — a worker spent on a deterministic check it could misreport | Division of Labour; CI owns machine-decidable checks |
 | Root `npm test` green while testing zero `app/` code | All commands `--prefix app`, stated in every spec |
 | `.tsx` test with a failing assertion silently not collected; suite exited 0 | `app/` Facts: `.ts` only, node env, `toasts.test.ts` as template |
