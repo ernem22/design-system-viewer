@@ -378,14 +378,75 @@ issue (`gh issue create`, labelled `agent` + `bug`/`enhancement` as
 appropriate) for a task it identifies — not to write a local `NEXT_TASK.md`
 that only this run can see (a prior cycle's NEXT_TASK.md-in-worktree approach
 does not survive worktree cleanup and is not discoverable by future runs;
-GitHub Issues are the durable, cross-run store). When a Coder starts work on
-an issue, comment on it (`gh issue comment <n> --body "..."`) so a concurrent
-or future run does not duplicate the pick. When the fix's PR merges, close
-the issue with a reference (`gh pr merge ... ` already auto-closes via a
-`Closes #<n>` line in the PR body — always include that line in every Coder
-PR body). An Orca Task whose spec merely says `MISSING` or targets a
-since-superseded local file (an artifact of a stale worktree, not a GitHub
-issue) is not real backlog — recognize and ignore it.
+GitHub Issues are the durable, cross-run store). An Orca Task whose spec
+merely says `MISSING` or targets a since-superseded local file (an artifact
+of a stale worktree, not a GitHub issue) is not real backlog — recognize and
+ignore it.
+
+## Issue-Label State Machine (parallel-safe)
+
+Coordination across parallel Coder/Reviewer/Tester dispatches happens through
+GitHub issue labels, not through Hermes holding it all in one turn's context.
+This lets multiple issues move through the pipeline concurrently without
+Hermes serializing every stage of every issue:
+
+```
+(open, unlabeled agent work) → coder picks it up, comments "claimed"
+  → Coder pushes branch + opens PR with "Closes #<n>", labels the issue
+    `needs-review`, removes any `in-progress` label
+  → Hermes scans open issues for `needs-review` label → dispatches a
+    Reviewer worktree against that issue's PR branch
+  → Reviewer PASS: Hermes swaps the label `needs-review` → `needs-test`
+  → Reviewer FAIL: Hermes creates a Fixer Task referencing the PR/issue,
+    leaves label at `needs-review` (or a `changes-requested` label if you
+    add one) so it re-enters the Reviewer queue after the Fixer pushes
+  → Hermes scans open issues for `needs-test` label → dispatches a Tester
+    worktree (report-only, per the Tester role rules above) against that PR
+    branch
+  → Tester PASS: Hermes opens/finalizes the PR merge, issue auto-closes via
+    "Closes #<n>", labels are irrelevant post-merge (issue is closed)
+  → Tester FAIL: Hermes creates a Fixer Task with the exact failing output,
+    label goes back to `needs-review` (a Fixer's patch should be re-reviewed
+    before re-testing, not trusted blind)
+```
+
+Label names to actually use on this repo (create them once if missing via
+`gh label create <name> --color <hex>` — check `gh label list` first):
+`needs-review`, `needs-test`, `in-progress` (optional, marks an issue with an
+active Coder dispatch so a second concurrent cycle doesn't double-claim it).
+
+**Parallel dispatch is expected, not just tolerated.** Hermes may have
+multiple Coder/Reviewer/Tester worktrees running concurrently against
+different issues — one issue's Coder, another issue's Reviewer, a third
+issue's Tester, all in-flight at once. Each dispatch still follows the fixed
+per-worker call budget (worktree create → terminal create → terminal wait →
+worker-start → check --wait → worker-release); running several of these
+budgets concurrently across different issues is the intended way to keep
+throughput up without violating any single-worker rule in this document.
+When waiting on multiple dispatches, poll/check each dispatch's run
+messages and route each settlement to its own next stage independently —
+do not force a strict single-issue-at-a-time serialization once more than
+one issue has entered the pipeline.
+
+**The Coder — not Hermes — flips `needs-review`/`needs-test` labels**,
+because the Coder is the one that knows its own PR is ready; encode the
+exact `gh issue edit <n> --add-label needs-review --remove-label
+in-progress` (or equivalent) command in every Coder/Fixer Task spec's commit
+instructions, immediately after the push step. Hermes's job is to *scan* for
+those labels each cycle (`gh issue list --state open --label needs-review`,
+`--label needs-test`) and dispatch the next role — Hermes does not manually
+flip a label a worker was supposed to flip, except as a corrective action if
+a worker's `worker_done` claims the flip but the label is verifiably still
+missing (same class of integrity check as the SHA-diff check elsewhere in
+this document).
+
+**Tester must actually test — no shortcuts.** Do not accept a Tester
+`worker_done` that skips actually invoking `npm run test`/`npm run build` in
+favor of only reading the diff or trusting the Reviewer's verdict. If a
+Tester's `body` doesn't show real command output (exact pass/fail counts,
+or the literal failing error text), treat it the same as a missing
+`worker_done` — nudge/re-dispatch, don't advance the stage on an unverified
+claim.
 
 - Coder/Fixer commits and pushes its own branch — Reviewer/Tester worktrees
   cannot see uncommitted changes in a sibling worktree; `--base-branch` off a
