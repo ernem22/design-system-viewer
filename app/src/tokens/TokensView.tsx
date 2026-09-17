@@ -80,7 +80,6 @@ export function TokensView({
         }
         onDelete={() => {
           onDelete(system.slug);
-          pushToast("System deleted", "ok");
         }}
       />
       {schemaMode ? (
