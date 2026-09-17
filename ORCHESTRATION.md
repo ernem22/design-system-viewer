@@ -536,6 +536,33 @@ Before advancing a stage:
 - [ ] Settlement message received with a structured status line.
 - [ ] `status: succeeded`/`pass` — advance. `failed` — fallback per policy.
       Ambiguous — escalate, do not guess.
+- [ ] **`worker-release` called for every settled dispatch, immediately after
+      ack** — a `worker_done`/settled dispatch is not fully closed out just
+      because its message was read and the next stage was dispatched. This
+      was missed once in this project: task_31c9d19e6a6b settled with an
+      accepted `worker_done` (PR opened, issue label correctly flipped to
+      `needs-review`) and the next-stage worker was dispatched, but
+      `worker-release` was never called for that dispatch — its terminal sat
+      leaked (`state: retained, reason: external_terminal` never even
+      requested) while the run moved on. Treat "ack the settlement" and
+      "release the dispatch" as one atomic pair of calls, not two
+      independently-optional steps — do the release in the same batch as the
+      `check --ack` and the integrity check, before starting the next
+      worktree/terminal for the following stage.
+- [ ] **`worker-release`/`terminal close` is not `worktree rm`.** Releasing
+      the dispatch and closing its terminal do not remove the worktree on
+      disk — that same project's leak was only half-fixed the first pass:
+      the dispatch was released and the terminal closed, but the worktree
+      directory (e.g. `coder-4`) was left behind because no later stage
+      still needed to read from it (its commit had already been branched
+      off by Reviewer/Tester worktrees). Once a role's worktree has no
+      remaining downstream worktree that still needs its uncommitted state
+      (i.e. its work is already committed+pushed and every next-stage
+      worktree was created from that pushed commit, not from this one), run
+      `orca worktree rm --worktree "id:<repo>::<path>" --force` for it in the
+      same cleanup pass as the release/terminal-close — don't leave stale
+      worktrees accumulating on disk across a long-running continuous
+      session.
 
 Before merge:
 
