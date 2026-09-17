@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as Switch from "@radix-ui/react-switch";
 import Shell, { type AppTab, type ShellTab } from "./shell/Shell.tsx";
+import ErrorBoundary from "./shell/ErrorBoundary.tsx";
 import Brand from "./shell/Brand.tsx";
 import IconToggleButton from "./shell/IconToggleButton.tsx";
 import IconActionButton from "./shell/IconActionButton.tsx";
@@ -313,64 +314,66 @@ function App() {
 
   return (
     <>
-      <Shell
-        brand={
-          <>
-            <IconToggleButton
-              pressed={railOpen}
-              onPressedChange={toggleRail}
-              icon={<Icon name="panelLeft" size={15} />}
-              labelWhenOn="Hide sidebar"
-              labelWhenOff="Show sidebar"
+      <ErrorBoundary pushToast={pushToast}>
+        <Shell
+          brand={
+            <>
+              <IconToggleButton
+                pressed={railOpen}
+                onPressedChange={toggleRail}
+                icon={<Icon name="panelLeft" size={15} />}
+                labelWhenOn="Hide sidebar"
+                labelWhenOff="Show sidebar"
+              />
+              <Brand />
+            </>
+          }
+          systemSwitcher={
+            <SystemSwitcher
+              systems={systems}
+              active={active}
+              activeSlug={activeSlug}
+              onSelect={setActiveSlug}
+              onAddClick={() => openAdd()}
             />
-            <Brand />
-          </>
-        }
-        systemSwitcher={
-          <SystemSwitcher
-            systems={systems}
-            active={active}
-            activeSlug={activeSlug}
-            onSelect={setActiveSlug}
-            onAddClick={() => openAdd()}
-          />
-        }
-        actions={
-          <>
-            {tab === "preview" && swapCount > 0 && (
-              <button
-                type="button"
-                className="app-pill"
-                onClick={clearAllSwaps}
-                title="Reset every scoped token swap"
-              >
-                {swapCount} swap{swapCount === 1 ? "" : "s"}
-                <span className="app-pill-reset">Reset</span>
-              </button>
-            )}
-            {tab !== "compare" && hasDark && (
-              <label className="app-dark" title="Toggle the system's dark variant">
-                <Switch.Root className="app-dark-switch" checked={dark} onCheckedChange={setDark}>
-                  <Switch.Thumb className="app-dark-thumb" />
-                </Switch.Root>
-                Dark
-              </label>
-            )}
-            {tab === "preview" && <SectionSearch value={query} onChange={setQuery} />}
-            <IconActionButton onClick={copyLink} icon={<Icon name="link" size={15} />} label="Copy link to this view" />
-            <IconToggleButton
-              pressed={propsOpen}
-              onPressedChange={toggleProps}
-              icon={<Icon name="panelRight" size={15} />}
-              labelWhenOn="Hide properties panel"
-              labelWhenOff="Show properties panel"
-            />
-          </>
-        }
-        tabs={tabs}
-        tab={tab}
-        onTabChange={setTab}
-      />
+          }
+          actions={
+            <>
+              {tab === "preview" && swapCount > 0 && (
+                <button
+                  type="button"
+                  className="app-pill"
+                  onClick={clearAllSwaps}
+                  title="Reset every scoped token swap"
+                >
+                  {swapCount} swap{swapCount === 1 ? "" : "s"}
+                  <span className="app-pill-reset">Reset</span>
+                </button>
+              )}
+              {tab !== "compare" && hasDark && (
+                <label className="app-dark" title="Toggle the system's dark variant">
+                  <Switch.Root className="app-dark-switch" checked={dark} onCheckedChange={setDark}>
+                    <Switch.Thumb className="app-dark-thumb" />
+                  </Switch.Root>
+                  Dark
+                </label>
+              )}
+              {tab === "preview" && <SectionSearch value={query} onChange={setQuery} />}
+              <IconActionButton onClick={copyLink} icon={<Icon name="link" size={15} />} label="Copy link to this view" />
+              <IconToggleButton
+                pressed={propsOpen}
+                onPressedChange={toggleProps}
+                icon={<Icon name="panelRight" size={15} />}
+                labelWhenOn="Hide properties panel"
+                labelWhenOff="Show properties panel"
+              />
+            </>
+          }
+          tabs={tabs}
+          tab={tab}
+          onTabChange={setTab}
+        />
+      </ErrorBoundary>
       <AddSystemDialog
         open={addOpen}
         initialCss={addCss}

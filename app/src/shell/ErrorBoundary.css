@@ -1,0 +1,45 @@
+/* Fallback UI for the chrome-level ErrorBoundary. Uses only existing
+   design tokens and the shared dsv-btn classes — no inline styles. */
+
+.app-error {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  padding: var(--space-8);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.app-error-card {
+  max-width: var(--space-96);
+  width: 100%;
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  text-align: center;
+}
+
+.app-error-title {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text);
+}
+
+.app-error-message {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-secondary);
+}
+
+.app-error-details {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--color-danger-text);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
