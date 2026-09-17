@@ -653,3 +653,71 @@
 .app-dark-switch[data-state="checked"] .app-dark-thumb {
   transform: translateX(14px);
 }
+
+/* ── narrow viewport: rails become overlay drawers ── */
+
+/* Below this width the two fixed-width rails (208px + 300px) would squeeze
+   .app-main to near-zero when both are open, so they stop participating in
+   the grid and float above main instead. Open/close state (topbar toggles +
+   localStorage) is untouched — the same data-open clips just render as
+   drawers down here, so Rail/CompareRail/Props content keeps working. */
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-areas:
+      "topbar"
+      "main";
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-rail,
+  .app-props {
+    position: absolute;
+    top: var(--app-topbar-height);
+    bottom: 0;
+    z-index: 40;
+    border: none;
+    background: transparent;
+    /* Closed drawers (zero-width clips) must not steal main's clicks. */
+    pointer-events: none;
+  }
+
+  .app-rail {
+    left: 0;
+  }
+
+  .app-props {
+    right: 0;
+  }
+
+  .app-rail-clip,
+  .app-props-clip {
+    background: var(--color-bg);
+    pointer-events: auto;
+  }
+
+  .app-rail-clip {
+    max-width: 85vw;
+    border-right: 1px solid var(--color-divider);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .app-props-clip {
+    max-width: 85vw;
+    border-left: 1px solid var(--color-divider);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .app-rail-inner,
+  .app-props-inner {
+    max-width: 85vw;
+  }
+
+  /* A closed clip is zero-width — drop its edge/shadow so no 1px seam
+     floats over main. (Parent can't be targeted from the child's
+     data-open without :has, so the border lives on the clip down here.) */
+  .app-rail-clip[data-open="false"],
+  .app-props-clip[data-open="false"] {
+    border-color: transparent;
+    box-shadow: none;
+  }
+}
