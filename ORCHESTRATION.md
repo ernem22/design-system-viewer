@@ -555,7 +555,18 @@ and let it choose on its own judgment.
 - **Nothing reaches the base branch except through a PR, including this file.**
   `enforce_admins: true` means required checks apply to admins too, so a direct
   `git push` to `refactor/full-react-migration` is rejected — a pushed commit
-  has no check run on it yet. Coordinator infrastructure edits therefore take
+  has no check run on it yet.
+
+  Status of that last claim: it follows from GitHub's documented behaviour for
+  required status checks under `enforce_admins`, and it is **not empirically
+  verified here** — deliberately. Two ways of checking it both fail on purpose.
+  `git push --dry-run` reports the ref update it would make without consulting
+  the server's protection hook, so it prints a success line either way and
+  settles nothing; one was run and it proved nothing in either direction. And
+  an actual direct push *is* an attempt to bypass the CI gate — not something
+  to do to satisfy curiosity. Treat the rule as binding, route everything
+  through a PR, and if a direct push ever does land, record it here as a
+  finding — discovered by accident, not by trying. Coordinator infrastructure edits therefore take
   the same route as app changes: branch, push, PR, green `app` check, squash
   merge. This is a deliberate cost of making the gate binding, not an
   oversight.
