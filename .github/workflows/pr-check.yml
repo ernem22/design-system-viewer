@@ -16,6 +16,9 @@ concurrency:
 
 jobs:
   check:
+    # Explicit name: this string is the required-status-check context on
+    # refactor/full-react-migration. Renaming it silently un-gates the branch.
+    name: app
     runs-on: ubuntu-latest
     defaults:
       run:
