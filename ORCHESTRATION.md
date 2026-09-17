@@ -489,10 +489,13 @@ Gaps.
   in-flight branch just to pick up a CI change.
 - PR opens after the Coder pushes. Merge requires **CI green** (`gh pr checks
   <pr>`) **and Reviewer PASS**. Both, always.
-- Prefer `gh pr merge --squash --auto` so GitHub merges when checks pass and
-  Hermes does not block. **Auto-merge is currently disabled on this repo**
-  (`allow_auto_merge: false`), so until it is enabled Hermes must wait on
-  `gh pr checks <pr> --watch` before `gh pr merge --squash`.
+- Use `gh pr merge --squash --auto`. Auto-merge is enabled on this repo, so
+  GitHub merges the PR itself the moment the `app` check goes green and Hermes
+  does not block waiting for it. Only fall back to
+  `gh pr checks <pr> --watch` + `gh pr merge --squash` if `--auto` is refused.
+- `delete_branch_on_merge` is enabled, so the merged head branch is deleted
+  automatically. The explicit remote-branch deletion in the cleanup checklist
+  is now only needed for branches abandoned without a merge.
 - Squash-merge unless the repo's convention says otherwise. All merged PRs base
   onto `refactor/full-react-migration`.
 - After the merge, `gh issue close <n>` for the issue the PR resolves. GitHub
@@ -549,6 +552,13 @@ and let it choose on its own judgment.
 - Never write directly to the coordinator/main worktree — all Coder/Fixer work
   happens in a dedicated child worktree. Coordinator-owned infrastructure
   (this file, workflows) is the exception and uses the human identity.
+- **Nothing reaches the base branch except through a PR, including this file.**
+  `enforce_admins: true` means required checks apply to admins too, so a direct
+  `git push` to `refactor/full-react-migration` is rejected — a pushed commit
+  has no check run on it yet. Coordinator infrastructure edits therefore take
+  the same route as app changes: branch, push, PR, green `app` check, squash
+  merge. This is a deliberate cost of making the gate binding, not an
+  oversight.
 - Never delete or reset uncommitted work in a worktree Hermes did not create
   for this run.
 - Never fabricate a model ID, a test result, or a "verified" claim. Every
@@ -639,6 +649,7 @@ the rules do not have to carry their narrative.
 | `worktree rm` preserved `ernem22/coder-3` and `coder-5` branches | Check `preservedBranch`, then decide by merged-PR state, not by SHA ancestry |
 | Squash merge made the branch's commit a non-ancestor, so an ancestry check said "unique commits, do not delete" for fully-merged work | Ask `gh pr list --head <branch> --state merged`, never `git log -1` vs `origin/<branch>` |
 | `gh pr merge --delete-branch` left the remote branch alive: the local checkout switch failed first in a worktree setup | Verify `state: MERGED` separately; delete the remote branch explicitly |
+| Protection was set with `enforce_admins: false` while the coordinator is a repo admin — the gate did not bind the actor it existed to bind | `enforce_admins: true`; the gate is only real when the merging actor cannot bypass it |
 | Tester dispatched to run `tsc`/`npm test` — a worker spent on a deterministic check it could misreport | Division of Labour; CI owns machine-decidable checks |
 | Root `npm test` green while testing zero `app/` code | All commands `--prefix app`, stated in every spec |
 | `.tsx` test with a failing assertion silently not collected; suite exited 0 | `app/` Facts: `.ts` only, node env, `toasts.test.ts` as template |
@@ -671,14 +682,17 @@ Real, unfixed, and not to be papered over.
   Not installed yet: adding a hook that rejects commits mid-run would surface
   to a worker as an unexplained commit failure, so it needs a quiet moment and
   a Task spec that mentions it.
-- **Branch protection is not enabled.** `refactor/full-react-migration` is
-  unprotected, so the CI gate is advisory: nothing stops a merge over a red
-  check except Hermes obeying Merge Policy. Note that the coordinator is a repo
-  admin, so `enforce_admins: false` protection would also be advisory for
-  Hermes — gating Hermes for real requires `enforce_admins: true`. Recommended
-  order: enable auto-merge, set protection with context `app` and
-  `enforce_admins: false`, confirm on the first real PR that the context name
-  matches, then flip `enforce_admins` to `true`.
+- ~~Branch protection is not enabled.~~ **Resolved.**
+  `refactor/full-react-migration` is protected with required context `app`,
+  `strict: false`, and `enforce_admins: true` — verified live. Because the
+  coordinator is a repo admin, `enforce_admins: true` is what makes the gate
+  binding on Hermes rather than advisory; with it `false` the gate would not
+  constrain the one actor it exists to constrain.
+
+  If CI ever breaks for a reason unrelated to the change under test, the
+  pipeline jams. The one-command release valve is
+  `gh api -X DELETE repos/<owner>/<repo>/branches/refactor%2Ffull-react-migration/protection/enforce_admins`,
+  re-enabled with `-X POST` on the same path. Prefer fixing CI.
 - **Token/tool-call savings** in this document are measured only for the one
   comparison run in this project's history. They are not a guaranteed
   percentage for future tasks.
