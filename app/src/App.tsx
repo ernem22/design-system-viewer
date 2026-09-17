@@ -154,9 +154,19 @@ function App() {
   );
   const dragging = useCssFileDrop(importFile);
 
+  // Previously applied token names — removed individually when they drop
+  // out of the active system so stale props never accumulate on <html>.
+  const appliedTokensRef = useRef<string[]>([]);
   useLayoutEffect(() => {
     const tokens = resolveSystemTokens(active, darkOn);
-    document.documentElement.style.cssText = tokens.map((t) => `${t.name}:${t.value};`).join("");
+    const style = document.documentElement.style;
+    const names = new Set(tokens.map((t) => t.name));
+    // Drop props from the previous system/variant that the new list no
+    // longer defines; anything else on style (unrelated inline styles)
+    // is left untouched — bulk cssText assignment would wipe it.
+    for (const n of appliedTokensRef.current) if (!names.has(n)) style.removeProperty(n);
+    for (const t of tokens) style.setProperty(t.name, t.value);
+    appliedTokensRef.current = tokens.map((t) => t.name);
   }, [active, darkOn]);
 
   useEffect(() => {
