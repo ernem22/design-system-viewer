@@ -87,10 +87,10 @@ project's measurement run.
 
 | Role | Does | Does not |
 |---|---|---|
-| Task Creator | Inspects `app/` inside its fixed scope, proposes one small independent task, writes it (e.g. `NEXT_TASK.md`) | Implement anything |
+| Task Creator | Inspects the **whole** of `app/` with no artificial restriction on task type — missing features, bugs, poor/duplicated code, weak test coverage, anything — and proposes one small, independent, well-scoped task; writes it (e.g. `NEXT_TASK.md`) | Implement anything; narrow itself to one category (e.g. "tests only") unless the user explicitly asked for that category this run |
 | Coder | Implements the task in its child worktree, runs the relevant tests itself, commits + pushes | Review or test-suite-wide validation |
 | Reviewer (`--agent plan`) | Read-only diff/code review, returns PASS/FAIL + fix list | Edit any file, implement fixes |
-| Tester | Runs the full test suite (+ type-check) in a fresh worktree off the Coder's pushed branch, may add/adjust test files | Fix production source |
+| Tester | Runs the existing test suite (+ type-check) against the Coder's pushed branch in a fresh worktree, reports exact pass/fail counts and any build/type errors | Write, add, or modify any test or source file — including a "trivial" one-line fix; a discovered failure is reported (`status: failed`, `reason:`, `retryable:`) and routed to a Fixer Task, never patched in place by the Tester itself |
 | Fixer | Applies exactly the fix Reviewer/Tester reported, nothing else | Re-scope or re-design the change |
 
 ## Model Assignment & Fallback
@@ -100,11 +100,32 @@ Verified working IDs (via `opencode models` on this host and live
 
 | Role | Primary | Fallback |
 |---|---|---|
-| Coder | `openrouter/nex-agi/nex-n2.5-pro:free` | `opencode/muse-spark-1.3-contributor-free` |
+| Coder | `opencode/muse-spark-1.3-contributor-free` | `openrouter/nex-agi/nex-n2.5-mini:free` |
 | Reviewer | `opencode/nemotron-3-ultra-free` | `opencode/nemotron-3.5-lightning-free` |
 | Tester | `opencode/nemotron-3.5-lightning-free` | `openrouter/nex-agi/nex-n2.5-mini:free` |
 | Fixer | `opencode/muse-spark-1.3-contributor-free` | `openrouter/nex-agi/nex-n2.5-mini:free` |
 | Task Creator | `opencode/nemotron-3-ultra-free` | `openrouter/openrouter/free` |
+
+`openrouter/nex-agi/nex-n2.5-pro:free` was the original Coder primary but was
+demoted after hitting OpenRouter's daily free-tier cap mid-run
+(`Rate limit exceeded: free-models-per-day`) — it is not banned, just no
+longer the default; only use it if the user explicitly asks for it or if
+every other free-tier option in this table is also rate-limited that day.
+
+**Rate-limit detection (do this on every dispatch, not just on failure):**
+before trusting a `worker_done`, and immediately on any suspiciously fast or
+empty settlement, read the terminal tail once. A rate-limited model prints
+its cap message directly into the OpenCode transcript (verified form:
+`Rate limit exceeded: <bucket-name>. Add N credits to unlock ...`) rather
+than failing the dispatch cleanly — treat that string appearing anywhere in
+the tail as an automatic hard failure for that dispatch, equivalent to
+`worker_done outcome: failed`, and apply the normal Failure & Recovery Policy
+(fresh worktree + fallback model's `opencode.json`, same Task ID, no
+`--retry-of`). Do not wait out the full `check --wait` timeout on a dispatch
+already showing this string; abandon early once caught. There is currently
+no `opencode`/Orca API that reports remaining daily quota ahead of time — the
+only detection mechanism is this transcript string appearing after the
+model has already tried and failed a request.
 
 Model selection mechanism (verified, see the `orca-opencode-worker-pipelines`
 skill for the exact command sequence and its edge cases):
@@ -233,11 +254,27 @@ Encode this line format directly in each Task's spec (the "OBSERVABLE
 ACCEPTANCE" / "OUTPUT" clause) — it is the contract, not a suggestion.
 
 Known gap: `--agent plan` (Reviewer) does not automatically send
-`worker_done` when it finishes talking — verified in this session. If a
-dispatch sits `ready`/`activity: done` after the model has visibly produced
-its verdict, one nudge (`orchestration send --to dispatch:<id>`) is required
-and the worker complies. This is a real per-Reviewer-dispatch cost; it is not
-eliminated by this document, only accounted for.
+`worker_done` when it finishes talking — verified in this session. This is
+NOT limited to Reviewer/plan-mode: in this project, Nemotron-family models
+(`opencode/nemotron-3-ultra-free`, `opencode/nemotron-3.5-lightning-free`) in
+ANY role have repeatedly finished their work, visibly printed their verdict
+or result in the transcript, and then simply stopped without ever calling
+`orchestration send --type worker_done` — observed on Task Creator and
+Reviewer dispatches alike, not just plan-mode. Do not treat this as
+Reviewer-specific.
+
+**Automatic nudge policy (do this without asking the user):** after a
+dispatch has produced **two consecutive** full `check --wait` timeouts with
+no message, read the terminal once (`terminal read --screen`). If the tail
+shows the model has already produced its final answer/verdict and is sitting
+idle (no `⠋ Thinking`/spinner, prompt bar visible, no active tool call), send
+the nudge yourself immediately:
+`orchestration send --to dispatch:<id> --subject "send worker_done" --body "You must now run: orca orchestration send --from <terminal_handle> --dispatch-capability worker --type worker_done --subject ... --body ... --task-id <task_id> --dispatch-id <dispatch_id> --outcome succeeded"`,
+then resume `check --wait`. Do not wait for a third timeout, and do not ask
+the user for permission to nudge — this is routine dispatch housekeeping,
+not a judgment call. If the terminal instead shows active work in progress,
+keep waiting normally; the nudge is only for a genuinely idle-but-unsettled
+worker.
 
 ## State & Context Management
 
@@ -255,15 +292,73 @@ eliminated by this document, only accounted for.
 
 ## Scope Control
 
-Task Creator's spec must state the scope boundary explicitly and literally
-(e.g. "app/ only, not src/core, not preview/") — an unscoped "find something
-small and independent" prompt lets the model choose, which may not match what
-the user meant (this happened once in this project: an unscoped Task Creator
+Task Creator's spec must state the top-level scope boundary explicitly and
+literally (e.g. "app/ only, not src/core, not preview/") — an unscoped "find
+something small and independent" prompt lets the model choose the wrong
+directory (this happened once in this project: an unscoped Task Creator
 picked `src/core` when the user meant `app/`). If a task's target scope is
 ambiguous from the user's request, Hermes asks the user (or blocks/escalates
 in a headless context) rather than guessing a boundary.
 
-## PR & Merge Policy
+**Directory scope is the only boundary Hermes may impose.** Do not also
+constrain *what kind* of task Task Creator proposes (e.g. do not tell it
+"tests only" or "avoid these recently-touched files") unless the user
+explicitly asked for that category or exclusion this run — that is scope
+creep in the opposite direction and was caught once in this project: Hermes
+added an unrequested "steer away from recently-touched files" constraint,
+and Task Creator predictably picked the lowest-risk option (a missing test
+file) instead of surveying the whole directory for its most valuable next
+task. Give Task Creator the full directory and let it inspect everything in
+scope — missing features, bugs, poor or duplicated code, weak abstractions,
+missing tests, anything — and choose the best single small independent task
+on its own judgment.
+
+## Commit Attribution
+
+Every commit a worker makes must make its own role machine-obvious, and must
+NOT be attributed to the worker's personal/model identity:
+
+- **Commit message**: prefix the subject line with the role tag in brackets,
+  e.g. `[coder] test(app): add useToasts hook tests`,
+  `[fixer] fix(app): satisfy tsc for toasts.test.ts mountProbe container`,
+  `[task_creator] docs: NEXT_TASK.md for cycle N`. Valid tags:
+  `[task_creator]`, `[coder]`, `[reviewer]`, `[tester]`, `[fixer]`. Encode
+  this in every Task spec's commit instruction — it is not optional and not
+  left to the worker's own commit-message judgment.
+- **Commit author**: never let a worker commit under its own OpenCode/model
+  identity or a personal name. Set `git config user.name`/`user.email` in
+  each worker's worktree before it commits (or instruct the worker to do so
+  itself as its first step) to a fixed, role-scoped identity such as
+  `orca-coder <orca-coder@localhost>` / `orca-fixer <orca-fixer@localhost>` —
+  not `ernem22`, not a model name. This keeps `git log --author` and GitHub's
+  commit-author UI honestly reflecting "an automated worker did this", not a
+  specific human or model brand.
+- Verify this the same way the integrity check already works: `git log -1
+  --format='%an %s'` after a Coder/Fixer `worker_done`, alongside the
+  existing SHA check — a commit with the wrong author or missing role tag is
+  a policy violation even if the SHA is real and tests pass, and should be
+  routed back to the same worker (or its fallback) to amend before advancing.
+
+## Continuous Operation Mode
+
+Once started, Hermes runs cycles **back-to-back without stopping for
+confirmation** between them — Task Creator → Coder → Reviewer → Tester →
+(Fixer if needed) → PR → merge → next Task Creator cycle — until either:
+
+1. the user explicitly says stop, or
+2. `app/`'s migration is judged complete (no more small independent
+   improvements worth proposing; Task Creator itself signals this by
+   reporting it found nothing worth doing, or the user says the migration
+   goal is met).
+
+Do not pause after a successful merge to ask "should I continue?" — start
+the next Task Creator dispatch immediately. Do not narrate each cycle to the
+user in prose. Minimize input/output: only surface to the user on
+failure/escalation that needs a real decision, on a genuine blocker (e.g.
+capability gap, ambiguous scope this document doesn't resolve), or when
+stopping (user-requested or migration-complete). A running pipeline that is
+healthy produces no chat output at all between cycles — this document and
+the PR history are the audit trail, not a running commentary.
 
 - Coder/Fixer commits and pushes its own branch — Reviewer/Tester worktrees
   cannot see uncommitted changes in a sibling worktree; `--base-branch` off a
