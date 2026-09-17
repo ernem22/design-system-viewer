@@ -38,7 +38,7 @@ async function mountProbe(): Promise<void> {
   // Imported lazily so react-dom never observes a document-less environment
   // at module scope under the node test environment.
   const { createRoot } = await import('react-dom/client');
-  const container = window.document.createElement('div');
+  const container = window.document.createElement("div") as any;
   window.document.body.appendChild(container);
   const mounted = createRoot(container);
   act(() => {
