@@ -343,7 +343,7 @@ NOT be attributed to the worker's personal/model identity:
 
 Once started, Hermes runs cycles **back-to-back without stopping for
 confirmation** between them — Task Creator → Coder → Reviewer → Tester →
-(Fixer if needed) → PR → merge → next Task Creator cycle — until either:
+(Fixer if needed) → PR → merge → next cycle — until either:
 
 1. the user explicitly says stop, or
 2. `app/`'s migration is judged complete (no more small independent
@@ -352,13 +352,26 @@ confirmation** between them — Task Creator → Coder → Reviewer → Tester �
    goal is met).
 
 Do not pause after a successful merge to ask "should I continue?" — start
-the next Task Creator dispatch immediately. Do not narrate each cycle to the
-user in prose. Minimize input/output: only surface to the user on
-failure/escalation that needs a real decision, on a genuine blocker (e.g.
-capability gap, ambiguous scope this document doesn't resolve), or when
-stopping (user-requested or migration-complete). A running pipeline that is
-healthy produces no chat output at all between cycles — this document and
-the PR history are the audit trail, not a running commentary.
+the next cycle immediately. Do not narrate each cycle to the user in prose.
+Minimize input/output: only surface to the user on failure/escalation that
+needs a real decision, on a genuine blocker (e.g. capability gap, ambiguous
+scope this document doesn't resolve), or when stopping (user-requested or
+migration-complete). A running pipeline that is healthy produces no chat
+output at all between cycles — this document and the PR history are the
+audit trail, not a running commentary.
+
+**Task Creator is not mandatory every cycle.** Before dispatching a new
+Task Creator, run `orca orchestration task-list --run <id>` once and check
+for an existing Task whose `status` is still `ready` (created, never
+successfully dispatched to completion) with a real, non-superseded spec. If
+one exists, dispatch a Coder directly against it instead of spawning another
+Task Creator — there is no value in generating more proposals than the
+pipeline can consume. Only dispatch a fresh Task Creator when the backlog of
+`ready` Tasks is empty. A `ready` Task from an abandoned/superseded retry
+(e.g. a spec that says `MISSING` because its source file was already cleaned
+up, or a dispatch that failed on a since-demoted rate-limited model) is not
+real backlog — recognize and skip/ignore it rather than treating stale
+noise as usable work.
 
 - Coder/Fixer commits and pushes its own branch — Reviewer/Tester worktrees
   cannot see uncommitted changes in a sibling worktree; `--base-branch` off a
