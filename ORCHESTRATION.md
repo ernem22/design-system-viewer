@@ -563,6 +563,19 @@ Before advancing a stage:
       same cleanup pass as the release/terminal-close — don't leave stale
       worktrees accumulating on disk across a long-running continuous
       session.
+- [ ] **`worktree rm` can leave a dangling local branch behind.** Orca's
+      `worktree rm` refuses to delete the worktree's branch itself when git
+      can't prove it's safe to lose (`\"lastError\": \"could not safely
+      delete...\"` / a `preservedBranch` field in the removal response) — this
+      happened for `ernem22/coder-3` and `ernem22/coder-5` in this project
+      even though both branches were fully pushed and merged. After a
+      `worktree rm` whose result includes `preservedBranch`, check
+      `git log --oneline -1 <branch>` against `git log --oneline -1
+      origin/<branch>` (or the branch's already-merged commit) in the
+      coordinator worktree; if they're identical (no unique local commits),
+      `git branch -D <branch>` to actually remove it. Don't leave dozens of
+      dangling local branches accumulating from a long continuous-operation
+      session just because the automatic safety check was conservative.
 
 Before merge:
 
