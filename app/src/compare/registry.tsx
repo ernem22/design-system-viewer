@@ -12,7 +12,7 @@ import * as Select from "@radix-ui/react-select";
 import * as Tabs from "@radix-ui/react-tabs";
 import * as Accordion from "@radix-ui/react-accordion";
 import * as Progress from "@radix-ui/react-progress";
-import { Button, Field, usePortalContainer } from "../gallery/ui.tsx";
+import { Button, Field, useCompareIdPrefix, usePortalContainer } from "../gallery/ui.tsx";
 import { COMPONENT_ENTRIES } from "../gallery/components/index.ts";
 import type { GalleryEntry } from "../gallery/registry.ts";
 import { Icon } from "../lib/icons.tsx";
@@ -37,22 +37,25 @@ const Buttons = () => (
   </div>
 );
 
-const Inputs = () => (
-  <div className="cmp-stack">
-    <Field label="Email" id="c-e">
-      <input id="c-e" className="dsv-input" placeholder="ada@example.com" />
-    </Field>
-    <Field label="Password" id="c-p" error="At least 8 characters">
-      <input id="c-p" className="dsv-input" aria-invalid="true" defaultValue="123" type="password" />
-    </Field>
-    <Field label="Note" id="c-n">
-      <textarea id="c-n" className="dsv-textarea" placeholder="…" />
-    </Field>
-    <Field label="Disabled" id="c-d">
-      <input id="c-d" className="dsv-input" disabled defaultValue="read-only" />
-    </Field>
-  </div>
-);
+const Inputs = () => {
+  const id = useCompareIdPrefix();
+  return (
+    <div className="cmp-stack">
+      <Field label="Email" id={`${id}c-e`}>
+        <input id={`${id}c-e`} className="dsv-input" placeholder="ada@example.com" />
+      </Field>
+      <Field label="Password" id={`${id}c-p`} error="At least 8 characters">
+        <input id={`${id}c-p`} className="dsv-input" aria-invalid="true" defaultValue="123" type="password" />
+      </Field>
+      <Field label="Note" id={`${id}c-n`}>
+        <textarea id={`${id}c-n`} className="dsv-textarea" placeholder="…" />
+      </Field>
+      <Field label="Disabled" id={`${id}c-d`}>
+        <input id={`${id}c-d`} className="dsv-input" disabled defaultValue="read-only" />
+      </Field>
+    </div>
+  );
+};
 
 function Controls() {
   const [cb, setCb] = useState<Checkbox.CheckedState>(true);
@@ -227,25 +230,28 @@ const Progressy = () => (
   </div>
 );
 
-const LoginCard = () => (
-  <div className="dsv-card dsv-card--raised">
-    <div style={{ fontSize: "var(--font-size-lg)", fontWeight: "var(--font-weight-semibold)", marginBottom: "var(--space-1)" }}>
-      Sign in
+const LoginCard = () => {
+  const id = useCompareIdPrefix();
+  return (
+    <div className="dsv-card dsv-card--raised">
+      <div style={{ fontSize: "var(--font-size-lg)", fontWeight: "var(--font-weight-semibold)", marginBottom: "var(--space-1)" }}>
+        Sign in
+      </div>
+      <div className="dsv-muted" style={{ fontSize: "var(--font-size-sm)", marginBottom: "var(--space-4)" }}>
+        Access your account
+      </div>
+      <div className="cmp-stack">
+        <Field label="Email" id={`${id}lc-e`}>
+          <input id={`${id}lc-e`} className="dsv-input" placeholder="ada@example.com" />
+        </Field>
+        <Field label="Password" id={`${id}lc-p`}>
+          <input id={`${id}lc-p`} className="dsv-input" type="password" placeholder="••••••••" />
+        </Field>
+        <Button style={{ width: "100%" }}>Continue</Button>
+      </div>
     </div>
-    <div className="dsv-muted" style={{ fontSize: "var(--font-size-sm)", marginBottom: "var(--space-4)" }}>
-      Access your account
-    </div>
-    <div className="cmp-stack">
-      <Field label="Email" id="lc-e">
-        <input id="lc-e" className="dsv-input" placeholder="ada@example.com" />
-      </Field>
-      <Field label="Password" id="lc-p">
-        <input id="lc-p" className="dsv-input" type="password" placeholder="••••••••" />
-      </Field>
-      <Button style={{ width: "100%" }}>Continue</Button>
-    </div>
-  </div>
-);
+  );
+};
 
 /** One entry in the component picker: an id (kept stable — legacy's `?c=`
    querystring values matched these), a label, and the demo it renders. */

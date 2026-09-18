@@ -34,6 +34,18 @@ export function usePortalContainer() {
    provider; this is the explicit equivalent. Rendering mode, not state. */
 export const InCompareContext = createContext(false);
 
+/** Per-column id prefix for Compare. Preview mounts one of each renderer, so
+   fixed ids like the Basics `c-e`/`lc-e` are unique there; Compare mounts the
+   same renderer once per system, so those ids would repeat and every
+   `<label htmlFor>` would resolve to the first column's input. CompareColumn
+   provides `${slug}-` here and renderers prefix their ids with it, keeping
+   each column's label/input pair self-consistent. Empty outside Compare. */
+export const CompareIdPrefixContext = createContext("");
+
+export function useCompareIdPrefix() {
+  return useContext(CompareIdPrefixContext);
+}
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "solid" | "soft" | "outline" | "ghost" | "danger";
   size?: "sm" | "md" | "lg" | "xl";

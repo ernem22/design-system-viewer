@@ -44,6 +44,7 @@ export function CompareView({ view }: { view: CompareViewModel }) {
           {cols.map((s) => (
             <CompareColumn
               key={s.slug}
+              slug={s.slug}
               name={s.name}
               style={styleFor.get(s.slug) ?? {}}
               pct={systemCoveragePercent(s)}
