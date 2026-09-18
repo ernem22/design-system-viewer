@@ -181,6 +181,61 @@ Two bounded exceptions, both O(1) and both in the per-worker call budget:
 | Reviewer (`--agent plan`) | Read-only diff/code review against the issue's stated intent, returns PASS/FAIL + fix list | Edit any file; implement fixes; restate what CI already reports (lint/types/build/unit results are not review findings) |
 | Tester | Drives the **running build** through Orca's built-in browser and reports the behaviour it observed, before and after the change (see Tester). A required stage for every PR that changes `app/src`, and it does gate the merge | Run `npm test`/`tsc` and report counts — CI's job; write, add or modify any file; write tests; commit; take a full `snapshot` as a matter of course |
 | Fixer | Applies exactly the fix Reviewer or a failing CI check reported, nothing else | Re-scope or re-design the change |
+| Dispatcher | Authors each phase spec from `## Specification Templates`, creates the worktree/terminal, starts the dispatch, and on each settlement acks it, releases the worker, reaps the worktree and spawns the next phase — then escalates a merge packet (see `## The Dispatcher Role`) | Merge, close, reopen, label or approve anything; edit `app/`; edit this document; decide a design question two phases would both answer; exceed the spawn cap |
+
+## The Dispatcher Role
+
+The coordinator's real bottleneck is context, not judgement: authoring every
+phase spec inline and reading every settlement costs it more than the work being
+coordinated. The Dispatcher takes both jobs so the coordinator sees only merges
+and blockers.
+
+|  |  |
+|---|---|
+| **Input** | one line — `issue <n>` to start a cycle, `settlement <delivery id> <task id>` to advance one |
+| **Does** | fills a phase template (never invents the shape), creates the worktree + `opencode.json` + terminal, starts the dispatch; after a settlement: acks it, releases the worker, removes its worktree and terminal, spawns the next phase |
+| **Escalates to the coordinator** | a merge packet, or a blocker. Nothing else |
+| **Must not** | merge, close, reopen, label or approve; edit `app/`; edit `ORCHESTRATION.md`; exceed the spawn cap in `## Parallel Worker Spawning`; answer a design question two phases both need |
+
+The Dispatcher is the only role permitted to start another worker. It is itself a
+worker on the same run, so its start, heartbeat and settlement follow the same
+protocol, and a Dispatcher that dies silently is caught by the same stale sweep
+as any other worker.
+
+### Merge packet — the only message the coordinator gets per PR
+
+    pr: <number>
+    head: <sha>
+    ci: green <run url>
+    reviewer: pass scope_ok: <yes|no>
+    tester: pass <build asset hash> on :<port>
+    evidence: <one line per gate, the strongest observed value>
+    open risk: <what no gate covered, or: none>
+
+A packet with a missing field is not sent — it goes back to the phase that owes
+the field. The coordinator never reconstructs it, because reconstructing it means
+re-reading the raw settlement, which is the cost this role exists to remove.
+
+## Specification Templates
+
+A spec is a **filled template, never prose written from scratch**. Hand-written
+specs drift in shape — a missing evidence section, an absent forbidden-actions
+list — and that drift surfaces three phases later as a false pass.
+
+Every spec carries, in this order:
+
+1. the phase, and the issue/PR it serves;
+2. what the worker may touch, and which files open PRs already hold;
+3. what to prove, phrased so a wrong answer is observable rather than arguable;
+4. the evidence to paste — real command output, never a summary of it;
+5. the delivery: commit prefix, branch, PR title, labels, and what not to do;
+6. the acceptance block: the exact first lines of the `worker_done` body the
+   coordinator will parse.
+
+Templates live in `docs/orchestration/specs/` (`coder.md`, `reviewer.md`,
+`tester.md`, `fixer.md`, `dispatcher.md`). The Dispatcher reads the template and
+fills it. Editing a template is a coordinator action, because a template is the
+contract, not a per-cycle artifact.
 
 ## `app/` Facts Workers Must Be Told
 
@@ -325,6 +380,7 @@ spelled out below; the probe-driven table it replaces is kept as history in
 | Reviewer | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` |
 | Tester | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` |
 | Fixer | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` |
+| Dispatcher | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` |
 
 Verified 2026-09-18 — the one claim in this section that was observed rather
 than inherited: a project-level `<worktree>/opencode.json` holding
@@ -645,10 +701,12 @@ more of the user's attention than the question would have.
 
 ## Task Creator
 
-Enabled 2026-09-18, on a leash. It runs against a focus the user stated — an
-area, a theme, "we have no issue for X", or the **standing Default focus list**
-below, which counts as a stated focus — and it exists to turn that focus into a
-well-formed issue, not to generate a backlog.
+Enabled 2026-09-18, on a leash. It runs **only** against a focus the user
+stated — an area, a theme, "we have no issue for X", or an explicit instruction
+to scan the **Default focus list** below. The list is a menu, not a standing
+authorization: a user who names nothing has stated no focus, so the queue-empty
+stop rule (see Continuous Operation Mode) stays reachable. The role exists to
+turn the stated focus into a well-formed issue, not to generate a backlog.
 
 - **Scope:** `app/` only, stated literally in the spec ("app/ only, not
   src/core, not preview/"). The *directory* is the boundary; the focus the user
@@ -668,8 +726,10 @@ well-formed issue, not to generate a backlog.
 - **Not its job:** implementing anything, writing a local task file, or widening
   the focus the user gave.
 
-**Default focus when the user names nothing else.** The standing list, as the
-user gave it — scan order, not a set of independent mandates:
+**Default focus list — a pre-approved menu, not an authorization.** When the
+user states a focus (including "scan the default list"), take the smallest
+verifiable task from it in this scan order. It is a set of suggestions the user
+already approved, not a focus statement that fires on its own:
 
 1. **Legacy parity gaps.** Behaviours the legacy code sitting beside `app/`
    (`preview/`, `src/`) has and `app/` has not ported — `export` is the named
