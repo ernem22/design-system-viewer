@@ -22,6 +22,11 @@
   white-space: nowrap;
 }
 
+.app-toast-warn {
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
 .app-toast-err {
   border-color: var(--color-danger);
   color: var(--color-danger);

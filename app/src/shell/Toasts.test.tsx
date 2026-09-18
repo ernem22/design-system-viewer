@@ -2,8 +2,16 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { act } from "react";
 import type { Root } from "react-dom/client";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { Toasts } from "./Toasts.tsx";
 import type { Toast } from "../lib/toasts.ts";
+
+// Raw stylesheet text: the warn tone's class must exist as a rule, not only as
+// a className the renderer emits (issue #34 finding 1 — a warn toast rendered
+// with the neutral base skin because `.app-toast-warn` had no CSS). vitest runs
+// with cwd = app/, so the co-located stylesheet is resolvable from there.
+const toastsCss = readFileSync(resolve(process.cwd(), "src/shell/Toasts.css"), "utf8");
 
 // The companion suite lib/toasts.test.ts covers the queue itself. This one
 // covers what the queue renders, and doubles as the proof that a *.test.tsx
@@ -63,10 +71,22 @@ describe("Toasts", () => {
   });
 
   it("carries the tone into a per-tone class", async () => {
-    const el = await render([toast(1, "ok msg", "ok"), toast(2, "err msg", "err")]);
+    const el = await render([
+      toast(1, "ok msg", "ok"),
+      toast(2, "warn msg", "warn"),
+      toast(3, "err msg", "err"),
+    ]);
     const items = [...el.querySelectorAll(".app-toast")];
     expect(items[0].className).toContain("app-toast-ok");
-    expect(items[1].className).toContain("app-toast-err");
+    expect(items[1].className).toContain("app-toast-warn");
+    expect(items[2].className).toContain("app-toast-err");
+  });
+
+  it("defines the warn tone's skin with the warning token, like the err skin", () => {
+    // A class the renderer emits but the stylesheet never defines is a silent
+    // downgrade to the neutral base skin — the exact bug the Reviewer named.
+    expect(toastsCss).toMatch(/\.app-toast-warn\s*\{[^}]*--color-warning/);
+    expect(toastsCss).toMatch(/\.app-toast-err\s*\{[^}]*--color-danger/);
   });
 
   it("keeps two same-message toasts as two distinct nodes", async () => {
