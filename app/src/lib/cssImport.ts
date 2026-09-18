@@ -9,17 +9,55 @@ export async function readCssFile(file: File): Promise<string> {
   return file.text();
 }
 
-/** Direct fetch — there is no proxy server behind this app, so it only
-   works for CORS-enabled stylesheet URLs; the error says so. */
-export async function fetchCss(url: string): Promise<string> {
+const CORS_ERROR = "blocked (the URL must allow cross-origin requests)";
+const PROXY_PATH = "/api/fetch-css";
+
+/** Direct fetch — the only option on the static build. A rejected fetch is a
+   CORS/network failure; a reachable host's non-2xx keeps its real status
+   rather than being flattened into the CORS message. */
+async function fetchDirect(url: string): Promise<string> {
   let res: Response;
   try {
     res = await fetch(url);
   } catch {
-    throw new Error("blocked (the URL must allow cross-origin requests)");
+    throw new Error(CORS_ERROR);
   }
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`.trim());
   return res.text();
+}
+
+/** The dev server's /api/fetch-css route, which has no origin restrictions
+   (legacy parity — src/viewer/app.js:1010). Returns null when there is no
+   proxy behind the app; throws when the proxy itself reports a failure.
+
+   A static/SPA host answers the unknown path with its index.html (200,
+   text/html) or an HTML 404, and a fetch with no server at all rejects — those
+   are the only cases that fall back to the direct fetch. A JSON non-2xx is the
+   route answering with a real upstream status (`502 upstream 404`, `400
+   invalid url`); surfacing that beats retrying direct, which would replace the
+   status with a misleading CORS "blocked". */
+async function fetchProxied(url: string): Promise<string | null> {
+  let res: Response;
+  try {
+    res = await fetch(`${PROXY_PATH}?url=${encodeURIComponent(url)}`);
+  } catch {
+    return null;
+  }
+  const type = res.headers.get("content-type") ?? "";
+  if (res.ok) return type.includes("text/html") ? null : res.text();
+  if (!type.includes("application/json")) return null;
+  const body = (await res.json().catch(() => null)) as { error?: string } | null;
+  throw new Error(body?.error || `${res.status} ${res.statusText}`.trim());
+}
+
+/** Legacy parity (src/viewer/app.js fetchCss): most stylesheet hosts send no
+   ACAO header, so a direct request dies with "Failed to fetch". Try the dev
+   server proxy first; with no server behind the app (the static build) that
+   attempt is a no-op and the direct fetch the app has today is the fallback.
+   If both fail, the direct fetch's message is the one shown. */
+export async function fetchCss(url: string): Promise<string> {
+  const proxied = await fetchProxied(url);
+  return proxied ?? fetchDirect(url);
 }
 
 /** Page-wide .css drag & drop. Returns whether a file drag is over the page
