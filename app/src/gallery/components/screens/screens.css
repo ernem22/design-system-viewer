@@ -4,7 +4,7 @@
  * override below is adapted to a static subnav directly. */
 .dsv-setting-row .dsv-slider { flex: 1 1 140px; }
 
-.dsv-banner--on-dark .dsv-btn--on-dark-solid { background: var(--color-surface); color: var(--color-text); }
+.dsv-banner--on-dark .dsv-btn--on-dark-solid { background: var(--color-surface); color: var(--color-text); border-color: transparent; }
 
 .dsv-btn--on-dark-ghost { color: var(--color-on-accent); border: var(--border-width-thin) solid color-mix(in srgb, var(--color-on-accent) 50%, transparent); }
 
@@ -36,7 +36,7 @@
 
 .dsv-feature-card { border-radius: var(--radius-2xl); }
 
-.dsv-badge--on-dark { background: rgb(255 255 255 / 0.18); color: #fff; border-color: rgb(255 255 255 / 0.35); }
+.dsv-badge--on-dark { background: color-mix(in srgb, var(--color-text-on-accent) 18%, transparent); color: var(--color-text-on-accent); border-color: color-mix(in srgb, var(--color-text-on-accent) 35%, transparent); }
 
 .dsv-inbox { display: grid; grid-template-columns: minmax(220px, 280px) 1fr; gap: 0; border: var(--border-width-thin) solid var(--color-border-subtle); border-radius: var(--radius-lg); overflow: hidden; min-height: 320px; }
 
@@ -47,8 +47,8 @@
 .dsv-hero-panel {
   background: var(--gradient-hero); border-radius: var(--media-radius-xl);
   padding: var(--section-space-lg) var(--composition-gutter) var(--section-space-md);
-  color: #fff; text-align: center; position: relative; overflow: clip; isolation: isolate;
-  border: var(--border-width-thin) solid rgb(255 255 255 / 0.22);
+  color: var(--color-text-on-accent); text-align: center; position: relative; overflow: clip; isolation: isolate;
+  border: var(--border-width-thin) solid color-mix(in srgb, var(--color-text-on-accent) 22%, transparent);
   box-shadow: var(--shadow-lg), var(--glow-md);
 }
 
@@ -56,17 +56,17 @@
 
 .dsv-hero-grid {
   position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: 0.5;
-  background-image: linear-gradient(rgb(255 255 255 / 0.14) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(255 255 255 / 0.14) 1px, transparent 1px);
-  background-size: 28px 28px;
-  mask-image: radial-gradient(ellipse 80% 90% at 50% 10%, black 30%, transparent 75%);
+  background-image: linear-gradient(color-mix(in srgb, var(--color-text-on-accent) 14%, transparent) var(--border-width-thin), transparent var(--border-width-thin)),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-text-on-accent) 14%, transparent) var(--border-width-thin), transparent var(--border-width-thin));
+  background-size: var(--space-7) var(--space-7);
+  mask-image: radial-gradient(ellipse 80% 90% at 50% 10%, var(--color-neutral-1000) 30%, transparent 75%);
 }
 
 .dsv-hero-orb { position: absolute; z-index: 0; border-radius: var(--radius-full); pointer-events: none; filter: blur(var(--blur-xl)); }
 
 .dsv-hero-orb--a {
-  width: 320px; height: 320px; top: -120px; left: -80px; opacity: 0.55;
-  background: radial-gradient(circle, rgb(255 255 255 / 0.65), transparent 65%);
+  width: var(--space-80); height: var(--space-80); top: -120px; left: -80px; opacity: 0.55;
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-text-on-accent) 65%, transparent), transparent 65%);
 }
 
 .dsv-hero-orb--b {
@@ -74,12 +74,12 @@
   background: radial-gradient(circle, var(--color-accent-secondary), transparent 65%);
 }
 
-.dsv-hero-panel .dsv-display { color: #fff; text-wrap: balance; }
+.dsv-hero-panel .dsv-display { color: var(--color-text-on-accent); text-wrap: balance; }
 
-.dsv-hero-panel .dsv-lede { color: rgb(255 255 255 / 0.88); text-wrap: pretty; }
+.dsv-hero-panel .dsv-lede { color: color-mix(in srgb, var(--color-text-on-accent) 88%, transparent); text-wrap: pretty; }
 
 .dsv-hero-cta {
-  background: #fff; color: var(--color-text);
+  background: var(--color-surface); color: var(--color-text);
   box-shadow: var(--glow-md); transition: box-shadow var(--motion-page), transform var(--motion-page);
 }
 
@@ -88,46 +88,46 @@
 .dsv-hero-cta:active { transform: scale(var(--motion-scale-active)); }
 
 .dsv-hero-panel .dsv-hero-ghost {
-  background: rgb(255 255 255 / 0.12); border-color: rgb(255 255 255 / 0.5); color: #fff;
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--color-text-on-accent) 12%, transparent); border-color: color-mix(in srgb, var(--color-text-on-accent) 50%, transparent); color: var(--color-text-on-accent);
+  -webkit-backdrop-filter: blur(var(--blur-md)); backdrop-filter: blur(var(--blur-md));
 }
 
-.dsv-hero-panel .dsv-hero-ghost:hover { background: rgb(255 255 255 / 0.22); color: #fff; }
+.dsv-hero-panel .dsv-hero-ghost:hover { background: color-mix(in srgb, var(--color-text-on-accent) 22%, transparent); color: var(--color-text-on-accent); }
 
-.dsv-pulse-dot { width: 8px; height: 8px; border-radius: var(--radius-full); background: #fff; flex: none; animation: dsv-blink 1.6s var(--ease-in-out) infinite; }
+.dsv-pulse-dot { width: var(--space-2); height: var(--space-2); border-radius: var(--radius-full); background: var(--color-text-on-accent); flex: none; animation: dsv-blink 1.6s var(--ease-in-out) infinite; }
 
-.dsv-badge--on-dark .dsv-pulse-dot { background: #fff; }
+.dsv-badge--on-dark .dsv-pulse-dot { background: var(--color-text-on-accent); }
 
 .dsv-hero-stats {
   display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
   gap: var(--space-2) var(--space-4); margin-top: var(--space-6);
-  font-size: var(--font-size-sm); color: rgb(255 255 255 / 0.88);
+  font-size: var(--font-size-sm); color: color-mix(in srgb, var(--color-text-on-accent) 88%, transparent);
 }
 
-.dsv-hero-stats strong { color: #fff; font-weight: var(--font-weight-semibold); }
+.dsv-hero-stats strong { color: var(--color-text-on-accent); font-weight: var(--font-weight-semibold); }
 
-.dsv-hero-stats-sep { width: 4px; height: 4px; border-radius: var(--radius-full); background: rgb(255 255 255 / 0.5); flex: none; }
+.dsv-hero-stats-sep { width: var(--space-1); height: var(--space-1); border-radius: var(--radius-full); background: color-mix(in srgb, var(--color-text-on-accent) 50%, transparent); flex: none; }
 
 .dsv-hero-img {
   position: relative; border-radius: var(--radius-2xl); overflow: hidden;
   background: var(--color-surface-sunken);
   border: var(--border-width-thin) solid var(--color-border-subtle);
   box-shadow: var(--shadow-lg);
-  aspect-ratio: 21 / 9; min-height: 180px;
+  aspect-ratio: var(--media-aspect-wide); min-height: 180px;
 }
 
 .dsv-hero-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .dsv-hero-img::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(to top, rgb(0 0 0 / 0.45), transparent 55%);
+  background: linear-gradient(to top, color-mix(in srgb, var(--color-neutral-1000) 45%, transparent), transparent 55%);
 }
 
 .dsv-hero-img-cap {
   position: absolute; z-index: 1; left: var(--space-4); right: var(--space-4); bottom: var(--space-4);
   display: flex; align-items: center; gap: var(--space-3);
-  color: #fff; font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);
-  text-shadow: 0 1px 8px rgb(0 0 0 / 0.4);
+  color: var(--color-text-on-accent); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);
+  text-shadow: 0 var(--border-width-thin) var(--blur-md) color-mix(in srgb, var(--color-neutral-1000) 40%, transparent);
 }
 
 .dsv-feature-ico {
