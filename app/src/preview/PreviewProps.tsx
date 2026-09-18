@@ -8,16 +8,15 @@ import { useMemo } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ScopePanel } from "../gallery/tokenInspector.tsx";
 import { baseValue, setMobileOpen, useInspector } from "../lib/tokenOverrides.ts";
+import { tokenValueMap } from "../tokens/useTokensView.ts";
 import type { DesignSystem } from "../systems/store.ts";
 
+// Values come from the same shared map the Tokens tab reads (groups first,
+// css fallback) so the two panels can never disagree about a token; only a
+// token the system doesn't author at all falls through to the computed
+// `:root` value.
 function useValueOf(system: DesignSystem | null): (token: string) => string {
-  const tokenValues = useMemo(
-    () =>
-      new Map(
-        (system?.groups ?? []).flatMap((g) => g.tokens).map((t) => [t.name, t.value] as const),
-      ),
-    [system],
-  );
+  const tokenValues = useMemo(() => tokenValueMap(system), [system]);
   return (name: string) => tokenValues.get(name) ?? baseValue(name);
 }
 

@@ -50,6 +50,25 @@ export interface VisibleGroup {
   missing: string[];
 }
 
+/**
+ * Single source of truth for a system's token values, shared by the Tokens
+ * tab and the Preview inspector. `groups` wins because that is what App
+ * actually applies to `:root` (store.resolveSystemTokens) and what the
+ * gallery renders; `css` is parsed only when the system has no groups — the
+ * legacy viewer's order (`sys.groups ? groups : parseTokens(css)`,
+ * src/viewer/app.js:443). Routing both panels through this one map means a
+ * `groups`/`css` divergence can no longer show one value in Preview and a
+ * different one in Tokens. Pure and read-only: no override is dropped and
+ * the store is never mutated by rendering.
+ */
+export function tokenValueMap(system: DesignSystem | null): Map<string, string> {
+  const groups = system?.groups;
+  const tokens = groups?.length
+    ? groups.flatMap((g) => g.tokens)
+    : (parseTokens(system?.css ?? "") as Token[]);
+  return new Map(tokens.map((t) => [t.name, t.value]));
+}
+
 /** Turkish-locale match — the old viewer used plain toLowerCase, the
    preview side already had toLocaleLowerCase("tr"); the port carries it. */
 const trLower = (s: string) => s.toLocaleLowerCase("tr");
@@ -78,8 +97,11 @@ export function useTokensView(system: DesignSystem | null, pushToast: PushToast)
   }, [slug]);
 
   const css = system?.css ?? "";
+  // `tokens` stays CSS-derived for coverage/lint (their documented source),
+  // but the displayed/selectable values come from the shared source of truth
+  // so SchemaView, the copy flow and Preview all agree.
   const tokens = useMemo(() => (css ? (parseTokens(css) as Token[]) : []), [css]);
-  const valueMap = useMemo(() => new Map(tokens.map((t) => [t.name, t.value])), [tokens]);
+  const valueMap = useMemo(() => tokenValueMap(system), [system]);
 
   // Coverage is always computed live: stored snapshots go stale when the
   // schema grows and then silently break "Show missing" + missing rows.
