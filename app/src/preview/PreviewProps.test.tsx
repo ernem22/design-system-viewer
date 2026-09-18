@@ -309,12 +309,13 @@ describe("Preview value edits are ephemeral (#27)", () => {
   });
 });
 
-// Fixer finding #1 (end-to-end): with a value edit on a token that the same
-// scope also swaps away, the scope node must read the edited literal, not the
-// swap redirect. On the pre-fix head it stayed `var(--color-danger)`, so the
-// whole subtree resolved to the swapped-to token (the tester's #b64f42).
-describe("Preview value edits beat swaps on the same token (#92 fixer)", () => {
-  it("writes the edited literal on the scope node when the target is swapped", async () => {
+// Legacy is swap-first (#92 fixer): valueInDemo (preview/src/tokenOverrides.js:
+// 89-92) returns globalValue(source) and never reads a value edit on the swap
+// target, and useSwapStyle (preview/src/ui.jsx:324-326) always writes
+// `var(source)`. So a value edit on the swapped-away target does not change
+// what the scope reads; only an edit on the source changes what it resolves to.
+describe("Preview swaps are swap-first on the scope node (#92 fixer)", () => {
+  it("keeps var(source) whether or not the swapped-away target has a value edit", async () => {
     const el = await mount(swapPair, vi.fn());
     act(() => {
       setSwap("demo", TOKEN, "--color-danger");
@@ -322,18 +323,25 @@ describe("Preview value edits beat swaps on the same token (#92 fixer)", () => {
     expect(scopeStyle(el)).toEqual({ [TOKEN]: "var(--color-danger)" });
 
     act(() => setValueEdit(TOKEN, "#ff00aa"));
-    // valueEdit > swap: #ff00aa, not the swapped-to #222222.
-    expect(scopeStyle(el)).toEqual({ [TOKEN]: "#ff00aa" });
+    // Swap-first: on the pre-fix head this became #ff00aa (valueEdit > swap).
+    expect(scopeStyle(el)).toEqual({ [TOKEN]: "var(--color-danger)" });
+
+    act(() => clearValueEdit(TOKEN));
+    expect(scopeStyle(el)).toEqual({ [TOKEN]: "var(--color-danger)" });
   });
 
-  it("restores the swap redirect once the value edit is cleared", async () => {
+  it("repaints a value edit on the swap's source through the :root tag", async () => {
     const el = await mount(swapPair, vi.fn());
     act(() => {
       setSwap("demo", TOKEN, "--color-danger");
-      setValueEdit(TOKEN, "#ff00aa");
+      setValueEdit("--color-danger", "#00ffaa");
     });
-    act(() => clearValueEdit(TOKEN));
+    // The scope still emits var(--color-danger); the source's edit reaches it
+    // through the document-level `:root` override, not the inline style.
     expect(scopeStyle(el)).toEqual({ [TOKEN]: "var(--color-danger)" });
+    expect(document.getElementById("dsv-token-value-overrides")!.textContent).toContain(
+      "--color-danger:#00ffaa",
+    );
   });
 });
 

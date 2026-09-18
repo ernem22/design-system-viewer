@@ -66,44 +66,48 @@ describe("valueInScope — swap resolution", () => {
   });
 });
 
-// Fixer finding #1: the swap step used to short-circuit the value-edit layer,
-// so editing a token that a scope also swaps away was ignored. Precedence is
-// `valueEdit > swap > authored`: the literal the user typed is what the token
-// equals, and a scoped redirect must not hide it.
-describe("valueInScope — valueEdit > swap precedence", () => {
-  it("lets a value edit on the target beat a swap that targets that token", () => {
+// Legacy is swap-first: valueInDemo (preview/src/tokenOverrides.js:89-92)
+// returns `source ? globalValue(source) : globalValue(name)` and never reads a
+// value edit on the swap *target*. So editing a token that a scope also swaps
+// away does not beat the swap; only an edit on the swap's *source* changes
+// what the scope reads.
+describe("valueInScope — swap-first precedence (legacy parity)", () => {
+  it("ignores a value edit on the swapped-away target", () => {
     const authored = authoredFrom({ "--color-danger": "#222222", [TOKEN]: "#111111" });
     setSwap("demo", TOKEN, "--color-danger");
     setValueEdit(TOKEN, "#ff00aa");
-    // The swap layer would resolve to #222222; the edit must win with #ff00aa.
-    expect(valueInScope(authored, "demo", TOKEN)).toBe("#ff00aa");
+    // Swap-first: the scope reads --color-danger -> #222222, not #ff00aa.
+    expect(valueInScope(authored, "demo", TOKEN)).toBe("#222222");
   });
 
-  it("still resolves the swap when the target itself is not edited", () => {
+  it("resolves a value edit on the swap's source", () => {
+    const authored = authoredFrom({ "--color-danger": "#222222", [TOKEN]: "#111111" });
+    setSwap("demo", TOKEN, "--color-danger");
+    setValueEdit("--color-danger", "#00ffaa");
+    // globalValue(source): an edit on the source changes the swap's output.
+    expect(valueInScope(authored, "demo", TOKEN)).toBe("#00ffaa");
+  });
+
+  it("still resolves the swap when neither side is edited", () => {
     const authored = authoredFrom({ "--color-danger": "#222222", [TOKEN]: "#111111" });
     setSwap("demo", TOKEN, "--color-danger");
     expect(valueInScope(authored, "demo", TOKEN)).toBe("#222222");
   });
 });
 
-// Same order, applied to the DOM node instead of a read: the scope's inline
-// `target: var(source)` is what a component actually inherits, so it has to
-// yield to the target's value edit too (finding #1's section style).
-describe("scopeStyleFor — page-level valueEdit > swap", () => {
-  it("emits the swap redirect when the target has no value edit", () => {
-    expect(scopeStyleFor({ demo: { [TOKEN]: "--color-danger" } }, {}, "demo")).toEqual({
+// Same order, applied to the DOM node instead of a read: legacy's useSwapStyle
+// (preview/src/ui.jsx:324-326) always writes `target: var(source)`, with no
+// substitution for a value edit on the target; the source's edit repaints
+// through the `:root` document override instead.
+describe("scopeStyleFor — swap-first var(source)", () => {
+  it("emits the swap redirect for every target", () => {
+    expect(scopeStyleFor({ demo: { [TOKEN]: "--color-danger" } }, "demo")).toEqual({
       [TOKEN]: "var(--color-danger)",
     });
   });
 
-  it("emits the edited literal in place of the swap when the target is edited", () => {
-    expect(
-      scopeStyleFor({ demo: { [TOKEN]: "--color-danger" } }, { [TOKEN]: "#ff00aa" }, "demo"),
-    ).toEqual({ [TOKEN]: "#ff00aa" });
-  });
-
   it("returns undefined for a scope with no swaps", () => {
-    expect(scopeStyleFor({}, { [TOKEN]: "#ff00aa" }, "demo")).toBeUndefined();
+    expect(scopeStyleFor({}, "demo")).toBeUndefined();
   });
 });
 

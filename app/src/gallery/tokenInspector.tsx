@@ -175,10 +175,10 @@ function TokenRow({
   const [mode, setMode] = useState<"swap" | "edit" | null>(null); // null | "swap" | "edit"
   const swappedTo = swaps[scopeId]?.[name];
   const isValueEdited = name in valueEdits;
-  // valueEdit > swap: an edited token shows the edited literal even when the
-  // scope swaps the token away (the swap is a redirect, not an override of the
-  // user's explicit literal).
-  const value = isValueEdited || !swappedTo ? valueOf(name) : valueOf(swappedTo);
+  // Swap-first (legacy valueInDemo): a swapped token reads the source's
+  // resolved value; a value edit on the swapped-away target does not override
+  // the redirect, while the source still resolves through the value-edit layer.
+  const value = valueOf(swappedTo ?? name);
 
   return (
     <div className="dsv-token-row">
@@ -471,17 +471,17 @@ export function SectionScopeTrigger({
 
 /** Inline style scoping a component's token swaps to its own subtree —
     each swap becomes `target: var(source)` on the Demo node, so only that
-    node's descendants pick it up via inheritance. A target with a value edit
-    gets the edited literal instead (valueEdit > swap; see scopeStyleFor). */
+    node's descendants pick it up via inheritance. Swap-first: a value edit on
+    the source shows through the `:root` override (see scopeStyleFor). */
 export function useScopeStyle(title: string): CSSProperties | undefined {
   return useSectionScopeStyle(demoId(title));
 }
 
 /** Section-level twin, keyed by gallery entry id — applied on the
     GallerySection node so screen swaps inherit across the whole Body
-    without leaking into sibling sections. Subscribes to valueEdits too, so
-    clearing a value edit puts the plain `var(source)` redirect back. */
+    without leaking into sibling sections. `var(source)` always; a value edit
+    on the source shows through the `:root` document override it mirrors. */
 export function useSectionScopeStyle(id: string): CSSProperties | undefined {
-  const { swaps, valueEdits } = useInspector();
-  return useMemo(() => scopeStyleFor(swaps, valueEdits, id), [swaps, valueEdits, id]);
+  const { swaps } = useInspector();
+  return useMemo(() => scopeStyleFor(swaps, id), [swaps, id]);
 }
