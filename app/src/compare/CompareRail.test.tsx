@@ -49,7 +49,7 @@ async function renderRail(mode: "component" | "diff" = "component"): Promise<HTM
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => {
-    root!.render(<CompareRail systems={systems} view={makeView(mode)} open />);
+    root!.render(<CompareRail systems={systems} view={makeView(mode)} />);
   });
   return host;
 }
