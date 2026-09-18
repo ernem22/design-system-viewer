@@ -298,11 +298,43 @@ export function useSystems() {
 }
 
 /** Coverage is recomputed from the CSS, never read from the stored
-   snapshot: those go stale when the schema grows and report bogus numbers. */
+   snapshot: those go stale when the schema grows and report bogus numbers.
+   Keyed by slug + the whole CSS text, so *any* change to the text — including
+   a same-length edit in the middle — misses and a stale entry is never
+   served. Hashing the full string per call is acceptable because the only hot
+   caller, SystemSwitcher, memoizes its slug→pct map on the systems list, so
+   this is reached only when that list changes, not on every keystroke render. */
+export const PCT_CACHE_MAX = 200;
+/** Bounded LRU (insertion order, re-inserted on hit). One overflow evicts
+   the coldest entry instead of `clear()`ing every warm system at once. */
 const pctCache = new Map<string, number | null>();
+
+function pctCacheKey(system: DesignSystem): string {
+  return `${system.slug}\u0000${system.css ?? ""}`;
+}
+
+function pctCacheGet(key: string): number | null | undefined {
+  if (!pctCache.has(key)) return undefined;
+  const value = pctCache.get(key) as number | null;
+  pctCache.delete(key);
+  pctCache.set(key, value);
+  return value;
+}
+
+function pctCacheSet(key: string, value: number | null): void {
+  if (pctCache.has(key)) pctCache.delete(key);
+  pctCache.set(key, value);
+  while (pctCache.size > PCT_CACHE_MAX) {
+    const oldest = pctCache.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    pctCache.delete(oldest);
+  }
+}
+
 export function systemCoveragePercent(system: DesignSystem | null | undefined): number | null {
   if (!system) return null;
-  const hit = pctCache.get(system.css);
+  const key = pctCacheKey(system);
+  const hit = pctCacheGet(key);
   if (hit !== undefined) return hit;
   let pct: number | null = null;
   try {
@@ -311,8 +343,7 @@ export function systemCoveragePercent(system: DesignSystem | null | undefined): 
   } catch {
     /* unparsable — no badge */
   }
-  if (pctCache.size > 200) pctCache.clear();
-  pctCache.set(system.css, pct);
+  pctCacheSet(key, pct);
   return pct;
 }
 
