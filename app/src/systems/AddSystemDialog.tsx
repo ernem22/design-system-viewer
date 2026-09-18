@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import { REFERENCE, templateCss } from "../../../src/core/schema.js";
-import type { AppTab } from "../shell/Shell.ts";
+import type { AppTab } from "../shell/Shell.tsx";
 import type { PushToast } from "../lib/toasts.ts";
 import { CssPreview } from "../tokens/CssPreview.tsx";
 import { countTokens } from "../tokens/tokenUtils.ts";
