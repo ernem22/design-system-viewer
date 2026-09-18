@@ -208,15 +208,32 @@ background process with a completion notice, that notice *is* the push channel,
 and the coordinator's loop becomes: act on the settlement (ack → release → reap →
 spawn the next phase), then start a fresh watcher.
 
-    terminal(background=true, notify=true):
-      bash tools/orchestration/watch.sh <run-id> [max-seconds]
+    bash tools/orchestration/watch.sh <run-id> [max-seconds]
       exit 0 = settlement waiting (report on stdout)
       exit 3 = heartbeats only for <max-seconds>
       exit 4 = another waiter already holds this run
 
-One watcher per run — Orca permits a single waiter, so a second exits instead of
-queueing behind the first. The settlement it reports must be acked: an unacked one
-is redelivered and looks like new work.
+**Exit-based notification has a hole, and the supervisor closes it.** A watcher that
+exits in order to notify leaves the channel empty until the coordinator arms the next
+one, and a settlement landing in that gap is read by nobody. That is not hypothetical:
+it is exactly how "the thing that closes finished items is broken" felt, with the
+mechanism working perfectly and simply nobody listening. `watchd.sh` runs `watch.sh`
+in a loop inside ONE process that never exits, and prints a line starting with `WAKE`
+whenever something needs the coordinator — so the notification is *pattern*-based, not
+exit-based, and there is never a gap:
+
+    terminal(background=true, notify=["WAKE"]):
+      bash tools/orchestration/watchd.sh <run-id> [window-seconds]
+      WAKE settlement  = a worker_done / escalation / question arrived
+      WAKE drained     = a delivery was waiting at arming time (acked, and printed to the log)
+      WAKE queue-error = the queue could not be read
+      stop it with: touch ${LOCALAPPDATA}/Temp/watchd.stop
+
+`watch.sh` stays the primitive — its exit codes are how `watchd.sh` classifies a
+window — and `watchd.sh` is how it is armed in practice. One watcher per run: Orca
+permits a single waiter, so a second exits instead of queueing behind the first. The
+settlement it reports must be acked: an unacked one is redelivered and looks like new
+work.
 
 ## Mechanism beats prose
 
