@@ -202,6 +202,36 @@ worker on the same run, so its start, heartbeat and settlement follow the same
 protocol, and a Dispatcher that dies silently is caught by the same stale sweep
 as any other worker.
 
+### What the Dispatcher reads — and what it must not
+
+A Dispatcher that reads this whole file spends ~47k tokens before it starts a
+single worker. That was measured, on the first live run. It does not need the
+document; it needs the contract, its own template, and the one phase template it
+is filling.
+
+  **Read:** `## Operational Contract`, `docs/orchestration/specs/dispatcher.md`,
+  the one phase template being filled, and the issue or PR it serves.
+  **Do not read:** the rest of this file. Every rule that binds the Dispatcher is
+  restated in the contract or in its template; if one is not, that is a bug in
+  this document — fix the contract, do not widen the read.
+
+### Mechanism beats prose
+
+Every lifecycle action stays a direct Orca CLI call, because Orca owns task,
+dispatch and worktree state and nothing may keep a second copy of it. What may be
+scripted is the *stateless sequencing* of those calls, so a model turn is not
+spent on it:
+
+    tools/orchestration/spawn.sh  <role> [base-branch] [--plan]  → PATH, HANDLE
+    tools/orchestration/reap.sh   <role> [dispatch-id]           → release, close, rm
+    tools/orchestration/packet.sh <pr> [run-id] [task-id ...]    → the merge packet
+
+`spawn.sh` reads nothing and stores nothing; `reap.sh` asks Orca for the worktree
+rather than caching the path. `packet.sh` prints the packet shape above, with each
+role's verdict *chain* (`fail -> pass`), so a superseded fail cannot hide and an
+unsuperseded one cannot pass silently. A gate whose verdict cannot be tied to the
+PR's head prints `NOT verified on this head` — that is a re-run, not a merge.
+
 ### Merge packet — the only message the coordinator gets per PR
 
     pr: <number>
