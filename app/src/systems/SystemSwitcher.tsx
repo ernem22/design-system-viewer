@@ -1,4 +1,5 @@
 import * as Select from "@radix-ui/react-select";
+import { useMemo } from "react";
 import { Icon } from "../lib/icons.tsx";
 import "./AddSystemDialog.css";
 import { systemCoveragePercent, type DesignSystem } from "./store.ts";
@@ -27,8 +28,16 @@ export default function SystemSwitcher({
       + Add system
     </button>
   );
+  // Cover pct for the header + every menu row, recomputed only when the
+  // system list changes — not on each unrelated App re-render (a search
+  // keystroke re-renders App; legacy preview memoized this as `pctMap`).
+  const pctMap = useMemo(() => {
+    const m = new Map<string, number | null>();
+    for (const s of systems) m.set(s.slug, systemCoveragePercent(s));
+    return m;
+  }, [systems]);
   if (systems.length === 0) return <span className="app-syswrap">{addButton}</span>;
-  const activePct = systemCoveragePercent(active);
+  const activePct = active ? (pctMap.get(active.slug) ?? null) : null;
   return (
     <span className="app-syswrap">
       <Select.Root value={activeSlug} onValueChange={onSelect}>
@@ -49,7 +58,7 @@ export default function SystemSwitcher({
         <Select.Content className="app-select-content app-sysmenu" position="popper" sideOffset={6} align="start">
           <Select.Viewport>
             {systems.map((s) => {
-              const pct = systemCoveragePercent(s);
+              const pct = pctMap.get(s.slug) ?? null;
               return (
                 <Select.Item key={s.slug} value={s.slug} className="app-select-item">
                   <Select.ItemIndicator className="app-select-item-indicator">

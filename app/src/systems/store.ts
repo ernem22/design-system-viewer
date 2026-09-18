@@ -298,11 +298,47 @@ export function useSystems() {
 }
 
 /** Coverage is recomputed from the CSS, never read from the stored
-   snapshot: those go stale when the schema grows and report bogus numbers. */
+   snapshot: those go stale when the schema grows and report bogus numbers.
+   Keyed by slug + a cheap length/prefix/suffix fingerprint of the CSS, not
+   the whole text: a warm hit costs O(1) instead of re-hashing tens of KB,
+   and a token edit (which can keep the length) still misses because the
+   fingerprint samples the head and tail. Mutations keep the same slug but
+   change the fingerprint, so a stale entry is never served. */
+export function coverageFingerprint(css: string): string {
+  return `${css.length}:${css.slice(0, 64)}:${css.slice(-64)}`;
+}
+
+/** Bounded LRU (insertion order, re-inserted on hit). One overflow evicts
+   the coldest entry instead of `clear()`ing every warm system at once. */
+export const PCT_CACHE_MAX = 200;
 const pctCache = new Map<string, number | null>();
+
+function pctCacheKey(system: DesignSystem): string {
+  return `${system.slug}\u0000${coverageFingerprint(system.css ?? "")}`;
+}
+
+function pctCacheGet(key: string): number | null | undefined {
+  if (!pctCache.has(key)) return undefined;
+  const value = pctCache.get(key) as number | null;
+  pctCache.delete(key);
+  pctCache.set(key, value);
+  return value;
+}
+
+function pctCacheSet(key: string, value: number | null): void {
+  if (pctCache.has(key)) pctCache.delete(key);
+  pctCache.set(key, value);
+  while (pctCache.size > PCT_CACHE_MAX) {
+    const oldest = pctCache.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    pctCache.delete(oldest);
+  }
+}
+
 export function systemCoveragePercent(system: DesignSystem | null | undefined): number | null {
   if (!system) return null;
-  const hit = pctCache.get(system.css);
+  const key = pctCacheKey(system);
+  const hit = pctCacheGet(key);
   if (hit !== undefined) return hit;
   let pct: number | null = null;
   try {
@@ -311,8 +347,7 @@ export function systemCoveragePercent(system: DesignSystem | null | undefined): 
   } catch {
     /* unparsable — no badge */
   }
-  if (pctCache.size > 200) pctCache.clear();
-  pctCache.set(system.css, pct);
+  pctCacheSet(key, pct);
   return pct;
 }
 
