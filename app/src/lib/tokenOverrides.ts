@@ -17,11 +17,20 @@
 //     inheritance — every other place still reads the real --color-accent.
 //
 // Resolution precedence, light and dark alike: valueEdit > swap > authored
-// value. A swap's source is resolved from the token's own authored/edited
-// value, never sideways through another component's scoped swap (legacy).
-// An override is keyed by token name only, so it applies in whichever system
-// defines that token and comes back untouched when you switch back — an
-// override on a token no system currently defines is kept, not dropped.
+// value. So a value edit on a token beats a swap that targets that same token
+// (the swap is only a redirect; the edited literal is what the user asked the
+// token to equal). A swap's source is resolved from the token's own
+// authored/edited value, never sideways through another component's scoped
+// swap (legacy). An override is keyed by token name only, so it applies in
+// whichever system defines that token and comes back untouched when you
+// switch back — an override on a token no system currently defines is kept,
+// not dropped.
+//
+// A value edit is global, so it is mirrored into the document (`:root`, via
+// syncValueOverridesToDocument below) on every store change — not just read
+// through `resolvedValue` by the inspector. That is what makes a what-if edit
+// repaint everything themed by the token, and what Reset removes (legacy
+// injected the same style tag).
 //
 // Not available in Compare (ambiguous which column an edit would apply to) —
 // Compare's renderers never mount the Demo/trigger below, so the feature
@@ -36,12 +45,16 @@
 // Preview panels call with the active system's own value map — keeping
 // tokenValueMap (css -> groups -> themes.dark) as the authored layer and this
 // override layer strictly above it, so there is one resolution order, not two.
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore, type CSSProperties } from "react";
 import { REFERENCE } from "../../../src/core/schema.js";
 import { CATEGORIES } from "../../../src/core/taxonomy.js";
 import { slugify } from "./slug.ts";
 
 export type TokenKind = "color" | "type" | "length" | "shadow" | "motion" | "number" | "raw";
+
+/** Legacy's style-tag id (preview/src/tokenOverrides.js). Kept so the
+    document-level override layer is the same, inspectable thing. */
+const VALUE_STYLE_ID = "dsv-token-value-overrides";
 
 /** Every canonical token name and its schema group label. */
 export const ALL_TOKENS: Array<{ name: string; group: string }> = (
@@ -110,12 +123,35 @@ export function resolvedValue(
   return overrides[name] ?? authoredOrComputed(authored, name);
 }
 
-/** What one component actually reads for a token: if it is swapped, resolve
-    the swapped-to token through the global layer; otherwise resolve this
-    token. Symmetric with resolvedValue, one level up the chain. */
+/** What one component actually reads for a token, in the documented order
+    `valueEdit > swap > authored`. A value edit on the token itself wins even
+    when the same scope swaps that token away — the literal the user typed is
+    what the token equals, and a scoped redirect must not hide it. Otherwise a
+    swap resolves its source through the global layer; an unswapped token
+    resolves directly. Symmetric with resolvedValue, one level up the chain. */
 export function valueInScope(authored: AuthoredValueOf, scopeId: string, name: string): string {
+  const edited = state.valueEdits[name];
+  if (edited !== undefined) return edited;
   const source = state.swaps[scopeId]?.[name];
   return resolvedValue(authored, source ?? name);
+}
+
+/** The inline custom properties a scope's swaps put on its own DOM node:
+    `target: var(source)`, except a target with a value edit gets the edited
+    literal instead, so `valueEdit > swap` holds on the page (a scoped inline
+    declaration would otherwise beat the `:root` override). Pure so the
+    precedence can be pinned without mounting; `useSectionScopeStyle` supplies
+    the live snapshots. */
+export function scopeStyleFor(
+  swaps: Record<string, Record<string, string>>,
+  valueEdits: Record<string, string>,
+  id: string,
+): CSSProperties | undefined {
+  const scope = swaps[id];
+  if (!scope || Object.keys(scope).length === 0) return undefined;
+  return Object.fromEntries(
+    Object.entries(scope).map(([target, source]) => [target, valueEdits[target] ?? `var(${source})`]),
+  ) as CSSProperties;
 }
 
 /** Figma-style right panel selection: { id, title, tokens } of the Demo
@@ -140,7 +176,36 @@ interface InspectorState {
 let state: InspectorState = { selected: null, mobileOpen: false, swaps: {}, valueEdits: {} };
 const listeners = new Set<() => void>();
 
+/** Mirror the ephemeral value edits into the document so a what-if edit
+    repaints everything themed by that token, not just the inspector row
+    (legacy parity). App.tsx applies the system's tokens as INLINE styles on
+    <html>, which a plain `:root{}` rule can never beat — hence `!important`.
+    Written on every store change and removed when the last edit goes, so
+    Reset (clearAll) drops it and no component mount/unmount can strand it.
+    Runs synchronously from the store, independent of React, so the document
+    layer can't drift from `state` (unlike a provider effect that unmounts). */
+function syncValueOverridesToDocument(): void {
+  if (typeof document === "undefined") return;
+  const entries = Object.entries(state.valueEdits);
+  let el = document.getElementById(VALUE_STYLE_ID) as HTMLStyleElement | null;
+  if (entries.length === 0) {
+    el?.remove();
+    return;
+  }
+  if (!el) {
+    el = document.createElement("style");
+    el.id = VALUE_STYLE_ID;
+  }
+  // appendChild moves an existing node to the end, so this stays after the
+  // Tokens tab's #dsv-tokens stylesheet regardless of mount/effect order.
+  document.head.appendChild(el);
+  el.textContent = `:root{${entries
+    .map(([name, value]) => `${name}:${value} !important`)
+    .join(";")}}`;
+}
+
 function emit(): void {
+  syncValueOverridesToDocument();
   for (const l of listeners) l();
 }
 

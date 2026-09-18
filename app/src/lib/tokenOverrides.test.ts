@@ -6,6 +6,7 @@ import {
   getInspectorState,
   getValueEdit,
   resolvedValue,
+  scopeStyleFor,
   setSwap,
   setValueEdit,
   valueInScope,
@@ -62,6 +63,47 @@ describe("valueInScope — swap resolution", () => {
     const authored = authoredFrom({ [TOKEN]: "#111111" });
     setValueEdit(TOKEN, "#ff0000");
     expect(valueInScope(authored, "demo", TOKEN)).toBe("#ff0000");
+  });
+});
+
+// Fixer finding #1: the swap step used to short-circuit the value-edit layer,
+// so editing a token that a scope also swaps away was ignored. Precedence is
+// `valueEdit > swap > authored`: the literal the user typed is what the token
+// equals, and a scoped redirect must not hide it.
+describe("valueInScope — valueEdit > swap precedence", () => {
+  it("lets a value edit on the target beat a swap that targets that token", () => {
+    const authored = authoredFrom({ "--color-danger": "#222222", [TOKEN]: "#111111" });
+    setSwap("demo", TOKEN, "--color-danger");
+    setValueEdit(TOKEN, "#ff00aa");
+    // The swap layer would resolve to #222222; the edit must win with #ff00aa.
+    expect(valueInScope(authored, "demo", TOKEN)).toBe("#ff00aa");
+  });
+
+  it("still resolves the swap when the target itself is not edited", () => {
+    const authored = authoredFrom({ "--color-danger": "#222222", [TOKEN]: "#111111" });
+    setSwap("demo", TOKEN, "--color-danger");
+    expect(valueInScope(authored, "demo", TOKEN)).toBe("#222222");
+  });
+});
+
+// Same order, applied to the DOM node instead of a read: the scope's inline
+// `target: var(source)` is what a component actually inherits, so it has to
+// yield to the target's value edit too (finding #1's section style).
+describe("scopeStyleFor — page-level valueEdit > swap", () => {
+  it("emits the swap redirect when the target has no value edit", () => {
+    expect(scopeStyleFor({ demo: { [TOKEN]: "--color-danger" } }, {}, "demo")).toEqual({
+      [TOKEN]: "var(--color-danger)",
+    });
+  });
+
+  it("emits the edited literal in place of the swap when the target is edited", () => {
+    expect(
+      scopeStyleFor({ demo: { [TOKEN]: "--color-danger" } }, { [TOKEN]: "#ff00aa" }, "demo"),
+    ).toEqual({ [TOKEN]: "#ff00aa" });
+  });
+
+  it("returns undefined for a scope with no swaps", () => {
+    expect(scopeStyleFor({}, { [TOKEN]: "#ff00aa" }, "demo")).toBeUndefined();
   });
 });
 
