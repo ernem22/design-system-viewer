@@ -29,6 +29,33 @@ import { useEffect, useRef, useState } from "react";
  *  panel height. */
 const ACTIVATION_OFFSET = 100;
 
+/** Keys whose default action scrolls the content area. A keydown that isn't
+ *  one of these (a letter typed into the search box, Escape, a shortcut) is
+ *  never the user's own scroll intent, so it must leave a click-pin alone. */
+const SCROLL_KEYS = new Set([
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "PageUp",
+  "PageDown",
+  "Home",
+  "End",
+  " ",
+]);
+
+/** Whether a keydown happened in a field that owns the keystroke. Arrow /
+ *  Home / End move a text caret there, not the scroller — so even a scroll
+ *  key isn't scroll intent while the search box has focus. */
+function inEditable(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target.isContentEditable ||
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA"
+  );
+}
+
 /** Id of the element (from `ids`) whose top edge has most recently passed
  *  the activation line — i.e. the section currently under the header —
  *  falling back to whichever element sits topmost overall when none have
@@ -119,13 +146,21 @@ export function useScrollSpy(ids: string[]): [string | null, (id: string) => voi
       const activationY = scroller ? scroller.getBoundingClientRect().top + ACTIVATION_OFFSET : 0;
       setActiveId(currentId(idsRef.current, activationY));
     };
+    // Only a scroll-producing key is the user's own scroll intent. Typing a
+    // search query fires a keydown per character; an unfiltered unpin would
+    // release a click-pin and jump the highlight on every keystroke.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (inEditable(event.target)) return;
+      if (!SCROLL_KEYS.has(event.key)) return;
+      unpin();
+    };
     scroller?.addEventListener("wheel", unpin, { passive: true });
     scroller?.addEventListener("touchmove", unpin, { passive: true });
-    window.addEventListener("keydown", unpin);
+    window.addEventListener("keydown", onKeyDown);
     return () => {
       scroller?.removeEventListener("wheel", unpin);
       scroller?.removeEventListener("touchmove", unpin);
-      window.removeEventListener("keydown", unpin);
+      window.removeEventListener("keydown", onKeyDown);
     };
   }, []);
 
