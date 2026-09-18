@@ -14,13 +14,11 @@ Fix each one so a reader can point at the line that closes it. Do not re-scope,
 do not re-design, do not "improve while you are in there" — an unrequested change
 is what makes the next Reviewer return `scope_ok: no` and blocks the merge.
 
-WHEN A FINDING IS UNCLEAR: ask, do not guess at intent:
-
-    orca orchestration send --run <run id> --from <your terminal handle> \
-      --type question --subject "<the finding you cannot act on>" \
-      --body "<what you know, what you need>" \
-      --to <coordinator terminal handle> \
-      --task-id <task id> --dispatch-id <dispatch id> --json
+WHEN A FINDING IS UNCLEAR: ask, do not guess at intent — with `--type question`,
+using the command shape printed in your dispatch preamble (`--to <coordinator
+terminal handle from your preamble>`, plus `--task-id`, `--dispatch-id` and the
+capability token). Never retype a send command: the capability token is per-dispatch
+and a retyped one is rejected with `dispatch_capability_invalid`.
 
 then wait for the answer. Do not silently drop a finding you disagree with —
 say so in the message.
@@ -45,11 +43,11 @@ tests: pass | fail
 pr: <number>
 fixed: <one line per finding>
 
-Send worker_done once, from this terminal, with the task id, dispatch id and
-terminal handle from your preamble and --outcome succeeded:
-
-    orca orchestration send --run <run id> --from <your terminal handle> \
-      --type worker_done --subject "fixer pr <n> done" \
-      --body "<the acceptance block above + one line per finding>" \
-      --task-id <task id> --dispatch-id <dispatch id> \
-      --outcome=succeeded --files-modified <csv> --json
+Send worker_done once, from this terminal. **Do not retype the command: your
+dispatch preamble prints it verbatim, including the `--dispatch-capability dcap_...`
+token that is unique to your dispatch.** A hand-written command is rejected with
+`dispatch_capability_invalid: The Dispatch capability is missing`, and your report
+then reaches the coordinator only as a rejection echo — no settlement, no verdict.
+Check the command carries `--task-id`, `--dispatch-id`, `--outcome=succeeded`
+(equals sign; the space form is rejected), `--files-modified <csv>` and the
+capability token.
