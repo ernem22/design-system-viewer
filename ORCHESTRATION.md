@@ -607,9 +607,10 @@ more of the user's attention than the question would have.
 
 ## Task Creator
 
-Enabled 2026-09-18, on a leash. It runs only when the user has stated what new
-work should look at — an area, a theme, or "we have no issue for X" — and it
-exists to turn that focus into a well-formed issue, not to generate a backlog.
+Enabled 2026-09-18, on a leash. It runs against a focus the user stated — an
+area, a theme, "we have no issue for X", or the **standing Default focus list**
+below, which counts as a stated focus — and it exists to turn that focus into a
+well-formed issue, not to generate a backlog.
 
 - **Scope:** `app/` only, stated literally in the spec ("app/ only, not
   src/core, not preview/"). The *directory* is the boundary; the focus the user
@@ -628,6 +629,33 @@ exists to turn that focus into a well-formed issue, not to generate a backlog.
   queue-bound, so a new proposal only adds latency.
 - **Not its job:** implementing anything, writing a local task file, or widening
   the focus the user gave.
+
+**Default focus when the user names nothing else.** The standing list, as the
+user gave it — scan order, not a set of independent mandates:
+
+1. **Legacy parity gaps.** Behaviours the legacy code sitting beside `app/`
+   (`preview/`, `src/`) has and `app/` has not ported — `export` is the named
+   example. One-way: port the behaviour, never re-import a legacy quirk or bug.
+   `app/` is the corrected port, not a copy of it.
+2. **`preview/` item completeness.** Every gallery section, screen, component
+   and control `preview/` renders should exist in `app/`.
+3. Missing test coverage.
+4. Accessibility.
+5. Performance.
+6. Dead code.
+7. Error-message consistency: the same failure says the same thing in the same
+   tone, everywhere it can happen.
+8. **Token discipline.** Every visual value bound to the token set —
+   `app/src/tokens/tokens.css` defines **432** custom properties (verified
+   2026-09-18; 449 across all of `app/`'s CSS). No hardcoded colour, size, font
+   or spacing outside that set.
+9. None of the above is satisfied by "it compiles": the behaviour has to work
+   without errors when the app actually runs, which is what the Tester stage
+   verifies and what the issue's `Verify:` line must be written for.
+
+One issue per cycle, taken from whichever item yields the smallest verifiable
+task. The list is a scan order — it is not a licence to widen the scope of an
+issue once written, and it does not override the `app/`-only directory boundary.
 
 It reports `status: succeeded` plus `issue: <number>`, or `status: failed` with
 `reason: no remaining proposal in <focus>` — an exhausted focus is a valid,
