@@ -181,44 +181,44 @@ Two bounded exceptions, both O(1) and both in the per-worker call budget:
 | Reviewer (`--agent plan`) | Read-only diff/code review against the issue's stated intent, returns PASS/FAIL + fix list | Edit any file; implement fixes; restate what CI already reports (lint/types/build/unit results are not review findings) |
 | Tester | Drives the **running build** through Orca's built-in browser and reports the behaviour it observed, before and after the change (see Tester). A required stage for every PR that changes `app/src`, and it does gate the merge | Run `npm test`/`tsc` and report counts — CI's job; write, add or modify any file; write tests; commit; take a full `snapshot` as a matter of course |
 | Fixer | Applies exactly the fix Reviewer or a failing CI check reported, nothing else | Re-scope or re-design the change |
-| Dispatcher | Authors each phase spec from `## Specification Templates`, creates the worktree/terminal, starts the dispatch, and on each settlement acks it, releases the worker, reaps the worktree and spawns the next phase — then escalates a merge packet (see `## The Dispatcher Role`) | Merge, close, reopen, label or approve anything; edit `app/`; edit this document; decide a design question two phases would both answer; exceed the spawn cap |
 
-## The Dispatcher Role
+## The Wake-Up Loop (and why there is no dispatcher role)
 
-The coordinator's real bottleneck is context, not judgement: authoring every
-phase spec inline and reading every settlement costs it more than the work being
-coordinated. The Dispatcher takes both jobs so the coordinator sees only merges
-and blockers.
+The pipeline's delay was measured, not guessed. Four settlements landed while the
+coordinator was idle on 2026-09-18:
 
-|  |  |
-|---|---|
-| **Input** | one line — `issue <n>` to start a cycle, `settlement <delivery id> <task id>` to advance one |
-| **Does** | fills a phase template (never invents the shape), creates the worktree + `opencode.json` + terminal, starts the dispatch; after a settlement: acks it, releases the worker, removes its worktree and terminal, spawns the next phase |
-| **Escalates to the coordinator** | a merge packet, or a blocker. Nothing else |
-| **Must not** | merge, close, reopen, label or approve; edit `app/`; edit `ORCHESTRATION.md`; exceed the spawn cap in `## Parallel Worker Spawning`; answer a design question two phases both need |
+    19:11:50  tester   PR 68   → processed within the minute (the coordinator was mid-turn)
+    19:16:07  tester   PR 63   → 31 minutes
+    19:20:17  coder    PR 69   → 27 minutes
+    19:23:52  coder    PR 70   → 24 minutes
 
-The Dispatcher is the only role permitted to start another worker. It is itself a
-worker on the same run, so its start, heartbeat and settlement follow the same
-protocol, and a Dispatcher that dies silently is caught by the same stale sweep
-as any other worker.
+Orca has no push channel into the coordinator's session, so a settlement sat in
+the queue until a human poked the session. That was the entire delay: teardown and
+the next spawn are cheap, but they ran on the human's clock.
 
-### What the Dispatcher reads — and what it must not
+**Rejected fix: a dispatcher role.** A worker that authored specs, spawned and
+reaped other workers was built and run. It dies with its terminal — the first one
+was closed externally mid-run and left two PRs ungated — it cannot merge, so the
+coordinator is still in the loop for every PR, and it puts a second model's
+latency in front of every phase. It is not a role here any more.
 
-A Dispatcher does not need this document. Two live runs measured the same thing,
-and the second was told to read only the contract and its templates: the context
-is ~47–50k tokens at intake either way, because the baseline is opencode's own
-system prompt and tool schemas, not this file. What the read list below controls
-is the increment on top of that baseline — and this file is ~90k characters, so
-the increment is worth controlling. It needs the contract, its own template, and
-the one phase template it is filling. Nothing else.
+**Accepted fix: the settlement wakes the coordinator.** `watch.sh` blocks on
+Orca's own queue and exits the moment an informative settlement arrives. Run as a
+background process with a completion notice, that notice *is* the push channel,
+and the coordinator's loop becomes: act on the settlement (ack → release → reap →
+spawn the next phase), then start a fresh watcher.
 
-  **Read:** `## Operational Contract`, `docs/orchestration/specs/dispatcher.md`,
-  the one phase template being filled, and the issue or PR it serves.
-  **Do not read:** the rest of this file. Every rule that binds the Dispatcher is
-  restated in the contract or in its template; if one is not, that is a bug in
-  this document — fix the contract, do not widen the read.
+    terminal(background=true, notify=true):
+      bash tools/orchestration/watch.sh <run-id> [max-seconds]
+      exit 0 = settlement waiting (report on stdout)
+      exit 3 = heartbeats only for <max-seconds>
+      exit 4 = another waiter already holds this run
 
-### Mechanism beats prose
+One watcher per run — Orca permits a single waiter, so a second exits instead of
+queueing behind the first. The settlement it reports must be acked: an unacked one
+is redelivered and looks like new work.
+
+## Mechanism beats prose
 
 Every lifecycle action stays a direct Orca CLI call, because Orca owns task,
 dispatch and worktree state and nothing may keep a second copy of it. What may be
@@ -228,14 +228,15 @@ spent on it:
     tools/orchestration/spawn.sh  <role> [base-branch] [--plan]  → PATH, HANDLE
     tools/orchestration/reap.sh   <role> [dispatch-id]           → release, close, rm
     tools/orchestration/packet.sh <pr> [run-id] [task-id ...]    → the merge packet
+    tools/orchestration/watch.sh  [run-id] [max-seconds]         → exit on settlement
 
 `spawn.sh` reads nothing and stores nothing; `reap.sh` asks Orca for the worktree
-rather than caching the path. `packet.sh` prints the packet shape above, with each
+rather than caching the path. `packet.sh` prints the packet shape below, with each
 role's verdict *chain* (`fail -> pass`), so a superseded fail cannot hide and an
 unsuperseded one cannot pass silently. A gate whose verdict cannot be tied to the
 PR's head prints `NOT verified on this head` — that is a re-run, not a merge.
 
-### Merge packet — the only message the coordinator gets per PR
+### Merge packet — what one merge decision needs
 
     pr: <number>
     head: <sha>
@@ -266,9 +267,9 @@ Every spec carries, in this order:
    coordinator will parse.
 
 Templates live in `docs/orchestration/specs/` (`coder.md`, `reviewer.md`,
-`tester.md`, `fixer.md`, `dispatcher.md`). The Dispatcher reads the template and
-fills it. Editing a template is a coordinator action, because a template is the
-contract, not a per-cycle artifact.
+`tester.md`, `fixer.md`). The coordinator reads the template and fills it. Editing
+a template is a deliberate act, because a template is the contract, not a
+per-cycle artifact.
 
 ## `app/` Facts Workers Must Be Told
 
@@ -413,7 +414,6 @@ spelled out below; the probe-driven table it replaces is kept as history in
 | Reviewer | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` |
 | Tester | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` |
 | Fixer | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` |
-| Dispatcher | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` |
 
 Verified 2026-09-18 — the one claim in this section that was observed rather
 than inherited: a project-level `<worktree>/opencode.json` holding
