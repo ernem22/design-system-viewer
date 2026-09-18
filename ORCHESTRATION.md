@@ -221,11 +221,20 @@ Chosen by running the same probe through every plausible candidate on
 2026-09-18, not by reputation. Probe method and full results in
 `Model Selection Evidence` below.
 
-| Role | Primary | Fallback |
-|---|---|---|
-| Coder | `opencode/muse-spark-1.3-contributor-free` | `orcarouter/deepseek/deepseek-v4-flash-free` |
-| Reviewer | `opencode/mimo-v2.5-free` | `openrouter/thinkingmachines/inkling:free` |
-| Fixer | `opencode/muse-spark-1.3-contributor-free` | `orcarouter/deepseek/deepseek-v4-flash-free` |
+| Role | Primary | Fallback | Providers |
+|---|---|---|---|
+| Coder | `google/gemini-3-flash-preview` | `opencode/muse-spark-1.3-contributor-free` | google → opencode |
+| Reviewer | `opencode/mimo-v2.5-free` | `google/gemini-3-flash-preview` | opencode → google |
+| Fixer | `google/gemini-3-flash-preview` | `opencode/muse-spark-1.3-contributor-free` | google → opencode |
+
+**A fallback must live on a different provider than its primary.** Quotas are
+enforced per account per provider, not per model, so a same-provider fallback
+shares the bucket that just emptied and fails for the identical reason. The
+old table broke this twice: three roles shared one `openrouter` fallback, and
+OpenRouter's free tier turns out to be **50 requests/day across the entire
+account**, shared by every `:free` model at once (1,000/day only after $10 of
+lifetime credit). One agentic dispatch spends dozens of requests, so no
+`openrouter/*:free` model belongs in this table at all.
 
 **Never pick a model for a role without probing that role.** The clearest
 result of the measurement run: `openrouter/thinkingmachines/inkling:free` is
@@ -635,6 +644,38 @@ behalf.
 Recorded so the next model change is a measurement, not an opinion. Two probes,
 run through every plausible free candidate on this host, 2026-09-18.
 
+**Provider quotas, researched 2026-09-18 and then probed.** The published limit
+and the usable limit are different numbers; both columns matter.
+
+| Provider | Published free limit | What a probe actually did |
+|---|---|---|
+| `google` | Gemini 3 Flash: 1,500 req/day, 10 RPM, 250k tok/min | Passed both probes with real tool use. The only candidate whose quota also fits sustained agent work |
+| `opencode` (Zen) | not published | `muse-spark-1.3` 4/4 Coder, `mimo-v2.5` correct Reviewer. No cap seen in this project's history |
+| `orcarouter` | not published | `deepseek-v4-flash-free` 4/4 Coder |
+| `openrouter` | **50 req/day account-wide**, all `:free` models sharing one bucket | Works per call, but the bucket is far too small for agentic dispatch — this is what the recorded `free-models-per-day` failure was |
+| `groq` | 1,000 req/day, but **8,000 tok/min** | **Could not complete one request.** The agent's own context is ~14k tokens: `Limit 8000, Requested 14170`. Structurally unusable here, not merely tight |
+| `cerebras` | 1M tok/day, but **8,192-token context cap** | Not probed — the context cap alone cannot hold a file plus instructions |
+| `mistral` | ~1B tok/month, but **2 RPM** | `codestral-latest` 4/4 in 10s (fastest correct Coder), then `magistral-medium` hit `Rate limit exceeded` on the very next call. 2 RPM cannot support parallel dispatch |
+| `nvidia` | 40 RPM account-wide | `nemotron-3-super-120b` correct Reviewer in 27.7s. `qwen3-coder-480b` returned **410 Gone — end of life 2026-06-11** |
+| `deepseek` (native) | paid | `Insufficient Balance` on both flash and pro |
+| `apinex` | advertised as free | `qwen-3.8-max` demands a subscription |
+| `tokenrouter` | — | `glm-5.3-free`: no available channel |
+
+Read that table as one lesson: **a free tier fails in whichever dimension you
+did not check.** Groq's request/day looked generous and its tokens/minute made
+it useless. Cerebras's tokens/day is the largest here and its context cap makes
+it useless. Mistral has a billion tokens a month behind a 2-requests-minute
+door. OpenRouter publishes per-model pages and enforces one account-wide
+counter. Check requests/day, requests/minute, tokens/minute, tokens/day and
+context window before adopting a model, then probe it anyway.
+
+Runners-up worth remembering, in case a primary has to be replaced:
+`mistral/codestral-latest` (correct and fastest, but printed rather than wrote
+the file, and 2 RPM), `nvidia/nemotron-3-super-120b-a12b` (correct Reviewer,
+40 RPM shared, Nemotron `worker_done` tax), `opencode/nemotron-3-ultra-free`
+and `openrouter/thinkingmachines/inkling:free` (both correct Reviewers, both
+carrying a tax — Nemotron's settle failure, OpenRouter's 50/day bucket).
+
 **Reviewer probe** — a diff whose `useEffect` creates a `setTimeout` and never
 clears it, plus a demand for exactly three output lines. Scored on finding the
 missing cleanup and on obeying the format.
@@ -648,7 +689,12 @@ missing cleanup and on obeying the format.
 | `apinex/free/qwen-3.8-max` | unusable — paid subscription | — | 8.8s |
 | `tokenrouter/z-ai/glm-5.3-free` | unusable — no available channel | — | 79.7s |
 | `openrouter/z-ai/glm-5.2:free` | unusable — no tool-use endpoint | — | 6.4s |
+| `google/gemini-3-flash-preview` | correct | exact | 16.6s |
+| `nvidia/nvidia/nemotron-3-super-120b-a12b` | correct | exact | 27.7s |
 | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` | no output in 10+ min | — | — |
+| `groq/openai/gpt-oss-120b` | unusable — 8k tok/min < 14k context | — | — |
+| `mistral/magistral-medium-latest` | unusable — `Rate limit exceeded` at 2 RPM | — | 80.9s |
+| `deepseek/deepseek-v4-pro` | unusable — `Insufficient Balance` | — | 13.4s |
 
 **Coder probe** — write one small module under four mechanically checkable
 constraints (named export, specific edge-case behaviour, exactly one WHY
@@ -658,8 +704,13 @@ comment, explicit `.ts` import extensions).
 |---|---|---|---|
 | `opencode/muse-spark-1.3-contributor-free` | 4/4 | read the dir, wrote the file | 20.8s |
 | `orcarouter/deepseek/deepseek-v4-flash-free` | 4/4 | globbed, wrote the file | 22.1s |
+| `google/gemini-3-flash-preview` | 4/4 | wrote the file | 20.9s |
+| `mistral/codestral-latest` | 4/4 | printed only, never wrote | 10.1s |
 | `openrouter/cohere/north-mini-code:free` | 3.5/4 | printed only, never wrote | 17.4s |
 | `openrouter/thinkingmachines/inkling:free` | 0/4 | **mangled the Windows path**, permission-rejected | 14.2s |
+| `groq/openai/gpt-oss-120b` | — | unusable — 8k tok/min < 14k context | — |
+| `deepseek/deepseek-v4-flash` | — | unusable — `Insufficient Balance` | 9.6s |
+| `nvidia/qwen/qwen3-coder-480b-a35b-instruct` | — | unusable — **410 Gone**, EOL 2026-06-11 | 6.0s |
 
 Three findings worth carrying forward:
 
