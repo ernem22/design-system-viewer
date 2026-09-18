@@ -1480,6 +1480,17 @@ the thread records what happened. Free-text comments are still read by the coord
 verdict and cannot approve, which is deliberate — only the machine-readable block moves
 the gate.
 
+**Closing is a pass, not a memory.** `tools/orchestration/close.sh` loops over every open
+PR, **attempts the merge blindly** and lets GitHub refuse the ones the gate has not
+approved — which is exactly what a required status check buys: the coordinator no longer
+has to hold each PR's CI/verdict state in its head. For each PR it prints what is missing
+(`no verdict block yet — who owes: reviewer + tester`, `waiting on tester verdict for head
+<sha>`, `BLOCKED by the gate — …`), and on a merge it closes the issues the PR body claims
+(`Closes #<n>` only fires on the repo's default branch, and this pipeline merges into a
+feature branch). Run it every cycle: a green, reviewed PR sitting open while the
+coordinator is busy elsewhere is what "we have trouble closing finished things" looks
+like, and the fix is to make the closing mechanical rather than remembered.
+
 ## Failure Ledger
 
 Incidents already paid for. Each is a rule above; this table is the index so
