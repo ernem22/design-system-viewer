@@ -61,7 +61,7 @@ export function SchemaView({
                     data-token={name}
                     aria-selected={selected?.name === name || undefined}
                     title={hit ? "click to copy — double-click or Update to edit" : "missing — Add to create it"}
-                    onClick={() => hit && onPick({ name, value: value as string })}
+                    onClick={() => onPick(token)}
                     onDoubleClick={() => onEdit(token)}
                   >
                     <td className={hit ? "tok-yes" : "tok-no"}>

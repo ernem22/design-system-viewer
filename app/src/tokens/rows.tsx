@@ -164,7 +164,14 @@ export const EasingRow = memo(function EasingRow(props: RendererProps) {
 });
 
 export const OpacityRow = memo(function OpacityRow(props: RendererProps) {
-  return <Rows {...props} render={(t) => <div className="tok-shadowbox" style={{ opacity: varOf(t.name) }} />} />;
+  return (
+    <Rows
+      {...props}
+      render={(t) => (
+        <div className="tok-shadowbox" style={{ opacity: varOf(t.name), background: "var(--color-accent)" }} />
+      )}
+    />
+  );
 });
 
 export const TypeRow = memo(function TypeRow(props: RendererProps) {
