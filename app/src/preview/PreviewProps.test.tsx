@@ -45,6 +45,20 @@ const consistent = {
   ],
 } as unknown as DesignSystem;
 
+const darkThemed = {
+  ...divergent,
+  css: `:root { ${TOKEN}: #222222; }`,
+  groups: [
+    {
+      id: "color-accent",
+      label: "Accent / Brand",
+      kind: "color",
+      tokens: [{ name: TOKEN, value: "#111111" }],
+    },
+  ],
+  themes: { dark: [{ name: TOKEN, value: "#000000" }] },
+} as unknown as DesignSystem;
+
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 
@@ -52,16 +66,18 @@ function Harness({
   system,
   push,
   onPatch,
+  dark = false,
 }: {
   system: DesignSystem;
   push: PushToast;
   onPatch: (name: string, value: string) => void;
+  dark?: boolean;
 }) {
-  const view = useTokensView(system, push);
+  const view = useTokensView(system, push, dark);
   return (
     <>
       <span data-testid="tokens-value">{view.valueMap.get(TOKEN) ?? "missing"}</span>
-      <PreviewProps system={system} onPatch={onPatch} />
+      <PreviewProps system={system} onPatch={onPatch} dark={dark} />
     </>
   );
 }
@@ -70,13 +86,14 @@ async function mount(
   system: DesignSystem,
   push: PushToast,
   onPatch: (name: string, value: string) => void,
+  dark = false,
 ): Promise<HTMLDivElement> {
   const { createRoot } = await import("react-dom/client");
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => {
-    root!.render(<Harness system={system} push={push} onPatch={onPatch} />);
+    root!.render(<Harness system={system} push={push} onPatch={onPatch} dark={dark} />);
   });
   return host;
 }
@@ -114,6 +131,39 @@ describe("Preview vs Tokens token values", () => {
     const el = await mount(consistent, vi.fn(), vi.fn());
     expect(tokensValue(el)).toBe("#4f46e5");
     expect(previewValue(el)).toBe("#4f46e5");
+  });
+
+  it("agree on a token authored only in css when groups exist", async () => {
+    const cssOnly = {
+      slug: "css-only",
+      name: "Css only",
+      css: `:root { ${TOKEN}: #333333; }`,
+      groups: [
+        {
+          id: "color-bg",
+          label: "Background",
+          kind: "color",
+          tokens: [{ name: "--color-bg", value: "#ffffff" }],
+        },
+      ],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    } as unknown as DesignSystem;
+    const el = await mount(cssOnly, vi.fn(), vi.fn());
+    expect(tokensValue(el)).toBe("#333333");
+    expect(previewValue(el)).toBe("#333333");
+  });
+
+  it("agree on the light value when a dark theme is present but off", async () => {
+    const el = await mount(darkThemed, vi.fn(), vi.fn(), false);
+    expect(tokensValue(el)).toBe("#111111");
+    expect(previewValue(el)).toBe("#111111");
+  });
+
+  it("agree on the dark override when dark is on", async () => {
+    const el = await mount(darkThemed, vi.fn(), vi.fn(), true);
+    expect(tokensValue(el)).toBe("#000000");
+    expect(previewValue(el)).toBe("#000000");
   });
 
   it("does not patch the token store just by rendering", async () => {

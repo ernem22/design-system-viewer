@@ -3,9 +3,9 @@ import type { DesignSystem } from "../systems/store.ts";
 import { tokenValueMap } from "./useTokensView.ts";
 
 // Issue #37: Preview and Tokens must read token values from one place. These
-// pin that place: `groups` first (what App applies to :root and the gallery
-// renders), `css` only as the fallback — the legacy order from
-// src/viewer/app.js:443.
+// pin that place and its merge order: `css` first, then `groups` per token
+// (groups win — what App applies to `:root` and the gallery renders), then the
+// active `themes.dark` override on top.
 
 const TOKEN = "--color-accent";
 
@@ -40,6 +40,60 @@ describe("tokenValueMap", () => {
   it("falls back to parsing css when there are no groups", () => {
     const sys = system({ css: `:root { ${TOKEN}: #222222; }`, groups: [] });
     expect(tokenValueMap(sys).get(TOKEN)).toBe("#222222");
+  });
+
+  it("keeps a token authored only in css when groups exist", () => {
+    const sys = system({
+      css: `:root { ${TOKEN}: #222222; --new: #333333; }`,
+      groups: [
+        {
+          id: "color-accent",
+          label: "Accent / Brand",
+          kind: "color",
+          tokens: [{ name: TOKEN, value: "#111111" }],
+        },
+      ],
+    });
+    const map = tokenValueMap(sys);
+    // groups still wins for the token both sources author…
+    expect(map.get(TOKEN)).toBe("#111111");
+    // …while the css-only token is not dropped.
+    expect(map.get("--new")).toBe("#333333");
+  });
+
+  it("applies the active themes.dark override only when dark is on", () => {
+    const sys = system({
+      css: `:root { ${TOKEN}: #222222; }`,
+      groups: [
+        {
+          id: "color-accent",
+          label: "Accent / Brand",
+          kind: "color",
+          tokens: [{ name: TOKEN, value: "#111111" }],
+        },
+      ],
+      themes: { dark: [{ name: TOKEN, value: "#000000" }] },
+    });
+    expect(tokenValueMap(sys).get(TOKEN)).toBe("#111111");
+    expect(tokenValueMap(sys, true).get(TOKEN)).toBe("#000000");
+  });
+
+  it("overlays dark per token, leaving non-overridden layers intact", () => {
+    const sys = system({
+      css: `:root { ${TOKEN}: #222222; --new: #333333; }`,
+      groups: [
+        {
+          id: "color-accent",
+          label: "Accent / Brand",
+          kind: "color",
+          tokens: [{ name: TOKEN, value: "#111111" }],
+        },
+      ],
+      themes: { dark: [{ name: TOKEN, value: "#000000" }] },
+    });
+    const map = tokenValueMap(sys, true);
+    expect(map.get(TOKEN)).toBe("#000000");
+    expect(map.get("--new")).toBe("#333333");
   });
 
   it("still returns the authored value when both sources agree", () => {
