@@ -21,9 +21,35 @@ set -uo pipefail
 
 RUN="${1:-run_4e539259ab29}"
 MAX="${2:-3600}"
+SKIP_EXISTING=""
+for arg in "$@"; do [ "$arg" = "--skip-existing" ] && SKIP_EXISTING=1; done
+case "$MAX" in --*) MAX=3600 ;; esac
 S="${LOCALAPPDATA}/orca-orchestration/design-system-viewer"
 TMP="${LOCALAPPDATA}/Temp/watch_$$.json"
 START=$(date +%s)
+
+# An unacked settlement is redelivered forever, and every watcher wakes on it
+# immediately — so an old message makes this script useless. With --skip-existing
+# the queue is drained once, printing what it acks, and the watcher then reports
+# only what arrives after it started.
+if [ -n "$SKIP_EXISTING" ]; then
+  orca orchestration check --run "$RUN" --json > "$TMP" 2>/dev/null
+  # The ack takes the DELIVERY id (result.deliveryId), not the message id: acking
+  # with msg_... returns ok:false and leaves the queue untouched.
+  DID=$(node -e "
+const fs=require('fs');
+try{ const j=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
+  const r=j.result||{};
+  const list=r.deliveries||r.messages||[];
+  console.log(r.deliveryId||''); if(list.length) console.log('pending='+list.length);
+}catch(e){}
+" "$TMP")
+  FIRST=$(printf '%s' "$DID" | head -1)
+  if [ -n "$FIRST" ]; then
+    orca orchestration check --run "$RUN" --ack "$FIRST" --json >/dev/null 2>&1 \
+      && echo "watch: acked pre-existing $FIRST"
+  fi
+fi
 
 while :; do
   NOW=$(date +%s)
