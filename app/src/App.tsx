@@ -20,7 +20,6 @@ import SystemSwitcher from "./systems/SystemSwitcher.tsx";
 import { AddSystemDialog } from "./systems/AddSystemDialog.tsx";
 import "./systems/AddSystemDialog.css";
 import Rail from "./shell/Rail.tsx";
-import Props from "./shell/Props.tsx";
 import { COMPONENT_ENTRIES } from "./gallery/components/index.ts";
 import { buildRailGroups } from "./gallery/registry.ts";
 import { GallerySection } from "./gallery/ui.tsx";
@@ -264,7 +263,8 @@ function App() {
   );
 
   // Each tab supplies its rail content (groups) and props content; Shell
-  // renders the one rail frame around whichever tab's content is active.
+  // renders the one rail frame and the one props frame around whichever
+  // tab's content is active.
   const tabs: ShellTab[] = [
     {
       id: "tokens",
@@ -287,9 +287,7 @@ function App() {
           syncSection={sectionSyncArmed && tab === "tokens"}
         />
       ),
-      propsPanel: (
-        <Props open={propsOpen}>{active && <TokensProps view={tokensView} />}</Props>
-      ),
+      propsPanel: active && <TokensProps view={tokensView} />,
     },
     {
       id: "preview",
@@ -319,22 +317,14 @@ function App() {
           syncSection={sectionSyncArmed && tab === "preview"}
         />
       ),
-      propsPanel: (
-        <Props open={propsOpen}>
-          <PreviewProps system={active} onPatch={handlePatch} dark={darkOn} />
-        </Props>
-      ),
+      propsPanel: <PreviewProps system={active} onPatch={handlePatch} dark={darkOn} />,
     },
     {
       id: "compare",
       label: "Compare",
       content: <CompareView view={compareView} />,
       rail: <CompareRail systems={systems} view={compareView} />,
-      propsPanel: (
-        <Props open={propsOpen}>
-          <CompareProps view={compareView} />
-        </Props>
-      ),
+      propsPanel: <CompareProps view={compareView} />,
     },
   ];
 
@@ -397,6 +387,7 @@ function App() {
           }
           tabs={tabs}
           railOpen={railOpen}
+          propsOpen={propsOpen}
           tab={tab}
           onTabChange={setTab}
         />

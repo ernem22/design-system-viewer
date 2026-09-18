@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { readViewUrl, type UrlTab } from "../lib/urlState.ts";
 import RailFrame from "./RailFrame.tsx";
+import PropsFrame from "./PropsFrame.tsx";
 import "./shell.css";
 
 export type AppTab = UrlTab;
@@ -27,6 +28,9 @@ export interface ShellSlots {
      App (toggled from the topbar) like `tab`, passed down so Shell stays a
      controlled chrome shell with no state of its own. */
   railOpen: boolean;
+  /** Whole-panel collapse state for the one props frame Shell renders, same
+     lifted-from-App shape as `railOpen`. */
+  propsOpen: boolean;
   /** Controlled tab state — App.tsx lifts this so its URL-sync effect sees
      every switch. Shell still owns layout; this is chrome state passed down
      as props, same shape as railOpen/propsOpen. Absent = uncontrolled. */
@@ -46,13 +50,13 @@ function isKnownTab(value: string, tabs: ShellTab[]): value is AppTab {
  *
  * The Rail/Props <aside> chrome (open/close toggle, width, animation) is
  * the same across every tab — only what's inside swaps with the active
- * tab. The rail frame itself (RailFrame) is rendered once, outside the tab
- * map, so exactly one `.app-rail-inner` exists and a tab switch swaps its
- * content instead of rebuilding the scroller (which would reset scroll).
- * Each tab's rail/props content is still forceMount'ed, same as `main`'s,
- * so switching tabs hides it (via the [data-state="inactive"] rule in
- * shell.css) instead of unmounting it — Rail keeps its open/collapsed
- * groups when you tab away and back.
+ * tab. Both frames (RailFrame, PropsFrame) are rendered once, outside the
+ * tab map, so exactly one `.app-rail-inner` and one `.app-props-inner`
+ * exist and a tab switch swaps their content instead of rebuilding the
+ * scrollers (which would reset scroll). Each tab's rail/props content is
+ * still forceMount'ed, same as `main`'s, so switching tabs hides it (via
+ * the [data-state="inactive"] rule in shell.css) instead of unmounting it —
+ * Rail keeps its open/collapsed groups when you tab away and back.
  */
 export default function Shell({
   brand,
@@ -60,6 +64,7 @@ export default function Shell({
   actions,
   tabs,
   railOpen,
+  propsOpen,
   tab: controlledTab,
   onTabChange,
 }: ShellSlots) {
@@ -117,13 +122,15 @@ export default function Shell({
         </main>
 
         <aside id="app-props" className="app-props" aria-label="Properties">
-          {tabs.map(({ id, propsPanel }) =>
-            propsPanel ? (
-              <Tabs.Content key={id} value={id} forceMount>
-                {propsPanel}
-              </Tabs.Content>
-            ) : null,
-          )}
+          <PropsFrame open={propsOpen}>
+            {tabs.map(({ id, propsPanel }) =>
+              propsPanel ? (
+                <Tabs.Content key={id} value={id} forceMount>
+                  {propsPanel}
+                </Tabs.Content>
+              ) : null,
+            )}
+          </PropsFrame>
         </aside>
       </div>
     </Tabs.Root>
