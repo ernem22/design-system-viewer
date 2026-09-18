@@ -37,14 +37,18 @@ tests: pass | fail
 pr: <number>
 changed: <files, one line>
 
-Send worker_done once, from this terminal, with the task id, dispatch id and
-terminal handle from your preamble — the exact call is:
+Send worker_done once, from this terminal. **Do not retype the command: your
+dispatch preamble prints it verbatim, including the `--dispatch-capability dcap_...`
+token that is unique to your dispatch.** A hand-written or remembered command is
+rejected with `dispatch_capability_invalid: The Dispatch capability is missing`, and
+your report then reaches the coordinator only as a rejection echo — no settlement, no
+verdict, and the phase looks finished while it is stalled. Check the command you are
+about to run carries all of:
 
-    orca orchestration send --run <run id> --from <your terminal handle> \
-      --type worker_done --subject "coder <n> done" \
-      --body "<the acceptance block below + your prose>" \
-      --task-id <task id> --dispatch-id <dispatch id> \
-      --outcome=succeeded --files-modified <csv> --json
+    --task-id <task id> --dispatch-id <dispatch id>
+    --outcome=succeeded          (equals sign; the space form is rejected)
+    --files-modified <csv>
+    --dispatch-capability <token from your preamble>
 
 TWO OPERATIONAL RULES, both learned from a real failure:
   - **`--outcome=succeeded`, with the equals sign.** The space form
@@ -56,12 +60,9 @@ TWO OPERATIONAL RULES, both learned from a real failure:
     terminal output — the coordinator can read a retained terminal — and say in it
     that the settlement was empty.
 
-If the issue leaves a requirement genuinely ambiguous, ask instead of guessing:
-
-    orca orchestration send --run <run id> --from <your terminal handle> \
-      --type question --subject "<the one thing you cannot decide>" \
-      --body "<what you know, what you need>" \
-      --to <coordinator terminal handle from your preamble> \
-      --task-id <task id> --dispatch-id <dispatch id> --json
+If the issue leaves a requirement genuinely ambiguous, ask instead of guessing — with
+`--type question`, using the command shape from your dispatch preamble again
+(`--to <coordinator terminal handle from your preamble>`, plus `--task-id`,
+`--dispatch-id` and the capability token), never a retyped one.
 
 then wait. Never invent a requirement.
