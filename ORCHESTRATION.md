@@ -14,17 +14,40 @@ what a worker did. Every optimization in this doc exists to cut Hermes's own
 token and tool-call cost without weakening the verified pipeline below.
 
 **The user owns what gets built, and owns what the next proposal looks at.**
-They write the issues and they mark the safe ones `auto-ok`; when they want more
-issues than exist, they tell Hermes the focus (an area, a theme, a "we have no
-issue for X") and a Task Creator turns that focus into one new issue. Hermes
-never invents a direction on its own — an empty backlog with no stated focus
-means Hermes says the queue is empty and stops there.
+They write the issues, and they can hold any one of them back with
+`human-merge`; when they want more issues than exist, they tell Hermes the focus
+(an area, a theme, a "we have no issue for X") and a Task Creator turns that
+focus into one new issue. Hermes never invents a direction on its own — an empty
+backlog with no stated focus means Hermes says the queue is empty and stops
+there.
 
 The split is by blast radius, not by novelty. A large self-contained addition
 is safer to merge unread than a three-line edit to a file everything renders
-through, so `auto-ok` tracks how far a change reaches rather than how big or how
-new it is. A Task Creator role exists, but only runs on a focus the user stated
-— see Task Creator.
+through, so the user's `human-merge` marker tracks how far a change reaches
+rather than how big or how new it is. A Task Creator role exists, but only runs
+on a focus the user stated — see Task Creator.
+
+## Operational Contract (apply this without reading further)
+
+1. One Run per session; every dispatch carries `--run <id> --from <handle>`.
+2. Per worker: worktree → `opencode.json` (the model) → terminal →
+   `worker-start --spec`. Tester worktrees get their harness installed, built and
+   served by the coordinator, one port each — the worker never starts a server.
+3. Read `check --wait` FIFO batches. Ack heartbeat-only batches; never ack a
+   batch you have not parsed. `check --all` recovers a settlement you think you
+   lost.
+4. A stall is an identical tail **and** a frozen token counter across two reads
+   ≥90s apart → `worker-abandon --dispatch <old>`, then `worker-start --task <id>
+   --retry-of <old>` with a fresh worktree.
+5. A PR advances only on CI green (`gh pr checks`) + Reviewer PASS (`scope_ok:
+   yes`) + Tester PASS (`observed:` and `before:` lines). All three in hand →
+   merge, then close the issue — unless the issue carries `human-merge`.
+6. While a review or verification wave waits, keep a Coder in flight for every
+   free `app/src` area.
+7. Never write application code, never re-review a PASS, never report an
+   unverifiable result as success.
+8. Every merged commit carries both identities: the `[role]` tag in the subject,
+   `erne` as author, and the worker as a `Co-authored-by:` trailer.
 
 ## Current Verified Architecture
 
@@ -299,7 +322,7 @@ spelled out below; the probe-driven table it replaces is kept as history in
 | Role | Primary | Fallback |
 |---|---|---|
 | Coder | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` |
-| Batch Reviewer | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` |
+| Reviewer | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` |
 | Tester | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` |
 | Fixer | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` |
 
@@ -498,24 +521,24 @@ identity on every call of the wave.
 **Fan-out bounds.** One Coder per `app/src` area at a time (see the Issue-Label
 State Machine) — a conflict rule, not a rate limit. Beyond that, size the wave
 to what the coordinator can process: the budget assumes roughly one `check
---wait` per wave. Batch Review exists because review is the expensive seat, so
-fan out Coders and Testers, and batch Reviewers.
+--wait` per wave. Review and verification are per PR now, so the seats to fan
+out are Coders and Testers; the Reviewer's cross-PR conflict block is what keeps
+several live PRs from colliding at merge.
 
 ## Task Lifecycle
 
-```
-created → coding → ci → review → pr → merging → completed
-```
+There is no separate lifecycle enum to keep in sync — the states live in the two
+systems that already own them:
 
-Failure transitions:
+- **Orca** owns per-dispatch state: `ready` → `working` → `succeeded`/`failed`,
+  `blocked` after an abandon, `abandoned` after a fence. Read it from
+  `worker-list --run <id>`; never restate it here.
+- **GitHub labels** own per-issue state, and the happy path is one label at a
+  time: `in-progress` → `needs-review` → (`needs-verify`) → merged and closed,
+  with `human-merge` as the user's hold. The Issue-Label State Machine section is
+  the authority; this section deliberately repeats none of it.
 
-```
-ci_failed     → fixing → ci
-review_failed → fixing → review
-merge_failed  → fixing → pr
-```
-
-A stage advances only on a structured PASS/succeeded signal or a green CI
+A stage advances only on a structured `PASS`/`succeeded` signal or a green CI
 check; never on Hermes's own inference from partial output.
 
 ## Issue-Label State Machine (parallel-safe)
@@ -570,16 +593,9 @@ pushed, awaiting review), `needs-verify` (the PR is in a verification wave),
 green + Reviewer PASS + Tester PASS). Check `gh label list` and create missing
 ones once with `gh label create <name> --color <hex>`.
 
-**`needs-test` is retired, but must be drained, not deleted.** Four issues
-(#41, #23, #21, #15) still carry it from the Tester-stage era, where it meant
-"Reviewer already passed, awaiting Tester". Under this document Hermes scans
-only `needs-review`, so those four would be orphaned. Drain each one before
-removing the label from the repo: find the PR that references it; if that PR
-is already merged, the work is done and the issue only needs
-`gh issue close <n>`; if no PR exists or it is still open, strip `needs-test`
-and put the issue back to `needs-review` (or unlabeled, if no Coder has
-claimed it) so it re-enters the normal queue. The Tester role is re-enabled
-under this document and uses the fresh `needs-verify` label — never revive
+**`needs-test` is retired.** The four issues that carried it (#41, #23, #21,
+#15) were drained and closed; the label stays in the repo as history and is
+never applied again. The Tester stage uses `needs-verify` — never revive
 `needs-test`, whose old meaning was "run the suite", which is CI's job.
 
 **The Coder — not Hermes — flips its own labels**, because the Coder is what
@@ -590,11 +606,14 @@ labels and dispatches the next role; it does not flip a label a worker owned,
 except as a corrective action when a `worker_done` claims the flip and the
 label is verifiably still missing.
 
-**One Coder per area at a time.** Parallel dispatch is throughput, but two
-Coders editing the same area produce PRs that both pass CI and then conflict on
-merge — and conflict resolution lands on the user, who did not write either
-change. `strict: false` on the branch protection deliberately does not force
-branches up to date, so nothing catches this for you.
+**One Coder per file, one Coder per area as the proxy.** Parallel dispatch is
+throughput, but two Coders editing the same file produce PRs that both pass CI
+and then conflict on merge — and conflict resolution lands on the user, who did
+not write either change. `strict: false` on the branch protection deliberately
+does not force branches up to date, so nothing catches this for you. The real
+invariant is the *file*: when the areas of two issues look claimed but their
+file sets are disjoint (different files inside `lib/`, say), dispatching both is
+correct — check the files, not just the subtree name.
 
 Areas are the `app/src` subtrees: `shell/`, `gallery/`, `tokens/`, `compare/`,
 `preview/`, `systems/`, `lib/`. Before dispatching a Coder, read the areas of
@@ -892,8 +911,8 @@ Gaps.
 - Squash-merge unless the repo's convention says otherwise. All merged PRs base
   onto `refactor/full-react-migration`.
 - Whoever merges also closes the issue — `gh issue close <n>`. GitHub will not
-  do it (see the Issue-Label State Machine), so for an `auto-ok` PR that step
-  belongs to Hermes, and for everything else to the user.
+  do it (see the Issue-Label State Machine), so for a `human-merge` PR that step
+  belongs to the user, and for everything else to Hermes at merge time.
 - Coder/Fixer must commit **and push** — Reviewer worktrees cannot see
   uncommitted changes in a sibling worktree, and `--base-branch` off a branch
   with only uncommitted work silently falls back to that branch's last real
@@ -904,9 +923,9 @@ Gaps.
 
 ## PR Body
 
-Most PRs are read by the Batch Reviewer and then merged; only `needs-human` ones
-reach the user. So the body is a short audit record, not an essay. Four
-headings, from `.github/pull_request_template.md`:
+Most PRs are read by the Reviewer and then merged by the pipeline; only
+`human-merge` ones reach the user. So the body is a short audit record, not an
+essay. Four headings, from `.github/pull_request_template.md`:
 
 ```
 ## What this changes     — links the issue, one plain paragraph
@@ -1011,19 +1030,20 @@ Three findings worth carrying forward:
 - **Bigger is not better on free tiers.** The 550B Nemotron produced nothing in
   ten minutes; the fastest correct Reviewer took nine seconds.
 
-## Batch Review
+## Review
 
-Review is batched because OpenCode Zen allows **100 requests/day** across all its
-models. One Muse Spark dispatch reading several PRs against its 1M-token context
-is how that quota becomes usable — and it buys something per-PR review cannot.
+One Reviewer dispatch per PR, in the same wave as that PR's Tester: they depend
+on the same green `app` check and not on each other's verdict, so serializing
+them only adds latency.
 
-**Trigger:** 3 or more PRs holding `needs-review` with a green `app` check.
-Ceiling **5**. Below 3, wait. Above 5, split — attention per diff falls as the
-batch grows, and attention is the whole reason for using the strongest model.
+Batching (3-5 PRs per dispatch) existed for a quota that is no longer in play —
+OpenCode Zen's 100 requests/day. The current model has no such cap, so the batch
+is gone and per-PR review is the shape. What batching bought is kept as one
+extra block, because it is the one thing a per-PR read cannot see.
 
 **Input** per PR: the issue body, `gh pr diff <n>`, the PR body. Nothing else.
 
-**Output** — one block per PR, then one cross-PR block:
+**Output** — one block per PR:
 
 ```
 pr: <number>
@@ -1033,29 +1053,33 @@ fix_required: <short actionable, only if fail>
 scope_ok: yes | no        # did it change anything the issue did not ask for?
 ```
 
+**A report missing the block for the PR it was dispatched on is rejected whole**
+— same class as a missing `worker_done`. Never infer a PASS for a PR the
+reviewer did not name.
+
+`scope_ok` is load-bearing, not decoration: the pipeline merges on the
+Reviewer's word, so this field is the only thing standing between an
+over-reaching Coder and an unreviewed merge. A `no` blocks the merge regardless
+of `status` — Hermes holds that PR for the user and says why.
+
+**Cross-PR conflicts are the one thing a per-PR review structurally cannot see.**
+Every PR branches from the same base with `strict: false`, so two PRs touching
+one file both report green and collide only at merge. When more than one PR is
+open or in flight, ask the same Reviewer for one extra block:
+
 ```
 conflicts: <pr>+<pr> on <path> | none
 ```
 
-**A batch missing a block for any PR in it is rejected whole** — same class as a
-missing `worker_done`. Never infer a PASS for a PR the reviewer did not name.
-
-`scope_ok` is load-bearing, not decoration: with `auto-ok` merging on the
-Reviewer's word, this field is the only thing standing between an over-reaching
-Coder and an unreviewed merge. A `no` blocks the merge regardless of `status`.
-
-**The cross-PR block is a reason to batch, not a bonus.** Open PRs all branch
-from the same base with `strict: false`, so two touching one file both report
-green and collide only at merge. A per-PR reviewer structurally cannot see that;
-a batch reviewer holding both diffs can. Require the block even when it is
-`none`.
+Require it even when it is `none`. A line naming two live PRs means: hold the
+later one and report it, never merge into a known conflict.
 
 ## Continuous Operation Mode
 
 Once started, Hermes runs cycles **back-to-back without stopping for
-confirmation** — open issue → Coder → CI → batch review → Tester → merge
+confirmation** — open issue → Coder → CI → review → Tester → merge
 (`human-merge` held) → next issue. It does not wait for the user on a
-`needs-human` PR before starting the next issue; those queue up while work
+`human-merge` PR before starting the next issue; those queue up while work
 continues.
 
 It stops when the user says stop, when the queue is empty and the user has stated
@@ -1138,9 +1162,14 @@ receipt.
   oversight.
 - Never delete or reset uncommitted work in a worktree Hermes did not create
   for this run.
-- Never fabricate a model ID, a test result, or a "verified" claim. Every
-  "verified" in this document was observed as command output, a terminal
-  header, or a re-run result. Anything else is labeled `assumed`.
+- **Never fabricate a model ID, a test result, or a "verified" claim.** The
+  words carry evidence requirements: `verified` is a command this run ran with
+  its output quoted; `observed` (Tester) is a DOM/URL/console fact read from the
+  running app, named with the URL it was read at; `PASS` (Reviewer) is a
+  judgement with the file:line it rests on. Anything without its evidence is
+  `assumed` — and an unverifiable result is never reported as success. The
+  honest alternatives are `status: failed`, `before: not-run (<reason>)`, or a
+  question to the user.
 
 ## Cleanup Checklist
 
