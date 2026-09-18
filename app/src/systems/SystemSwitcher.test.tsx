@@ -96,16 +96,16 @@ afterEach(() => {
 });
 
 describe("SystemSwitcher coverage memo", () => {
-  it("evaluates coverage once per system for the first render", async () => {
+  it("evaluates coverage once per system plus the active header on first render", async () => {
     const systems = [system("aurora", 22), system("chatgpt", 44)];
     await render(systems, systems[0]);
-    expect(counters.calls).toBe(2);
+    expect(counters.calls).toBe(3); // two menu rows + the active header
   });
 
   it("does not re-evaluate coverage when re-rendered with the same list", async () => {
     const systems = [system("aurora", 22), system("chatgpt", 44)];
     await render(systems, systems[0]);
-    expect(counters.calls).toBe(2);
+    expect(counters.calls).toBe(3);
 
     // App re-renders on every search keystroke with the same `systems`
     // prop; the switcher's memo must absorb those without re-parsing.
@@ -118,7 +118,7 @@ describe("SystemSwitcher coverage memo", () => {
     const first = system("aurora", 22);
     const second = system("chatgpt", 44);
     await render([first], first);
-    expect(counters.calls).toBe(1);
+    expect(counters.calls).toBe(2); // one menu row + the active header
 
     // A mutation produces a new list identity; only then does coverage run.
     counters.calls = 0;
@@ -136,5 +136,20 @@ describe("SystemSwitcher coverage memo", () => {
     // The trigger only shows the active system's badge; the menu rows carry
     // the rest through the same memoized map.
     expect(host!.querySelector(".app-topbar-cov")?.textContent).toBe("10%");
+  });
+
+  it("tracks a changed active even while the systems reference is stable", async () => {
+    const systems = [system("aurora", 22), system("chatgpt", 44)];
+    await render(systems, systems[1]);
+    expect(host!.querySelector(".app-topbar-cov")?.textContent).toBe("10%");
+
+    // `systems` keeps its identity, so `pctMap` is not rebuilt, while the
+    // active object is replaced with a different CSS under the same slug. A
+    // slug-keyed map would keep serving the stale 10%; the header must read
+    // the `active` object it was given.
+    counters.calls = 0;
+    await rerender(systems, system("chatgpt", 22));
+    expect(host!.querySelector(".app-topbar-cov")?.textContent).toBe("5%");
+    expect(counters.calls).toBe(1); // only the active header re-evaluated
   });
 });

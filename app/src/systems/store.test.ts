@@ -17,18 +17,17 @@ vi.mock("../../../src/core/parse.js", async (importOriginal) => {
 
 import { coverage, REFERENCE } from "../../../src/core/schema.js";
 import {
-  coverageFingerprint,
   coveragePercent,
   PCT_CACHE_MAX,
   systemCoveragePercent,
   type DesignSystem,
 } from "./store.ts";
 
-// Issue #36: `pctCache` keyed the whole CSS string and `clear()`ed all 200
-// warm entries on one overflow. These tests pin the two replacements:
-// (1) a bounded LRU that evicts only the coldest key, and (2) a keyed
-// fingerprint so a cache hit never hashes tens of KB. Because the tests run
-// in-process with the shared module cache, ordering is deterministic.
+// Issue #36: `pctCache` `clear()`ed all 200 warm entries on one overflow.
+// These tests pin the replacement: a bounded LRU that evicts only the coldest
+// key, keyed by slug + the whole CSS so a cache hit is never a stale one.
+// Because the tests run in-process with the shared module cache, ordering is
+// deterministic.
 
 const REFERENCE_NAMES: string[] = (REFERENCE as { tokens: string[] }[]).flatMap((g) => g.tokens);
 
@@ -58,26 +57,6 @@ function expectedPct(sys: DesignSystem): number {
   return coveragePercent(coverage(names) as DesignSystem["coverage"]) as number;
 }
 
-describe("coverageFingerprint", () => {
-  it("changes when the head of a same-length CSS changes", () => {
-    const a = `${"x".repeat(100)}AAA`;
-    const b = `${"x".repeat(100)}AAB`;
-    expect(a.length).toBe(b.length);
-    expect(coverageFingerprint(a)).not.toBe(coverageFingerprint(b));
-  });
-
-  it("changes when only the tail of a same-length CSS changes", () => {
-    const a = `AAA${"x".repeat(100)}`;
-    const b = `AAB${"x".repeat(100)}`;
-    expect(a.length).toBe(b.length);
-    expect(coverageFingerprint(a)).not.toBe(coverageFingerprint(b));
-  });
-
-  it("is stable for identical text", () => {
-    expect(coverageFingerprint(":root { --a: 1; }")).toBe(coverageFingerprint(":root { --a: 1; }"));
-  });
-});
-
 describe("systemCoveragePercent correctness", () => {
   it("computes the exact schema percentage", () => {
     const sys = system("aurora", 22);
@@ -94,6 +73,30 @@ describe("systemCoveragePercent correctness", () => {
     expect(p2).toBe(expectedPct(after));
     expect(p1).toBe(5);
     expect(p2).toBe(10);
+  });
+
+  it("does not serve a stale pct after a same-length edit in the middle", () => {
+    // 89 reference tokens rounds to 21%; dropping one lands on 20%. The
+    // renamed token sits far from both ends, so a length/head/tail key cannot
+    // tell `before` from `after` and would serve the stale 21%.
+    const names = REFERENCE_NAMES.slice(0, 89);
+    const mid = Math.floor(names.length / 2);
+    const last = names[mid].slice(-1);
+    const renamed = `${names[mid].slice(0, -1)}${last === "q" ? "z" : "q"}`;
+    const edited = names.slice();
+    edited[mid] = renamed;
+
+    const before = system("middle-edit", 89);
+    const after: DesignSystem = { ...before, css: css(edited) };
+    expect(after.css.length).toBe(before.css.length);
+    const at = after.css.indexOf(renamed);
+    expect(at).toBeGreaterThan(64);
+    expect(at).toBeLessThan(after.css.length - 64);
+
+    const p1 = systemCoveragePercent(before);
+    expect(p1).toBe(21);
+    expect(systemCoveragePercent(after)).toBe(expectedPct(after));
+    expect(systemCoveragePercent(after)).toBe(20);
   });
 
   it("does not confuse two systems with identical CSS", () => {

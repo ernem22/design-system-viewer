@@ -299,22 +299,18 @@ export function useSystems() {
 
 /** Coverage is recomputed from the CSS, never read from the stored
    snapshot: those go stale when the schema grows and report bogus numbers.
-   Keyed by slug + a cheap length/prefix/suffix fingerprint of the CSS, not
-   the whole text: a warm hit costs O(1) instead of re-hashing tens of KB,
-   and a token edit (which can keep the length) still misses because the
-   fingerprint samples the head and tail. Mutations keep the same slug but
-   change the fingerprint, so a stale entry is never served. */
-export function coverageFingerprint(css: string): string {
-  return `${css.length}:${css.slice(0, 64)}:${css.slice(-64)}`;
-}
-
+   Keyed by slug + the whole CSS text, so *any* change to the text — including
+   a same-length edit in the middle — misses and a stale entry is never
+   served. Hashing the full string per call is acceptable because the only hot
+   caller, SystemSwitcher, memoizes its slug→pct map on the systems list, so
+   this is reached only when that list changes, not on every keystroke render. */
+export const PCT_CACHE_MAX = 200;
 /** Bounded LRU (insertion order, re-inserted on hit). One overflow evicts
    the coldest entry instead of `clear()`ing every warm system at once. */
-export const PCT_CACHE_MAX = 200;
 const pctCache = new Map<string, number | null>();
 
 function pctCacheKey(system: DesignSystem): string {
-  return `${system.slug}\u0000${coverageFingerprint(system.css ?? "")}`;
+  return `${system.slug}\u0000${system.css ?? ""}`;
 }
 
 function pctCacheGet(key: string): number | null | undefined {
