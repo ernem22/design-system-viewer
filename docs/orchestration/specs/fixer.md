@@ -10,6 +10,13 @@ THE FINDINGS, verbatim:
 
   <paste reason + fix_required exactly as the Reviewer or CI wrote them>
 
+**STEP 0 — reproduce each finding before you fix it.** A Reviewer's finding is a claim
+too. Reproduce every one on the parent commit (its `where:` line is your pointer) and
+record the observed value; the Reviewer's own reading can be half wrong — one said
+"`.app-toast-warn` is absent" when the class was applied and only the CSS rule was
+missing. A finding you cannot reproduce is reported as `unreproducible` with what you
+tried, never silently "fixed".
+
 Fix each one so a reader can point at the line that closes it. Do not re-scope,
 do not re-design, do not "improve while you are in there" — an unrequested change
 is what makes the next Reviewer return `scope_ok: no` and blocks the merge.
