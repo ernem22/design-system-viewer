@@ -182,20 +182,17 @@ function App() {
   }, [inspectedId, revealProps]);
   const swapCount = Object.values(swaps).reduce((n, m) => n + Object.keys(m).length, 0);
 
-  // Dynamic Google Fonts for the active system plus every compared system
-  // (keyed on raw css so token edits that change a family also swap fonts).
-  // One call for the union: every tab stays mounted and shares one
-  // document.head link set, so separate per-tab calls would delete each
-  // other's families. Stale links are removed inside loadGoogleFonts.
+  // Dynamic Google Fonts, scoped per consumer (issue #40): the active system's
+  // families serve Tokens/Preview, Compare owns its picked columns'. Each scope
+  // diffs its own <link>s, so picking a Compare system can no longer
+  // add/remove/rewrite the other tabs' font links, and a patchToken that leaves
+  // families unchanged touches nothing (the hook diffs family sets first).
+  useGoogleFonts(active?.css ?? "", "active");
   const compareCss = useMemo(
     () => compareView.cols.map((s) => s.css).join("\n"),
     [compareView.cols],
   );
-  const fontCss = useMemo(
-    () => [active?.css ?? "", compareCss].filter(Boolean).join("\n"),
-    [active, compareCss],
-  );
-  useGoogleFonts(fontCss);
+  useGoogleFonts(compareCss, "compare");
 
   // Querystring half of the deep link (tab/system/compare picks) — one
   // replaceState writer, so switches never spam back/forward and never
