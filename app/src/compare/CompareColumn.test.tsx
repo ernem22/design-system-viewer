@@ -1,8 +1,11 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from "vitest";
-import { act } from "react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { act, useState } from "react";
+import type { CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import type { Root } from "react-dom/client";
 import { CompareColumn } from "./CompareColumn.tsx";
+import { usePortalContainer } from "../gallery/ui.tsx";
 import { BASIC_OPTIONS } from "./registry.tsx";
 import type { ComparableOption } from "./registry.tsx";
 
@@ -22,7 +25,11 @@ function option(id: string): ComparableOption {
   return found;
 }
 
-async function renderColumns(opt: ComparableOption, slugs: string[]): Promise<HTMLDivElement> {
+async function renderColumns(
+  opt: ComparableOption,
+  slugs: string[],
+  style: CSSProperties = {},
+): Promise<HTMLDivElement> {
   const { createRoot } = await import("react-dom/client");
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -31,7 +38,7 @@ async function renderColumns(opt: ComparableOption, slugs: string[]): Promise<HT
     root!.render(
       <>
         {slugs.map((slug) => (
-          <CompareColumn key={slug} slug={slug} name={slug} style={{}} pct={null} option={opt} />
+          <CompareColumn key={slug} slug={slug} name={slug} style={style} pct={null} option={opt} />
         ))}
       </>,
     );
@@ -92,5 +99,75 @@ describe("CompareColumn id namespacing", () => {
       root!.render(<Render />);
     });
     expect(host.querySelector("input")!.id).toBe("c-e");
+  });
+});
+
+// Issue #31: the column hands Radix portals a container node so their
+// contents resolve this column's inline token scope, not document.body/the
+// page :root. A ref-held node is null on the first render, so a portal opened
+// then escapes the scope until a later render repairs it. This probe locks in
+// whatever `usePortalContainer()` returned on its FIRST render and portals
+// into exactly that, so it can only pass if the first paint is already in
+// scope — and it counts its renders to catch a repair pass.
+
+let capturedContainer: HTMLElement | undefined;
+let containerCaptured = false;
+let probeRenders = 0;
+
+function FirstRenderPortalProbe() {
+  const container = usePortalContainer();
+  const [locked] = useState(() => {
+    if (!containerCaptured) {
+      capturedContainer = container;
+      containerCaptured = true;
+    }
+    return container;
+  });
+  probeRenders += 1;
+  return locked ? createPortal(<span className="cmp-probe-portal">portalled</span>, locked) : null;
+}
+
+/** Portals into whatever the live context holds — the "portal opened after
+    mount" path (Select/Dialog reachable from a later interaction). */
+function LivePortalProbe() {
+  const container = usePortalContainer();
+  return container ? createPortal(<span className="cmp-live-portal">live</span>, container) : null;
+}
+
+describe("CompareColumn portal container scope", () => {
+  beforeEach(() => {
+    capturedContainer = undefined;
+    containerCaptured = false;
+    probeRenders = 0;
+  });
+
+  it("renders a first-render portal into the column's token scope", async () => {
+    const probe: ComparableOption = { id: "probe", label: "Portal probe", Render: FirstRenderPortalProbe };
+    const scope = { "--color-accent": "rgb(10, 20, 30)", color: "var(--color-accent)" } as CSSProperties;
+    const el = await renderColumns(probe, ["aurora"], scope);
+    const column = el.querySelector(".cmp-col") as HTMLElement;
+
+    // Parent commit: the container is undefined on the first render (the
+    // Provider is skipped until the ref resolves), so this captured value is
+    // undefined and the probe mounts nothing at all.
+    expect(capturedContainer).toBeDefined();
+    expect(column.contains(capturedContainer as HTMLElement)).toBe(true);
+    // No repair render: the provider has a real node from the first commit.
+    expect(probeRenders).toBe(1);
+
+    // The portal subtree resolves the same token value as the column itself.
+    const portalled = el.querySelector(".cmp-probe-portal") as HTMLElement;
+    expect(portalled).not.toBeNull();
+    expect(getComputedStyle(portalled).color).toBe("rgb(10, 20, 30)");
+    expect(getComputedStyle(column).color).toBe("rgb(10, 20, 30)");
+  });
+
+  it("keeps routing a later-rendered portal into the column scope", async () => {
+    const probe: ComparableOption = { id: "live", label: "Live probe", Render: LivePortalProbe };
+    const el = await renderColumns(probe, ["aurora"]);
+    const column = el.querySelector(".cmp-col") as HTMLElement;
+    const portalled = el.querySelector(".cmp-live-portal") as HTMLElement;
+    expect(portalled).not.toBeNull();
+    expect(column.contains(portalled)).toBe(true);
   });
 });
