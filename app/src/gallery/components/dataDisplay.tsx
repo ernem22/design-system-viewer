@@ -174,7 +174,7 @@ export default function DataDisplayBody() {
         {CARD_TINTS.map(([cls, title, token, extra]) => (
           <div key={title} className="dsv-stack" style={{ gap: "var(--space-1)", maxWidth: 300 }}>
             <div
-              className={`dsv-card ${cls === "is-picked" ? "" : cls}`}
+              className={`dsv-card ${cls}`}
               style={
                 cls === "is-picked"
                   ? {

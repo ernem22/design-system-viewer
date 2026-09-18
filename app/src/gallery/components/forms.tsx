@@ -124,9 +124,9 @@ export default function FormsBody() {
         </div>
         <div className="dsv-disabled-box dsv-disabled-box--dim">
           <div className="dsv-inline">
-            <Icon name="x" size={14} /> Dimmed (--opacity-disabled)
+            <Icon name="x" size={14} /> Dimmed (--opacity-muted)
           </div>
-          <div className="dsv-disabled-box-note">same box at --opacity-disabled</div>
+          <div className="dsv-disabled-box-note">same box at --opacity-muted</div>
         </div>
       </Demo>
 
