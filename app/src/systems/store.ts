@@ -168,19 +168,33 @@ function readStored(): DesignSystem[] | null {
   return null;
 }
 
+/** The reason a reachable host gave for a failed index response — the same
+   status-line shape lib/cssImport.ts reports, so one failure reads the same
+   wherever the app shows it. */
+function fetchFailure(res: Response): string {
+  return `${res.status} ${res.statusText}`.trim();
+}
+
 /** The repo's systems, served/emitted by the vite plugin in vite.config.ts.
-   Unreachable (plain file://, stripped deploy) → the built-in seed. */
-async function fetchBundled(): Promise<DesignSystem[]> {
+   Unreachable (plain file://, stripped deploy) → the built-in seed, and the
+   reason is carried back with it so Preview can report the failure instead of
+   looking silently empty (issue #91). The seed fallback itself is unchanged:
+   the gallery keeps rendering with fallback tokens. An index that answers 200
+   but ships no systems is not a failure — it falls back without an error. */
+async function fetchBundled(): Promise<{ list: DesignSystem[]; error: string | null }> {
   try {
     const res = await fetch(`${import.meta.env.BASE_URL}systems/index.json`);
     if (res.ok) {
       const arr: unknown = await res.json();
-      if (Array.isArray(arr) && arr.length > 0) return (arr as DesignSystem[]).map(ensureGroups);
+      if (Array.isArray(arr) && arr.length > 0)
+        return { list: (arr as DesignSystem[]).map(ensureGroups), error: null };
+    } else {
+      return { list: seed(), error: fetchFailure(res) };
     }
-  } catch {
-    /* offline / no index — fall through */
+  } catch (e) {
+    return { list: seed(), error: e instanceof Error ? e.message : String(e) };
   }
-  return seed();
+  return { list: seed(), error: null };
 }
 
 function readActive(list: DesignSystem[]): string {
@@ -202,15 +216,17 @@ export function useSystems() {
   const [stored] = useState(readStored);
   const [systems, setSystems] = useState<DesignSystem[]>(() => stored ?? []);
   const [loading, setLoading] = useState(stored === null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [activeSlug, setActiveSlugState] = useState<string>(() => readActive(systems));
 
   useEffect(() => {
     if (stored !== null) return;
     let alive = true;
-    fetchBundled().then((list) => {
+    fetchBundled().then(({ list, error }) => {
       if (!alive) return;
       setSystems(list);
       setActiveSlugState(readActive(list));
+      setLoadError(error);
       setLoading(false);
     });
     return () => {
@@ -287,6 +303,7 @@ export function useSystems() {
   return {
     systems,
     loading,
+    error: loadError,
     active,
     activeSlug: active?.slug ?? "",
     setActiveSlug,
