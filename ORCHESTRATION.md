@@ -51,8 +51,8 @@ enforcement layer available. See Division of Labour.
 Verified pipeline shape:
 
 ```
-User-written issue → Coder → CI gate → Batch Reviewer → Tester ─→ auto-ok?  yes → Hermes merges
-        ↑_______________________________________________________|          no  → user merges
+User-written issue → Coder → CI gate → Reviewer → Tester ─→ all three pass → Hermes merges
+        ↑_________________________________________________|   `human-merge` → the user does
         (failure at any stage → fresh worker, fallback model)
 ```
 
@@ -100,9 +100,10 @@ Consequences Hermes must honour:
   (see Tester), once CI is green and Reviewer PASS is in hand. Testers run in
   parallel with other dispatches — see Parallel Worker Spawning.
 - Read the CI verdict from `gh pr checks`. When CI is green, Reviewer PASS and
-  Tester PASS are all in hand, the PR is *ready* — merged if the issue carries
-  `auto-ok`, otherwise left for the user under `ready-for-review`. Nothing else
-  authorizes either action.
+  Tester PASS are all in hand, Hermes merges the PR and closes the issue in the
+  same turn — unless the issue carries the user's `human-merge` label, in which
+  case the PR is left at `ready-for-review`. Nothing else authorizes either
+  action.
 - Release/close settled workers; clean up worktrees created for a
   since-finished or abandoned attempt.
 
@@ -123,7 +124,8 @@ Hermes does **not**:
 - Re-inspect the repository (`git log`, `ls`, full-tree reads) once scope and
   branch are already established for the run.
 - Guess or widen an issue's scope when it is ambiguous — ask the user instead.
-- Merge a PR whose issue does not carry `auto-ok`, or add that label itself.
+- Merge a PR that has not passed all three signals (CI green, Reviewer PASS,
+  Tester PASS), or add or remove the user's `human-merge` label.
 - Merge on a Reviewer PASS that reported `scope_ok: no`.
 - Run a Task Creator without a focus the user stated. An empty backlog plus no
   stated focus means Hermes stops and says so — not that it invents a direction.
@@ -533,9 +535,9 @@ issue in one turn's context.
     and the Tester for that PR in ONE wave; they depend on the same gate and not
     on each other's verdict, so serializing them only adds latency
   → both PASS (Reviewer `scope_ok: yes`, Tester with real `observed:` and
-    `before:` lines) → if the issue carries `auto-ok`, Hermes merges and closes
-    the issue; otherwise it swaps the label to `ready-for-review` and stops, and
-    the user merges and closes
+    `before:` lines) → Hermes merges and closes the issue, unless the issue
+    carries `human-merge`, in which case it swaps the label to
+    `ready-for-review` and stops, and the user merges and closes
   → Reviewer FAIL → Hermes creates a Fixer Task referencing the PR/issue and
     puts the label back to `needs-review` so it re-enters the queue after the
     Fixer pushes
@@ -560,13 +562,13 @@ Consequences Hermes must honour:
   permanently-inflated backlog makes the queue-empty stop condition
   unreachable, because completed work still looks unclaimed.
 
-Labels in use: `auto-ok` (**set by the user on the issue**; Hermes may merge
-this one), `in-progress` (a Coder holds it), `needs-review` (PR pushed, awaiting
-a batch), `needs-verify` (the PR is in a verification wave — Reviewer and Tester
-dispatched against it),
-`ready-for-review` (CI green + Reviewer PASS + Tester PASS on a PR without
-`auto-ok` — the user's turn). Check `gh label list` and create missing ones once
-with `gh label create <name> --color <hex>`.
+Labels in use: `human-merge` (**set by the user on the issue**; the only thing
+that holds a PR back), `in-progress` (a Coder holds it), `needs-review` (PR
+pushed, awaiting review), `needs-verify` (the PR is in a verification wave),
+`ready-for-review` (pipeline-passed but held by `human-merge` — the user's turn).
+`auto-ok` is retired as a gate: the pipeline merges on its own three signals (CI
+green + Reviewer PASS + Tester PASS). Check `gh label list` and create missing
+ones once with `gh label create <name> --color <hex>`.
 
 **`needs-test` is retired, but must be drained, not deleted.** Four issues
 (#41, #23, #21, #15) still carry it from the Tester-stage era, where it meant
@@ -816,6 +818,17 @@ worker's model or personal identity.
   first step) to a fixed role identity — `orca-coder
   <orca-coder@localhost>`, `orca-fixer <orca-fixer@localhost>` — never
   `ernem22`, never a model name.
+- **Both identities land on the merged commit.** The worker's branch commit
+  carries the role tag and `orca-<role>` as author, and its body must also name
+  the human: `Co-authored-by: erne <ernmctt@gmail.com>`. At merge time Hermes
+  squashes with `--subject "<subject> (#<n>)"` — the tag survives in the subject
+  — and a `--body` carrying `Co-authored-by: orca-<role>
+  <orca-<role>@localhost>`, because a squash re-authors the commit to the merging
+  account. Without that trailer the worker's identity is gone from the base
+  branch entirely. Verified failure: the four merges made before this rule
+  (`6cf38f9`, `e425c79`, `df02f59`, `30c162d`) carry `[coder]` in the subject and
+  only `erne` as author — the worker author survives on its own branch and
+  nowhere else.
 - **Use `--worktree`, never bare `git config user.name`.** Bare is `--local`
   and lives in the shared `.git/config` that every worktree of the repo reads,
   so setting it in one worktree silently overwrites the identity every other
@@ -855,20 +868,24 @@ Gaps.
   cut before the workflow landed is still checked — verified on PR #48, whose
   head predates `pr-check.yml` and was checked anyway. Do not rebase an
   in-flight branch just to pick up a CI change.
-- **Who merges is decided by one label on the issue: `auto-ok`.**
-  - Issue carries `auto-ok` → Hermes merges once CI is green, the Batch
-    Reviewer returned PASS **and** a Tester PASS is in hand. All three, always.
-  - No `auto-ok` → the PR is the user's. Hermes labels it
-    `ready-for-review` and stops — after the Tester PASS, not instead of it.
-  - The default is the user's. An unlabelled issue is never auto-merged, and
-    Hermes never adds `auto-ok` itself.
+- **The pipeline decides, not a label.** Hermes merges the moment all three
+  signals are in hand — CI green on the `app` check, Reviewer PASS with
+  `scope_ok: yes`, and Tester PASS with real `observed:`/`before:` lines — and
+  then closes the issue, in the same turn. All three, always; nothing else
+  authorizes a merge, and no fourth signal is waited for.
+- **The opt-out is one label the user sets on the issue: `human-merge`.** With
+  it, the PR is left at `ready-for-review` for the user to read and merge. This
+  replaced the old opt-in (`auto-ok`): waiting for a human on every PR handed
+  the pipeline's throughput to the user, while the three signals above are what
+  the gate was actually protecting. Hermes never adds or removes
+  `human-merge`.
 
-  The label is set by the user when they write the issue, because they already
-  know whether the work is self-contained or reaches into existing code — that
-  judgement does not need to be re-derived from a diff. Its accuracy is not
-  machine-checked anywhere, deliberately: the cost of being wrong is one
-  over-reaching PR merged without a human, and the Reviewer's existing
-  "changed nothing the issue did not ask for" rule is what guards it.
+  `human-merge` is set by the user — when they write the issue, or later — because
+  they already know whether this one is worth reading themselves. Its accuracy
+  is not machine-checked anywhere, deliberately: the cost of being wrong is one
+  PR merged that the user would have wanted to read, and the Reviewer's "changed
+  nothing the issue did not ask for" rule plus the Tester's before/after evidence
+  are what guard the default path.
 - `delete_branch_on_merge` is enabled, so the merged head branch is deleted
   automatically. The explicit remote-branch deletion in the cleanup checklist
   is now only needed for branches abandoned without a merge.
@@ -881,8 +898,8 @@ Gaps.
   uncommitted changes in a sibling worktree, and `--base-branch` off a branch
   with only uncommitted work silently falls back to that branch's last real
   commit.
-- A PR is **done** when it is merged (`auto-ok`) or labelled
-  `ready-for-review` (everything else). Either way Hermes stops touching it and
+- A PR is **done** when it is merged, or labelled `ready-for-review` because the
+  issue carries the user's `human-merge`. Either way Hermes stops touching it and
   moves to the next issue.
 
 ## PR Body
@@ -1037,7 +1054,7 @@ a batch reviewer holding both diffs can. Require the block even when it is
 
 Once started, Hermes runs cycles **back-to-back without stopping for
 confirmation** — open issue → Coder → CI → batch review → Tester → merge
-(`auto-ok`) or hand over → next issue. It does not wait for the user on a
+(`human-merge` held) → next issue. It does not wait for the user on a
 `needs-human` PR before starting the next issue; those queue up while work
 continues.
 
