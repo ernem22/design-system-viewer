@@ -1097,6 +1097,21 @@ receipt.
   tail excerpts used to diagnose a stall, verification output
   (`opencode debug config`, `git log -1`), the session's exhausted-model set.
 - Do not persist either kind in a bespoke file or DB.
+- **The coordinator's own context is the one thing that does not survive a long
+  run — so compression runs itself.** Hermes's context compression is enabled
+  (`compression.enabled: true`, `compression.threshold: 0.75`,
+  `compression.progress_notices: true`; verified with
+  `hermes config get compression`), and `/compact` (`/compress`) forces one by
+  hand when the coordinator wants a checkpoint. Because every fact above is
+  re-derivable from Orca and GitHub, a compressed coordinator loses nothing it
+  needs: after a compression, re-read `worker-list --run <id>`, `task-list` and
+  `gh pr list` rather than trusting a remembered dispatch id, and never assert
+  an in-flight state from memory.
+- **Compact at a stage boundary, not mid-dispatch.** Compression is safest when
+  nothing is half-decided: between processing a settlement and issuing the next
+  dispatch, or between cycles. If a compression notice arrives while a dispatch
+  is mid-flight, finish that settlement's bookkeeping — ack, release, labels,
+  merge — first, then continue.
 
 ## Safety / Guardrails
 
