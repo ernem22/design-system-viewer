@@ -37,7 +37,21 @@ RAW=$(orca worktree create --repo "id:$REPO_ID" --name "$ROLE" \
 P=$(printf '%s' "$RAW" | node -e \
   "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);console.log(j.result.worktree.path||j.result.path)})")
 
-printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "opencode-go/deepseek-v4.1-flash"\n}\n' > "$P/opencode.json"
+# Model pin AND permission model. The permission block is what stops a worker from
+# stalling on an approval prompt:
+#   * external_directory: deny — a worker may not touch anything outside its own
+#     worktree (this is the D:\ request class: denied, not asked).
+#   * "*": allow — inside the worktree everything runs, so no prompt can block a
+#     phase. That is the whole point: a prompt is a stall the coordinator has to
+#     notice, and denying predictably is cheaper than asking.
+#   * destructive git/rm patterns are denied outright; a worker that needs one has
+#     to say so in its report.
+if [ "$PLAN" = "--plan" ]; then
+  # A Reviewer is read-only by contract; enforce it here instead of trusting prose.
+  printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "opencode-go/deepseek-v4.1-flash",\n  "permission": {\n    "external_directory": "deny",\n    "edit": "deny",\n    "write": "deny",\n    "*": "allow",\n    "bash": { "*": "deny", "gh *": "allow", "git log *": "allow", "git show *": "allow", "git diff *": "allow", "ls *": "allow", "cat *": "allow", "grep *": "allow", "rg *": "allow", "head *": "allow", "tail *": "allow", "wc *": "allow" }\n  }\n}\n' > "$P/opencode.json"
+else
+  printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "opencode-go/deepseek-v4.1-flash",\n  "permission": {\n    "external_directory": "deny",\n    "*": "allow",\n    "bash": { "*": "allow", "rm -rf *": "deny", "git push --force*": "deny", "git reset --hard*": "deny", "git clean *": "deny" }\n  }\n}\n' > "$P/opencode.json"
+fi
 
 orca terminal create --worktree "id:$REPO_ID::$P" --title "$ROLE" --command "$CMD" --json >/dev/null
 
