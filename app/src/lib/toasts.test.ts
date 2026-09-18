@@ -89,6 +89,17 @@ describe('useToasts', () => {
     expect(typeof toast?.id).toBe('number');
   });
 
+  it('keeps a "warn" tone instead of downgrading it to "err"', () => {
+    // Legacy parity (issue #34): a soft notice (empty URL, non-.css file) is a
+    // warning, not an error — the queue must preserve the caller's tone.
+    act(() => {
+      current().push('Please enter URL', 'warn');
+    });
+
+    expect(current().toasts).toHaveLength(1);
+    expect(current().toasts[0]).toMatchObject({ msg: 'Please enter URL', tone: 'warn' });
+  });
+
   it('defaults the tone to "ok" when none is given', () => {
     act(() => {
       current().push('Saved');

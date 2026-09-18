@@ -143,11 +143,11 @@ function App() {
   const importFile = useCallback(
     (file: File | null) => {
       if (!file) {
-        pushToast("Only .css files", "err");
+        pushToast("Only .css files", "warn");
         return;
       }
       readCssFile(file).then(importCss, (e: unknown) =>
-        pushToast(e instanceof Error ? e.message : String(e), "err"),
+        pushToast(e instanceof Error ? e.message : String(e), "warn"),
       );
     },
     [importCss, pushToast],

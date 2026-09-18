@@ -15,7 +15,7 @@ export function CssSourceBar({ onLoad, onToast }: { onLoad: (css: string) => voi
   const fetchUrl = async () => {
     const target = url.trim();
     if (!target) {
-      onToast("Enter a stylesheet URL", "err");
+      onToast("Enter a stylesheet URL", "warn");
       return;
     }
     setBusy(true);
@@ -47,7 +47,7 @@ export function CssSourceBar({ onLoad, onToast }: { onLoad: (css: string) => voi
             onLoad(await readCssFile(file));
             onToast("File loaded — review, then save", "ok");
           } catch (err) {
-            onToast(err instanceof Error ? err.message : String(err), "err");
+            onToast(err instanceof Error ? err.message : String(err), "warn");
           }
         }}
       />
