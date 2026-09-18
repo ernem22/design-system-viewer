@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { readViewUrl, type UrlTab } from "../lib/urlState.ts";
+import RailFrame from "./RailFrame.tsx";
 import "./shell.css";
 
 export type AppTab = UrlTab;
@@ -22,6 +23,10 @@ export interface ShellSlots {
   systemSwitcher?: ReactNode;
   actions?: ReactNode;
   tabs: ShellTab[];
+  /** Whole-panel collapse state for the one rail frame Shell renders. Owned by
+     App (toggled from the topbar) like `tab`, passed down so Shell stays a
+     controlled chrome shell with no state of its own. */
+  railOpen: boolean;
   /** Controlled tab state — App.tsx lifts this so its URL-sync effect sees
      every switch. Shell still owns layout; this is chrome state passed down
      as props, same shape as railOpen/propsOpen. Absent = uncontrolled. */
@@ -41,16 +46,20 @@ function isKnownTab(value: string, tabs: ShellTab[]): value is AppTab {
  *
  * The Rail/Props <aside> chrome (open/close toggle, width, animation) is
  * the same across every tab — only what's inside swaps with the active
- * tab. Each tab's rail/props content is forceMount'ed, same as `main`'s,
+ * tab. The rail frame itself (RailFrame) is rendered once, outside the tab
+ * map, so exactly one `.app-rail-inner` exists and a tab switch swaps its
+ * content instead of rebuilding the scroller (which would reset scroll).
+ * Each tab's rail/props content is still forceMount'ed, same as `main`'s,
  * so switching tabs hides it (via the [data-state="inactive"] rule in
- * shell.css) instead of unmounting it — Rail keeps its scroll position and
- * open/collapsed groups when you tab away and back.
+ * shell.css) instead of unmounting it — Rail keeps its open/collapsed
+ * groups when you tab away and back.
  */
 export default function Shell({
   brand,
   systemSwitcher,
   actions,
   tabs,
+  railOpen,
   tab: controlledTab,
   onTabChange,
 }: ShellSlots) {
@@ -88,13 +97,15 @@ export default function Shell({
         </header>
 
         <aside id="app-rail" className="app-rail" aria-label="Sections">
-          {tabs.map(({ id, rail }) =>
-            rail ? (
-              <Tabs.Content key={id} value={id} forceMount>
-                {rail}
-              </Tabs.Content>
-            ) : null,
-          )}
+          <RailFrame open={railOpen}>
+            {tabs.map(({ id, rail }) =>
+              rail ? (
+                <Tabs.Content key={id} value={id} forceMount>
+                  {rail}
+                </Tabs.Content>
+              ) : null,
+            )}
+          </RailFrame>
         </aside>
 
         <main className="app-main">
