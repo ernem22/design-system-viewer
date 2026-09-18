@@ -141,13 +141,27 @@ describe("scoped Google Fonts loading", () => {
 
   it("emits zero active-scope <link> mutations across repeated compare changes", async () => {
     const { rerender } = await renderProbe(CSS_INTER, CSS_ROBOTO);
+
+    // Capture the pre-existing active consumer's <link> by node identity (and
+    // href) BEFORE any interaction. Deliberately not via data-dsv-font-scope:
+    // that attribute only exists after the fix, so classifying by it would
+    // bucket every mutation as "compare" and let this test pass vacuously.
+    const activeNodes = new Set(
+      [...document.querySelectorAll<HTMLLinkElement>("link[data-dsv-font]")].filter((l) => {
+        const href = l.getAttribute("href");
+        return l.dataset.fam === "Inter" && href !== null && href.includes("family=Inter");
+      }),
+    );
+    expect(activeNodes.size).toBeGreaterThan(0);
+
     const activeMutations: string[] = [];
     const compareMutations: string[] = [];
     const observer = new MutationObserver((records) => {
       for (const record of records) {
         for (const node of [...record.addedNodes, ...record.removedNodes]) {
           if (!(node instanceof HTMLLinkElement)) continue;
-          const bucket = node.dataset.dsvFontScope === "active" ? activeMutations : compareMutations;
+          // Bucket by captured identity, not by an attribute the fix writes.
+          const bucket = activeNodes.has(node) ? activeMutations : compareMutations;
           bucket.push(`${record.type}:${node.dataset.fam ?? ""}`);
         }
       }

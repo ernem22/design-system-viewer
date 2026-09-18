@@ -15,6 +15,9 @@ const FONT_LINK_ATTR = "data-dsv-font";
 // "which tab owns this link" observable to a running-app test.
 const FONT_SCOPE_ATTR = "data-dsv-font-scope";
 
+// Registration point for font consumers: a third consumer must be added to
+// this union and passed as `scope` to loadGoogleFonts/useGoogleFonts. There is
+// no registry, so nothing else enumerates the scopes.
 export type FontScope = "active" | "compare";
 
 // One <link> per family on purpose: the css2 API answers 400 for an unknown
