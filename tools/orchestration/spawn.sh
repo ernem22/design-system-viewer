@@ -8,9 +8,21 @@
 # Exit 0 only when the worktree, the opencode.json pin and the terminal exist.
 set -euo pipefail
 
-ROLE="${1:?usage: spawn.sh <role-slug> [base-branch] [--plan]}"
-BASE="${2:-origin/refactor/full-react-migration}"
-PLAN="${3:-}"
+ROLE=""
+BASE=""
+PLAN=""
+for arg in "$@"; do
+  case "$arg" in
+    --plan) PLAN="--plan" ;;
+    -*)
+      echo "spawn.sh: unknown flag $arg (usage: spawn.sh <role> [base-branch] [--plan])" >&2
+      exit 1 ;;
+    *)
+      if [ -z "$ROLE" ]; then ROLE="$arg"; else BASE="$arg"; fi ;;
+  esac
+done
+[ -z "$ROLE" ] && { echo "usage: spawn.sh <role> [base-branch] [--plan]" >&2; exit 1; }
+[ -z "$BASE" ] && BASE="origin/refactor/full-react-migration"
 
 S="${LOCALAPPDATA}/orca-orchestration/design-system-viewer"
 REPO_ID="294b7f02-d29f-464f-a65c-f6929e0b8ae2"
@@ -31,11 +43,11 @@ orca terminal create --worktree "id:$REPO_ID::$P" --title "$ROLE" --command "$CM
 
 sleep 6
 
-orca terminal list --json > "$TMP" 2>&1
-H=$(node "$S/tools/list_terminals.js" "$ROLE" "$TMP" \
-    | grep opencode | head -1 | awk '{print $1}')
-rm -f "$TMP"
-[ -z "$H" ] && { echo "NO_TERMINAL_HANDLE for $ROLE — inspect: orca terminal list" >&2; exit 2; }
+# Look the handle up by the worktree PATH, not by the role name: orca suffixes a
+# taken name (`role` -> `role-2`), and a name lookup then returns the terminal of
+# the older worktree, which worker-start rejects as terminal_worktree_mismatch.
+H=$(bash "$(dirname "$0")/handle.sh" "$P" 2>/dev/null | head -1)
+[ -z "$H" ] && { echo "NO_TERMINAL_HANDLE for $ROLE (path $P) — inspect: orca terminal list" >&2; exit 2; }
 
 echo "PATH=$P"
 echo "HANDLE=$H"

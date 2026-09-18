@@ -44,7 +44,17 @@ terminal handle from your preamble — the exact call is:
       --type worker_done --subject "coder <n> done" \
       --body "<the acceptance block below + your prose>" \
       --task-id <task id> --dispatch-id <dispatch id> \
-      --outcome succeeded --files-modified <csv> --json
+      --outcome=succeeded --files-modified <csv> --json
+
+TWO OPERATIONAL RULES, both learned from a real failure:
+  - **`--outcome=succeeded`, with the equals sign.** The space form
+    (`--outcome succeeded`) is rejected by the CLI.
+  - **Send worker_done once, with the final body.** A settled dispatch revokes the
+    capability: a placeholder first (e.g. a probe subject) burns the settlement and
+    the report you send afterwards never reaches the coordinator. Write the body
+    first, send second. If you settle early by mistake, put the full report in the
+    terminal output — the coordinator can read a retained terminal — and say in it
+    that the settlement was empty.
 
 If the issue leaves a requirement genuinely ambiguous, ask instead of guessing:
 
