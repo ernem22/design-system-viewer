@@ -141,3 +141,36 @@ describe("App shell rail frame (issue #95)", () => {
     expect(after[0].scrollTop).toBe(120);
   });
 });
+
+// Issue #95, second region: the props frame was still per-tab — each tab
+// rendered its own <Props> (a `.app-props-clip`/`.app-props-inner` pair), so
+// the shell-owned-one-frame contract held for the rail but not one region
+// over. This fails on the pre-fix head with 3 `.app-props-inner` nodes.
+describe("App shell props frame (issue #95)", () => {
+  it("renders exactly one props frame and keeps it across a tab switch", async () => {
+    const el = await mountApp();
+
+    expect(el.querySelectorAll(".app-props-clip")).toHaveLength(1);
+    const before = el.querySelectorAll<HTMLElement>(".app-props-inner");
+    expect(before).toHaveLength(1);
+
+    // Same identity argument as the rail: one element across a switch, so a
+    // rebuild would reset the scroll the single scroller is meant to keep.
+    const frame = before[0];
+    frame.scrollTop = 200;
+
+    const trigger = [...el.querySelectorAll<HTMLElement>(".app-tabs button")].find(
+      (b) => b.textContent === "Preview",
+    );
+    expect(trigger).toBeTruthy();
+    await act(async () => {
+      trigger!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(el.querySelectorAll(".app-props-clip")).toHaveLength(1);
+    const after = el.querySelectorAll<HTMLElement>(".app-props-inner");
+    expect(after).toHaveLength(1);
+    expect(after[0]).toBe(frame);
+    expect(after[0].scrollTop).toBe(200);
+  });
+});

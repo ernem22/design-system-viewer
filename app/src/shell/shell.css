@@ -345,14 +345,12 @@
   border-right: 1px solid var(--color-divider);
 }
 
-/* Each tab's props content sits inside its own Tabs.Content wrapper
-   (Shell.tsx) — without height:100% here, that wrapper auto-sizes to its
-   content instead of stretching, and app-props-clip's own height:100% would
-   resolve against that auto height instead of the full sidebar. The rail
-   needs no such rule: its content now lives inside the single RailFrame
-   scroller (.app-rail-inner), which is the element that already owns the
-   height/overflow. */
-.app-props > [role="tabpanel"] {
+/* Each tab's props content lives inside the single PropsFrame scroller
+   (.app-props-inner) and is wrapped in its own Tabs.Content (Shell.tsx) —
+   without height:100% here, that wrapper auto-sizes to its content instead
+   of stretching the props panel. The rail needs no such rule: RailFrame's
+   content fills the scroller naturally. */
+.app-props-inner > [role="tabpanel"] {
   height: 100%;
 }
 
