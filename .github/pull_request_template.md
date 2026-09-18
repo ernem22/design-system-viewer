@@ -1,29 +1,18 @@
 <!--
-Every section below is required. A reviewer who did not write this code decides
-merge / no-merge from this body alone, so write for that reader.
+Short on purpose. Most PRs are read by the batch Reviewer and merged; only the
+ones without `auto-ok` reach a person. This body is the audit record for both.
 
-Rules:
-- Claims need evidence. "Tests pass" is not evidence; pasted command output is.
-- Say what you did NOT check. An honest gap is cheap; a discovered surprise is not.
-- If you changed UI, behavioural evidence is required, not optional.
+Evidence, not assertion: CI is the authority on lint, types, build and tests, so
+repeating those claims adds nothing. What matters is what nobody checked.
 -->
 
 ## What this changes
 
-Closes #<!-- issue number -->
+Closes #<!-- issue -->
 
-<!-- One paragraph, plain language, no jargon. What was wrong or missing, and
-     what the change does about it. A reader who has never opened this file
-     should understand it. -->
-
-## Why this way
-
-<!-- Only if a real choice was made: what else was considered and why this won.
-     If there was no choice to make, write "Only one sensible approach." -->
+<!-- One plain paragraph. What was wrong or missing, and what this does about it. -->
 
 ## Verified
-
-<!-- Paste real output. Replace the placeholders; do not leave them. -->
 
 ```
 npm --prefix app run lint   → <result>
@@ -31,18 +20,17 @@ npm --prefix app run build  → <result>
 npm --prefix app test       → <result>
 ```
 
-Behaviour actually observed (required if any UI changed, otherwise write "No UI change"):
-
-<!-- What you did, and what you saw happen. Not what you expect to happen. -->
+<!-- If any UI changed: what you did, and what you saw happen. Not what you
+     expected to happen. Otherwise: "No UI change." -->
 
 ## Not verified
 
-<!-- What a reviewer should look at with their own eyes, and any risk you are
-     aware of but did not resolve. Write "Nothing" only if that is true. -->
+<!-- What nobody checked, and any risk you know of but did not resolve.
+     "I did not check the other callsites" is doing the job, not confessing.
+     Write "Nothing" only if that is true. -->
 
 ## Scope
 
-- [ ] Touches `app/` only — not `src/core`, not `preview/`, not repo root
-- [ ] No unrelated file changed (no drive-by reformatting, no dependency bumps)
-- [ ] Tests added for the behaviour this adds, or a stated reason none apply
-- [ ] Commit subject carries the role tag (`[coder]` / `[fixer]`)
+- [ ] `app/` only — not `src/core`, not `preview/`, not repo root
+- [ ] Nothing changed that the issue did not ask for
+- [ ] Tests added for new behaviour, or a stated reason none apply

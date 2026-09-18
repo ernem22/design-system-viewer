@@ -13,16 +13,16 @@ OpenCode workers through Orca; it never writes code, reviews code, or narrates
 what a worker did. Every optimization in this doc exists to cut Hermes's own
 token and tool-call cost without weakening the verified pipeline below.
 
-**Both ends of the pipeline belong to the user, not to Hermes.** The user
-writes the tasks, and the user approves and merges every PR. Hermes owns the
-middle: dispatch, CI verification, review, and delivering a PR that is ready
-to be judged. It does not invent work and it does not merge. A Task Creator
-role no longer exists in this pipeline; an unreviewed auto-merge no longer
-happens.
+**The user owns what gets built and which changes need a human.** They write
+the issues, and they mark the safe ones `auto-ok`. Hermes owns everything
+between: dispatch, CI, batch review, and either merging an `auto-ok` PR or
+handing the rest over. It never invents work, and it never decides on its own
+that a change was safe enough to merge.
 
-Because a human now reads every PR, **PR legibility is a hard requirement, not
-a courtesy** — see PR Legibility Contract. A correct change in an unreadable PR
-is a failed delivery.
+The split is by blast radius, not by novelty. A large self-contained addition
+is safer to merge unread than a three-line edit to a file everything renders
+through, so `auto-ok` tracks how far a change reaches rather than how big or how
+new it is. A Task Creator role no longer exists.
 
 ## Current Verified Architecture
 
@@ -49,8 +49,8 @@ enforcement layer available. See Division of Labour.
 Verified pipeline shape:
 
 ```
-User-written issue → Coder → CI gate → Reviewer → PR ready → **user approves and merges**
-        ↑_______________________________________|
+User-written issue → Coder → CI gate → Batch Reviewer ─→ auto-ok?  yes → Hermes merges
+        ↑_________________________________________|                 no  → user merges
         (failure at any stage → fresh worker, fallback model)
 ```
 
@@ -66,7 +66,7 @@ the same verdict for free and cannot lie about it.
 |---|---|---|
 | `eslint`, `tsc -b`, `vite build`, `vitest run` | **CI** — `.github/workflows/pr-check.yml`, job/context `app` | Deterministic, machine-decidable, cannot misreport itself |
 | Is the diff good code? Does it match what the issue asked? | **Reviewer** worker | Judgment; CI cannot do it |
-| Does the changed UI actually behave correctly when running? | **Tester** worker, via Orca's browser | Judgment; CI cannot do it, and Orca's browser cannot run in CI |
+| Does the changed UI actually behave correctly when running? | **Nobody, by default.** A Tester dispatch can check it on request | CI cannot, and Orca's browser cannot run in CI — so this is the standing hole, see Known Gaps |
 | New tests covering new behaviour | **Coder**, in the same commit | Tester may not write tests, so nobody else can grow coverage |
 | Merge decision and execution | **Hermes** | Control-plane action, explicitly in scope |
 
@@ -117,7 +117,8 @@ Hermes does **not**:
 - Re-inspect the repository (`git log`, `ls`, full-tree reads) once scope and
   branch are already established for the run.
 - Guess or widen an issue's scope when it is ambiguous — ask the user instead.
-- Merge a PR, approve a PR, or close an issue the user has not merged.
+- Merge a PR whose issue does not carry `auto-ok`, or add that label itself.
+- Merge on a Reviewer PASS that reported `scope_ok: no`.
 - Invent work, or open an issue proposing work, when the backlog is empty. An
   empty backlog means Hermes waits for the user, not that it fills the gap.
 - Invent a second store of pipeline state that duplicates what
@@ -146,7 +147,7 @@ Two bounded exceptions, both O(1) and both in the per-worker call budget:
 |---|---|---|
 | Coder | Implements the task in its child worktree, **writes tests for the behaviour it adds** (see `app/` Facts), commits + pushes, opens the PR, flips the issue label | Rely on CI to decide whether its own change is correct; skip tests because "CI will catch it" — CI only runs tests that exist |
 | Reviewer (`--agent plan`) | Read-only diff/code review against the issue's stated intent, returns PASS/FAIL + fix list | Edit any file; implement fixes; restate what CI already reports (lint/types/build/unit results are not review findings) |
-| Tester | Drives the **running** app through Orca's built-in browser (`orca goto/click/eval/console`) and reports the behaviour it actually observed against what the issue described | Run `npm test`/`tsc` and report counts — CI's job, never worth a dispatch; write or modify any file; take a full `snapshot` as a matter of course (see Driving The App) |
+| Tester *(on demand only)* | Drives the **running** app through Orca's built-in browser and reports the behaviour it observed. **Not a pipeline stage** — dispatched only when the user asks, because it needs this desktop awake and cannot gate a merge. See Driving The App | Run `npm test`/`tsc` and report counts — CI's job; write or modify any file; take a full `snapshot` as a matter of course |
 | Fixer | Applies exactly the fix Reviewer or a failing CI check reported, nothing else | Re-scope or re-design the change |
 
 ## `app/` Facts Workers Must Be Told
@@ -223,9 +224,34 @@ Chosen by running the same probe through every plausible candidate on
 
 | Role | Primary | Fallback | Providers |
 |---|---|---|---|
-| Coder | `google/gemini-3-flash-preview` | `opencode/muse-spark-1.3-contributor-free` | google → opencode |
-| Reviewer | `opencode/mimo-v2.5-free` | `google/gemini-3-flash-preview` | opencode → google |
-| Fixer | `google/gemini-3-flash-preview` | `opencode/muse-spark-1.3-contributor-free` | google → opencode |
+| Coder | `google/gemini-3-flash-preview` | `orcarouter/deepseek/deepseek-v4-flash-free` | google → orcarouter |
+| Batch Reviewer | `opencode/muse-spark-1.3-contributor-free` | `google/gemini-3-flash-preview` | opencode → google |
+| Fixer | `google/gemini-3-flash-preview` | `orcarouter/deepseek/deepseek-v4-flash-free` | google → orcarouter |
+
+The split is driven by the quotas, and it points the opposite way from the
+intuitive assignment. Gemini has **1,500 requests/day**, so it does volume:
+every Coder and Fixer dispatch. OpenCode Zen has **100 requests/day total**
+across its models, so Muse Spark is spent where one request covers the most
+ground — reviewing several PRs at once against its 1M-token context. The scarce
+model gets the job with the highest work-per-request, not the job that runs
+most often.
+
+Rough budget: a batch review costs ~10–20 Zen requests, so 5–10 batches/day; at
+4 PRs each that is 20–40 PRs reviewed. A Coder dispatch costs ~30 Gemini
+requests, so ~50 dispatches/day. The two sides roughly balance.
+
+`opencode/mimo-v2.5-free` is **not** the Reviewer fallback despite scoring well,
+because Zen's 100/day is shared — a Zen fallback for a Zen primary empties the
+same bucket. Same reason `muse-spark` is not a Coder fallback: Coder volume
+would eat the review budget.
+
+**Accepted cost: the contributor endpoint trades data for price.** `-contributor-free`
+means Meta may train on the prompts and completions, and a batch Reviewer's
+prompt is this repository's diffs. Accepted knowingly while the budget is zero;
+this repo is public, which is what makes it tolerable. Do not point a
+contributor endpoint at a private repo without asking first. The exit is the
+non-contributor Muse Spark endpoint once there is budget — same model, no data
+trade.
 
 **A fallback must live on a different provider than its primary.** Quotas are
 enforced per account per provider, not per model, so a same-provider fallback
@@ -359,8 +385,9 @@ issue in one turn's context.
   → Hermes scans `--label needs-review`; if CI is green, dispatches a Reviewer
     against that PR branch; if CI is red, dispatches a Fixer with the failing
     output instead and leaves the label alone
-  → Reviewer PASS → Hermes swaps the label to `ready-for-review` and stops.
-    The user reads the PR, merges it, and closes the issue
+  → Batch Reviewer PASS + `scope_ok: yes` → if the issue carries `auto-ok`,
+    Hermes merges and closes the issue; otherwise it swaps the label to
+    `ready-for-review` and stops, and the user merges and closes
   → Reviewer FAIL → Hermes creates a Fixer Task referencing the PR/issue and
     leaves the label at `needs-review` so it re-enters the queue after the
     Fixer pushes
@@ -382,9 +409,10 @@ Consequences Hermes must honour:
   permanently-inflated backlog makes the queue-empty stop condition
   unreachable, because completed work still looks unclaimed.
 
-Labels in use: `in-progress` (a Coder holds it), `needs-review` (PR pushed,
-awaiting a Reviewer dispatch), `ready-for-review` (CI green + Reviewer PASS —
-**this one means the user's turn**). Check `gh label list` and create missing
+Labels in use: `auto-ok` (**set by the user on the issue**; Hermes may merge
+this one), `in-progress` (a Coder holds it), `needs-review` (PR pushed, awaiting
+a batch), `ready-for-review` (CI green + Reviewer PASS on a PR without
+`auto-ok` — the user's turn). Check `gh label list` and create missing
 ones once with `gh label create <name> --color <hex>`.
 
 **`needs-test` is retired, but must be drained, not deleted.** Four issues
@@ -579,65 +607,57 @@ Gaps.
   cut before the workflow landed is still checked — verified on PR #48, whose
   head predates `pr-check.yml` and was checked anyway. Do not rebase an
   in-flight branch just to pick up a CI change.
-- PR opens after the Coder pushes. Merge requires **CI green** (`gh pr checks
-  <pr>`) **and Reviewer PASS**. Both, always.
-- **Hermes never merges.** Auto-merge is enabled on the repo and
-  `gh pr merge --auto` would work — do not use it. The merge is the user's
-  approval gate and the only point where a human reads the change.
+- **Who merges is decided by one label on the issue: `auto-ok`.**
+  - Issue carries `auto-ok` → Hermes merges once CI is green **and** the Batch
+    Reviewer returned PASS. Both, always.
+  - No `auto-ok` → the PR is the user's. Hermes labels it
+    `ready-for-review` and stops.
+  - The default is the user's. An unlabelled issue is never auto-merged, and
+    Hermes never adds `auto-ok` itself.
+
+  The label is set by the user when they write the issue, because they already
+  know whether the work is self-contained or reaches into existing code — that
+  judgement does not need to be re-derived from a diff. Its accuracy is not
+  machine-checked anywhere, deliberately: the cost of being wrong is one
+  over-reaching PR merged without a human, and the Reviewer's existing
+  "changed nothing the issue did not ask for" rule is what guards it.
 - `delete_branch_on_merge` is enabled, so the merged head branch is deleted
   automatically. The explicit remote-branch deletion in the cleanup checklist
   is now only needed for branches abandoned without a merge.
 - Squash-merge unless the repo's convention says otherwise. All merged PRs base
   onto `refactor/full-react-migration`.
-- The user closes the issue after merging. GitHub will not do it — see the
-  Issue-Label State Machine. Hermes does not close issues.
+- Whoever merges also closes the issue — `gh issue close <n>`. GitHub will not
+  do it (see the Issue-Label State Machine), so for an `auto-ok` PR that step
+  belongs to Hermes, and for everything else to the user.
 - Coder/Fixer must commit **and push** — Reviewer worktrees cannot see
   uncommitted changes in a sibling worktree, and `--base-branch` off a branch
   with only uncommitted work silently falls back to that branch's last real
   commit.
-- A PR is **delivered** when: CI `app` is green, Reviewer returned PASS, the
-  body satisfies the PR Legibility Contract, and the issue is linked. Hermes
-  then stops touching it and moves to the next issue. If the user later asks
-  why a PR is unmerged, the answer comes from `gh pr checks` and the stored
-  Reviewer verdict — not from Hermes re-reading the diff.
+- A PR is **done** when it is merged (`auto-ok`) or labelled
+  `ready-for-review` (everything else). Either way Hermes stops touching it and
+  moves to the next issue.
 
-## PR Legibility Contract
+## PR Body
 
-The user reads every PR and merges it or does not. That makes the PR body part
-of the deliverable, held to the same standard as the code. A correct change
-nobody can evaluate is a failed delivery, and it costs the user more than a
-wrong change that is easy to read.
+Most PRs are read by the Batch Reviewer and then merged; only `needs-human` ones
+reach the user. So the body is a short audit record, not an essay. Four
+headings, from `.github/pull_request_template.md`:
 
-The canonical structure lives in `.github/pull_request_template.md`. Every
-Coder/Fixer Task spec must require it by section name, because `gh pr create
---body` bypasses the template silently — passing `--body` means the template is
-never applied, so the spec, not the file, is what actually enforces it.
+```
+## What this changes     — links the issue, one plain paragraph
+## Verified              — pasted command output, and observed behaviour if UI changed
+## Not verified          — what nobody checked, and any known risk
+## Scope                 — app/ only, nothing unrelated touched
+```
 
-Required sections, and what makes each one pass:
+One rule carries the weight: **evidence, not assertion.** `tests: pass` is a
+worker's belief; CI is the authority on lint, types, build and unit tests, so
+repeating those claims adds nothing. What the body must add is what a machine
+did not check — which is exactly what `## Not verified` is for. A worker that
+writes "I did not check the other callsites" is doing its job, not confessing.
 
-| Section | Passes when | Fails when |
-|---|---|---|
-| `## What this changes` | Links the issue; one plain-language paragraph a reader who never opened the file can follow | Restates the diff in words, or is jargon a reviewer has to decode |
-| `## Why this way` | Names the alternative considered and why it lost, or states plainly that there was no choice | Silent about a real design decision |
-| `## Verified` | Pasted real command output, and for a UI change what was actually observed happening | "Tests pass", "works as expected", or an expectation written as an observation |
-| `## Not verified` | Names what the reviewer should look at with their own eyes, and any known unresolved risk | Claims nothing is unverified when something is |
-| `## Scope` | Checkboxes honestly ticked | Ticked without checking |
-
-Two rules that matter more than the rest:
-
-- **Evidence, not assertion.** `tests: pass` in a status line is a worker's
-  belief. The PR body must carry output. CI is the authority on lint, types,
-  build and unit tests, so a body that merely repeats those claims adds
-  nothing — what it must add is the behaviour a machine did not check.
-- **An honest gap is cheap.** A worker that writes "I did not check whether
-  other callsites need the same guard" saves the user from discovering it after
-  merge. A worker that hides it burns the user's trust in every later PR. Grade
-  `## Not verified` as the most valuable section, not the most embarrassing.
-
-Hermes checks the body against this contract before calling a PR delivered. A
-PR missing a required section is the same class of failure as a missing
-`worker_done` — send it back to the worker, do not fix the body on the worker's
-behalf.
+`gh pr create --body` bypasses the template silently, so the Coder Task spec,
+not the template file, is what actually enforces these headings.
 
 ## Model Selection Evidence
 
@@ -723,12 +743,51 @@ Three findings worth carrying forward:
 - **Bigger is not better on free tiers.** The 550B Nemotron produced nothing in
   ten minutes; the fastest correct Reviewer took nine seconds.
 
+## Batch Review
+
+Review is batched because OpenCode Zen allows **100 requests/day** across all its
+models. One Muse Spark dispatch reading several PRs against its 1M-token context
+is how that quota becomes usable — and it buys something per-PR review cannot.
+
+**Trigger:** 3 or more PRs holding `needs-review` with a green `app` check.
+Ceiling **5**. Below 3, wait. Above 5, split — attention per diff falls as the
+batch grows, and attention is the whole reason for using the strongest model.
+
+**Input** per PR: the issue body, `gh pr diff <n>`, the PR body. Nothing else.
+
+**Output** — one block per PR, then one cross-PR block:
+
+```
+pr: <number>
+status: pass | fail
+reason: <short, only if fail>
+fix_required: <short actionable, only if fail>
+scope_ok: yes | no        # did it change anything the issue did not ask for?
+```
+
+```
+conflicts: <pr>+<pr> on <path> | none
+```
+
+**A batch missing a block for any PR in it is rejected whole** — same class as a
+missing `worker_done`. Never infer a PASS for a PR the reviewer did not name.
+
+`scope_ok` is load-bearing, not decoration: with `auto-ok` merging on the
+Reviewer's word, this field is the only thing standing between an over-reaching
+Coder and an unreviewed merge. A `no` blocks the merge regardless of `status`.
+
+**The cross-PR block is a reason to batch, not a bonus.** Open PRs all branch
+from the same base with `strict: false`, so two touching one file both report
+green and collide only at merge. A per-PR reviewer structurally cannot see that;
+a batch reviewer holding both diffs can. Require the block even when it is
+`none`.
+
 ## Continuous Operation Mode
 
 Once started, Hermes runs cycles **back-to-back without stopping for
-confirmation** — open issue → Coder → CI → Reviewer → (Fixer if needed) → PR
-delivered → next issue. It does **not** wait for the user to merge PR N before
-starting issue N+1; delivered PRs queue up for review while work continues.
+confirmation** — open issue → Coder → CI → batch review → merge (`auto-ok`) or
+hand over → next issue. It does not wait for the user on a `needs-human` PR
+before starting the next issue; those queue up while work continues.
 
 It stops when the user says stop, or when no unclaimed issue is left. An empty
 queue is a stop, not a prompt to invent work.
