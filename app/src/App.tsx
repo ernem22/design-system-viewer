@@ -261,7 +261,8 @@ function App() {
     <Welcome onPaste={() => openAdd()} onUpload={() => fileInputRef.current?.click()} />
   );
 
-  // Each tab supplies its own rail/props content, not just its main content.
+  // Each tab supplies its rail content (groups) and props content; Shell
+  // renders the one rail frame around whichever tab's content is active.
   const tabs: ShellTab[] = [
     {
       id: "tokens",
@@ -281,7 +282,6 @@ function App() {
         <Rail
           groups={tokensView.railGroups}
           searching={tokensView.searching}
-          open={railOpen}
           syncSection={sectionSyncArmed && tab === "tokens"}
         />
       ),
@@ -314,7 +314,6 @@ function App() {
         <Rail
           groups={railGroups}
           searching={searching}
-          open={railOpen}
           syncSection={sectionSyncArmed && tab === "preview"}
         />
       ),
@@ -328,7 +327,7 @@ function App() {
       id: "compare",
       label: "Compare",
       content: <CompareView view={compareView} />,
-      rail: <CompareRail systems={systems} view={compareView} open={railOpen} />,
+      rail: <CompareRail systems={systems} view={compareView} />,
       propsPanel: (
         <Props open={propsOpen}>
           <CompareProps view={compareView} />
@@ -395,6 +394,7 @@ function App() {
             </>
           }
           tabs={tabs}
+          railOpen={railOpen}
           tab={tab}
           onTabChange={setTab}
         />
