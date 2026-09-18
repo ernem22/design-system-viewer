@@ -401,6 +401,39 @@ and the dispatch failed whatever its verdict said. A discovered failure is a
 finding, not a fix — it goes into the report, and a separate Fixer dispatch
 fixes it.
 
+## UI Audit
+
+**A read-only role that hunts interface defects with evidence.** It exists because
+the pipeline's other roles only ever look at what a PR touched: a Coder proves its
+own change, a Reviewer judges the diff, a Tester verifies the issue's behaviour. None
+of them looks at the interface as a whole, so whole-interface rot — a literal colour
+where a variable belongs, an unreachable focus ring, a panel with no empty state —
+survives every gate. The UI audit is that missing pass.
+
+Contract, identical in shape to the Tester's:
+
+  - **It writes nothing.** No test, no fix, no issue, no comment, no commit. Its
+    permission block is the Reviewer's (`edit`/`write` denied, `orca`/`gh`/`curl`/git
+    reads allowed) because it must be able to drive the browser and report.
+  - **It drives the running app**, served by the coordinator on its own port, through
+    Orca's browser automation: `orca tab create --url`, `orca snapshot` (accessibility
+    tree with `@e1` refs), `orca eval --expression` for computed styles and arithmetic,
+    `orca click`/`keypress`/`fill` for the interactive paths.
+  - **Evidence is text.** A screenshot is not citable; every finding carries the
+    selector or DOM path, the observed value, the expected value, the exact repro and
+    a one-line fix. Contrast ratios are computed and printed with the two numbers
+    divided, never eyeballed.
+  - **Seven axes:** token discipline (values that bypass the 432 custom properties),
+    contrast in both light and dark, keyboard and focus behaviour, legacy parity
+    (behaviours the legacy viewer has and the port lacks, cited by file:line), state
+    completeness (empty/loading/error per panel), layout robustness (overflow,
+    clipping, truncation without an affordance), and dead or dishonest UI (controls
+    that do nothing, labels that lie, duplicates).
+  - **It reports findings, the coordinator decides.** A finding is not a fix and not
+    an issue: the coordinator triages the list into issues, Coders or Fixers. Capped
+    at the ten worst per axis, because a list nobody can act on is worse than a short
+    one they can.
+
 ## Model Assignment & Fallback
 
 **Uniform by user decision, 2026-09-18: every worker role runs
@@ -1365,6 +1398,10 @@ the rules do not have to carry their narrative.
 | Three ids containing `free` were unusable — one needs a subscription, one had no channel, one had no tool-use endpoint | Probe reachability before planning around a model |
 | `element.click()` from `eval` reported success and did not switch a Radix tab | Use `orca click --element @ref`; programmatic clicks miss `mousedown` activation |
 | A bare `role=tab` query matched 9 elements, 6 of them gallery demos | Scope selectors to `.app-tabs` / the app's own container, in Orca and Playwright alike |
+| A Coder was handed dispatch text that described a different issue than its card — I wrote "an override on an undefined token is lost" for #27, whose real subject is "value-edits became permanent; Reset only clears swaps" | The coordinator's dispatch text is derived from the issue body — `gh issue view <n>` first, quoted — never from a summary or a filename. The worker caught it and asked; a less careful worker would have built the wrong feature and passed every gate |
+| Three Reviewers finished their analysis and could not report: `orca orchestration send` was denied by the reviewer permission allowlist I had just written (`gh`/`git`/`ls` allowed, `orca` missing) | Any read-only permission block must allow `orca *`. Reporting is the worker's only exit; a blocked report leaves a live-looking dispatch and an idle phase, and the verdict has to be recovered from the terminal by hand |
+| Two Coders sent correct reports that Orca rejected: `dispatch_capability_invalid`. They had retyped the send command from a template | The command comes from the dispatch preamble, verbatim, because it carries a per-dispatch capability token no template can contain. Quote the rejection string in every template so the failure is recognisable |
+| Three reaped Testers left live preview servers behind — 176MB free RAM, 37 node processes, and a `fork: Resource temporarily unavailable` that killed a spawn | A preview is started outside Orca's worktree lifecycle, so `reap.sh` does not kill it. Every Tester reap is followed by `serve.sh --stop <port>` |
 | A full `orca snapshot` of the app was 251 KB | Assert with targeted `eval`; use `snapshot` only to obtain a ref, filtered |
 | Tester dispatched to run `tsc`/`npm test` — a worker spent on a deterministic check it could misreport | Division of Labour; CI owns machine-decidable checks |
 | Root `npm test` green while testing zero `app/` code | All commands `--prefix app`, stated in every spec |
