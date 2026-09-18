@@ -229,6 +229,7 @@ spent on it:
     tools/orchestration/reap.sh   <role> [dispatch-id]           → release, close, rm
     tools/orchestration/packet.sh <pr> [run-id] [task-id ...]    → the merge packet
     tools/orchestration/watch.sh  [run-id] [max-seconds]         → exit on settlement
+    tools/orchestration/attention.sh [run-id]                    → who waits on a human, and on what
 
 `spawn.sh` reads nothing and stores nothing; `reap.sh` asks Orca for the worktree
 rather than caching the path. `packet.sh` prints the packet shape below, with each
@@ -1344,6 +1345,7 @@ the rules do not have to carry their narrative.
 | `pipeline.py` duplicated Orca's task/dispatch state | No second state layer; stateless mechanism is fine |
 | Specs told workers to run `orca orchestration message send` / `worker-done` — neither command exists | The exact CLI call, flags included, belongs in the template: a worker that has to guess the spelling of the command it reports with is a worker that reports nothing |
 | An empty `worker_done` arrived (`subject: probe`, empty body) after the worker sent a placeholder first | `worker_done` is one-shot: a settled dispatch revokes the reporting capability, so a placeholder burns the settlement and the real body never lands. State both rules in every template: `--outcome=succeeded` (equals form) and write the body before you send. The coordinator's recovery path is the retained terminal, which is authoritative |
+| A worker asked permission to touch `D:\` — outside its worktree — and sat waiting for an answer | Every worktree's `opencode.json` (written by `spawn.sh`) carries a permission block: `external_directory: deny` (no prompt, an immediate no), everything inside the worktree allowed, destructive git/rm patterns denied, and a Reviewer additionally has `edit`/`write` denied so its read-only contract is machine-enforced. A prompt is a stall the coordinator has to notice; a deny is a result the worker can report. `attention.sh` lists whatever still waits on a human, with the terminal tail and the exact reply command |
 | The wake-up loop spun on one stale settlement for two hours | `--ack` takes the **delivery** id (`result.deliveryId`), not the message id (`msg_...`, which returns `ok:false` and acks nothing); and an unacked settlement is redelivered to every new waiter instantly, so a watcher started on a dirty queue reports old news as if it were the wake-up. Drain before arming: `watch.sh --skip-existing` |
 | Worker reported `commit: <sha>` having never committed; `git diff --stat` looked clean because the file was untracked | Integrity check via `git log -1`, compare against pre-dispatch HEAD |
 | `--retry-of` rejected `task_not_startable` on a still-`ready` Task | Plain re-dispatch on the same Task ID is the first-line fallback |
