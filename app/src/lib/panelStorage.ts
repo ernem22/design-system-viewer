@@ -11,11 +11,25 @@ import { useCallback, useState } from "react";
 
 export type PanelStorageKey = "dsv.app.rail" | "dsv.app.props";
 
-/** Reads the stored panel state; returns `defaultOpen` if unset or storage is unreachable. */
+// The legacy viewer (preview/src/App.jsx) persisted the same choices under
+// unscoped keys. Returning users still have those, so the first read falls
+// back to its legacy key, migrates the value forward, and retires the old one.
+const LEGACY_KEYS: Record<PanelStorageKey, string> = {
+  "dsv.app.rail": "dsv.rail",
+  "dsv.app.props": "dsv.props",
+};
+
+/** Reads the stored panel state, migrating the legacy key on first read;
+ *  returns `defaultOpen` if unset or storage is unreachable. */
 export function readPanelOpen(key: PanelStorageKey, defaultOpen: boolean): boolean {
   try {
     const stored = localStorage.getItem(key);
-    return stored === null ? defaultOpen : stored !== "closed";
+    if (stored !== null) return stored !== "closed";
+    const legacy = localStorage.getItem(LEGACY_KEYS[key]);
+    if (legacy === null) return defaultOpen;
+    localStorage.setItem(key, legacy);
+    localStorage.removeItem(LEGACY_KEYS[key]);
+    return legacy !== "closed";
   } catch {
     return defaultOpen;
   }
