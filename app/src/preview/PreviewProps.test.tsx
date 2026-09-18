@@ -4,7 +4,15 @@ import { act } from "react";
 import type { Root } from "react-dom/client";
 import type { DesignSystem } from "../systems/store.ts";
 import type { PushToast } from "../lib/toasts.ts";
-import { selectScope } from "../lib/tokenOverrides.ts";
+import {
+  clearAll,
+  countOverrides,
+  getInspectorState,
+  getValueEdit,
+  selectScope,
+  setSwap,
+  setValueEdit,
+} from "../lib/tokenOverrides.ts";
 import { useTokensView } from "../tokens/useTokensView.ts";
 import { PreviewProps } from "./PreviewProps.tsx";
 
@@ -13,6 +21,11 @@ import { PreviewProps } from "./PreviewProps.tsx";
 // `groups` and `css` disagree (the hand-edited/corrupt localStorage case) and
 // reads each panel's rendered value. On the pre-fix commit Preview used
 // groups while Tokens parsed css, so the two values differed.
+//
+// Issue #27 rides on the same harness for the edit flow: driving the real
+// "Edit value" editor must land in the ephemeral override layer (rendering
+// through PreviewProps), NOT in onPatch (the stored system), and Reset must
+// drop it. On the pre-fix commit the editor called onPatch, so these failed.
 
 const TOKEN = "--color-accent";
 
@@ -65,19 +78,17 @@ let host: HTMLDivElement | null = null;
 function Harness({
   system,
   push,
-  onPatch,
   dark = false,
 }: {
   system: DesignSystem;
   push: PushToast;
-  onPatch: (name: string, value: string) => void;
   dark?: boolean;
 }) {
   const view = useTokensView(system, push, dark);
   return (
     <>
       <span data-testid="tokens-value">{view.valueMap.get(TOKEN) ?? "missing"}</span>
-      <PreviewProps system={system} onPatch={onPatch} dark={dark} />
+      <PreviewProps system={system} dark={dark} />
     </>
   );
 }
@@ -85,7 +96,6 @@ function Harness({
 async function mount(
   system: DesignSystem,
   push: PushToast,
-  onPatch: (name: string, value: string) => void,
   dark = false,
 ): Promise<HTMLDivElement> {
   const { createRoot } = await import("react-dom/client");
@@ -93,7 +103,7 @@ async function mount(
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => {
-    root!.render(<Harness system={system} push={push} onPatch={onPatch} dark={dark} />);
+    root!.render(<Harness system={system} push={push} dark={dark} />);
   });
   return host;
 }
@@ -115,20 +125,22 @@ afterEach(() => {
   root = null;
   host?.remove();
   host = null;
+  // Overrides are module-level (survive a root unmount), so drop them between
+  // tests or one test's what-if edit leaks into the next.
+  act(() => clearAll());
   selectScope(null);
 });
 
 describe("Preview vs Tokens token values", () => {
   it("agree on the in-effect value when groups and css diverge", async () => {
-    const onPatch = vi.fn();
-    const el = await mount(divergent, vi.fn(), onPatch);
+    const el = await mount(divergent, vi.fn());
     expect(tokensValue(el)).toBe("#111111");
     expect(previewValue(el)).toBe("#111111");
     expect(previewValue(el)).toBe(tokensValue(el));
   });
 
   it("show the authored value when there is no divergence", async () => {
-    const el = await mount(consistent, vi.fn(), vi.fn());
+    const el = await mount(consistent, vi.fn());
     expect(tokensValue(el)).toBe("#4f46e5");
     expect(previewValue(el)).toBe("#4f46e5");
   });
@@ -149,26 +161,115 @@ describe("Preview vs Tokens token values", () => {
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
     } as unknown as DesignSystem;
-    const el = await mount(cssOnly, vi.fn(), vi.fn());
+    const el = await mount(cssOnly, vi.fn());
     expect(tokensValue(el)).toBe("#333333");
     expect(previewValue(el)).toBe("#333333");
   });
 
   it("agree on the light value when a dark theme is present but off", async () => {
-    const el = await mount(darkThemed, vi.fn(), vi.fn(), false);
+    const el = await mount(darkThemed, vi.fn(), false);
     expect(tokensValue(el)).toBe("#111111");
     expect(previewValue(el)).toBe("#111111");
   });
 
   it("agree on the dark override when dark is on", async () => {
-    const el = await mount(darkThemed, vi.fn(), vi.fn(), true);
+    const el = await mount(darkThemed, vi.fn(), true);
     expect(tokensValue(el)).toBe("#000000");
     expect(previewValue(el)).toBe("#000000");
   });
+});
 
-  it("does not patch the token store just by rendering", async () => {
-    const onPatch = vi.fn();
-    await mount(divergent, vi.fn(), onPatch);
-    expect(onPatch).not.toHaveBeenCalled();
+// Issue #27 — the Preview "what-if" edit is ephemeral, not a store write.
+// Drives the real editor (open "Edit value", type, blur) and asserts the
+// rendered row and the override store, never the authored system.
+describe("Preview value edits are ephemeral (#27)", () => {
+  async function clickEdit(el: HTMLDivElement): Promise<void> {
+    const btn = [...el.querySelectorAll<HTMLButtonElement>(".dsv-token-row-actions button")].find(
+      (b) => b.textContent === "Edit value",
+    )!;
+    await act(async () => {
+      btn.click();
+    });
+  }
+
+  async function typeAndBlur(el: HTMLDivElement, value: string): Promise<void> {
+    const input = el.querySelector<HTMLInputElement>(".dsv-token-value-input")!;
+    await act(async () => {
+      // React tracks the last value on the node; set through the native setter
+      // so the change event isn't swallowed as a no-op.
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      setter.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      // React maps onBlur onto the bubble-phase focusout event; dispatch that
+      // (happy-dom's .blur() doesn't reliably reach React's listener).
+      input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+  }
+
+  it("lands the edit in the override layer and never mutates the system", async () => {
+    const el = await mount(divergent, vi.fn());
+    const before = JSON.stringify(divergent);
+    await clickEdit(el);
+    await typeAndBlur(el, "#00ff00");
+
+    expect(getValueEdit(TOKEN)).toBe("#00ff00");
+    expect(previewValue(el)).toBe("#00ff00");
+    // The authored system object is untouched — Preview never writes it.
+    expect(JSON.stringify(divergent)).toBe(before);
+    // The Tokens panel (authored source of truth) still reads the stored value,
+    // proving the edit did not land there.
+    expect(tokensValue(el)).toBe("#111111");
+  });
+
+  it("reverts the edited value when Reset (clearAll) runs", async () => {
+    const el = await mount(divergent, vi.fn());
+    await clickEdit(el);
+    await typeAndBlur(el, "#00ff00");
+    expect(previewValue(el)).toBe("#00ff00");
+
+    act(() => clearAll());
+    // Back to the authored/system value. On the parent commit's code this
+    // stayed #00ff00 because the edit had been written into the store.
+    expect(getValueEdit(TOKEN)).toBeUndefined();
+    expect(previewValue(el)).toBe("#111111");
+  });
+
+  it("keeps the edit across a system switch and brings it back (override keyed by token)", async () => {
+    setValueEdit(TOKEN, "#00ff00");
+    // A different system that defines the token sees the override applied.
+    const elA = await mount(consistent, vi.fn());
+    expect(previewValue(elA)).toBe("#00ff00");
+    act(() => root?.unmount());
+    root = null;
+    host?.remove();
+    // System that doesn't author the token: the override still applies to the
+    // row (it wins over the empty authored value) and is retained in the store.
+    const noToken = {
+      slug: "empty",
+      name: "Empty",
+      css: "",
+      groups: [],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    } as unknown as DesignSystem;
+    const elB = await mount(noToken, vi.fn());
+    expect(getValueEdit(TOKEN)).toBe("#00ff00");
+    expect(previewValue(elB)).toBe("#00ff00");
+    act(() => root?.unmount());
+    root = null;
+    host?.remove();
+    // Switch back: override still applies, untouched.
+    const elA2 = await mount(consistent, vi.fn());
+    expect(previewValue(elA2)).toBe("#00ff00");
+  });
+
+  it("counts value edits and swaps together in the Reset pill count", () => {
+    setValueEdit(TOKEN, "#00ff00");
+    setSwap("demo", "--a", "--b");
+    // 1 edit + 1 swap. On the parent commit the counter read swaps only, so
+    // this reported 1 — the exact dishonest count #27 complains about.
+    expect(countOverrides(getInspectorState())).toBe(2);
   });
 });
