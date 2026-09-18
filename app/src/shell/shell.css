@@ -14,7 +14,10 @@
     "rail main props";
   grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-rows: var(--app-topbar-height) minmax(0, 1fr);
-  overflow: hidden;
+  /* clip, not hidden: hidden still leaves the shell programmatically
+     scrollable, so a rail fragment link (#id) would scroll the shell itself
+     and shift the whole layout; clip forbids scrolling entirely. */
+  overflow: clip;
   background: var(--color-bg);
   color: var(--color-text);
 }
@@ -357,7 +360,8 @@
 .app-rail-clip {
   width: 208px;
   height: 100%;
-  overflow: hidden;
+  /* clip mirrors the shell contract: a layout frame must not be scrollable. */
+  overflow: clip;
   transition: width 260ms var(--ease-emphasized);
 }
 
@@ -442,7 +446,8 @@
 .app-props-clip {
   width: 300px;
   height: 100%;
-  overflow: hidden;
+  /* clip mirrors the shell contract: a layout frame must not be scrollable. */
+  overflow: clip;
   transition: width 260ms var(--ease-emphasized);
 }
 
