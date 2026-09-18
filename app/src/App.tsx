@@ -43,8 +43,18 @@ const ENTRY_IDS = COMPONENT_ENTRIES.map((e) => e.id);
 const APP_TITLE = "Design System Viewer";
 
 function App() {
-  const { systems, loading, active, activeSlug, setActiveSlug, addSystem, mergeCss, patchToken, removeSystem } =
-    useSystems();
+  const {
+    systems,
+    loading,
+    error: loadError,
+    active,
+    activeSlug,
+    setActiveSlug,
+    addSystem,
+    mergeCss,
+    patchToken,
+    removeSystem,
+  } = useSystems();
   const [toasts, pushToast] = useToasts();
   // Panel collapse lives here so the toggles can sit in the topbar —
   // no floating edge handle next to the main scrollbar. Same storage
@@ -282,15 +292,23 @@ function App() {
     {
       id: "preview",
       label: "Preview",
-      content: (
+      content: active ? (
         <>
-          <PreviewNotes system={active} />
+          <PreviewNotes system={active} error={loadError} />
           {shownEntries?.size === 0 && <div className="dsv-err">No sections match “{query.trim()}”.</div>}
           {COMPONENT_ENTRIES.map((entry) => (
             <GallerySection key={entry.id} {...entry} hidden={shownEntries ? !shownEntries.has(entry.id) : false} />
           ))}
           <PreviewScopeDialog system={active} onPatch={handlePatch} dark={darkOn} />
         </>
+      ) : (
+        <PreviewNotes
+          system={null}
+          loading={loading}
+          error={loadError}
+          onPaste={() => openAdd()}
+          onUpload={() => fileInputRef.current?.click()}
+        />
       ),
       rail: (
         <Rail
