@@ -51,9 +51,19 @@ role: tester
 task: <task id from your preamble>
 commit: n/a
 tests: n/a
-build: <asset hash served on :<port>>
+build: <asset hash served on :PORT>
 observed: <...>
 before: <...>
+
+THEN POST A VERDICT BLOCK AS A PR COMMENT — the merge gate is computed by GitHub from
+comments, not from the coordinator reading your message:
+
+    gh pr comment <n> --body "$(printf '```dsv-verdict\nstatus: pass\nrole: tester\ncommit: %s\nbuild: %s\n```\n' "$(git rev-parse --short HEAD)" "<the asset hash you served>")"
+
+`commit:` must be the head whose build you verified (your STEP 0 answer). A verdict whose
+commit is not the PR's current head does not count — that field exists because a Tester
+once verified a build from the wrong branch, and the coordinator merged on the strength
+of it.
 
 Report `status: pass` only if every step you could produce held. Then send
 worker_done once, from this terminal. **Do not retype the command: your dispatch

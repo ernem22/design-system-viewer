@@ -1441,6 +1441,45 @@ Cleanup is three distinct steps, not one:
       all still on the remote from earlier cycles. Drain them the same way —
       merged PR → delete; no PR → leave it and ask.
 
+## The merge gate is GitHub's, not the coordinator's
+
+Reading three signals by hand (CI green, Reviewer PASS, Tester PASS) has one failure the
+coordinator cannot check reliably: whether each verdict was produced against the *current*
+head. It got that wrong once — a Tester verified a build provisioned from the wrong
+branch and the PASS looked perfectly valid.
+
+So the gate is a **commit status computed by GitHub** (`.github/workflows/pipeline-gate.yml`):
+
+  - every Reviewer and Tester posts its verdict as a PR comment in a fenced block:
+
+        ```dsv-verdict
+        status: pass
+        role: reviewer
+        commit: 422f8cb
+        scope_ok: yes
+        ```
+
+  - the workflow parses comments and reviews, keeps the latest verdict per role **whose
+    `commit:` matches the PR head**, and posts `pipeline/verdict` on that head: success
+    only when reviewer=pass with `scope_ok: yes` AND tester=pass on the same head;
+    failure otherwise; pending while a verdict is missing. A verdict without a commit, or
+    from an older head, can never approve anything.
+  - a PR that changes nothing under `app/src/` is **not applicable** and passes
+    automatically, so documentation and tooling PRs do not wait for reviewers they do
+    not need.
+  - **branch protection requires `pipeline/verdict` alongside `app`**, with
+    `enforce_admins: true`, so the coordinator cannot merge a PR the machine has not
+    approved even by accident. That is the point: the coordinator's judgement is no
+    longer load-bearing at the gate.
+
+**The maintainer's channel is comments, parsed literally.** `/hold` freezes a PR (the
+status goes red and stays red), `/rework` sends it back for a fix, `/resume` clears both
+— accepted only from `OWNER`/`MEMBER`/`COLLABORATOR`, and each answered with a comment so
+the thread records what happened. Free-text comments are still read by the coordinator
+(`tools/orchestration/reviews.sh`), which routes them to a Fixer; a comment is not a
+verdict and cannot approve, which is deliberate — only the machine-readable block moves
+the gate.
+
 ## Failure Ledger
 
 Incidents already paid for. Each is a rule above; this table is the index so
