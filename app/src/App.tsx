@@ -95,7 +95,7 @@ function App() {
   // Tokens tab view model — one hook instance feeds its main content, its
   // left-rail group nav and its right-rail inspector (lifted to App, passed
   // down as props; no context).
-  const tokensView = useTokensView(active, pushToast);
+  const tokensView = useTokensView(active, pushToast, darkOn);
 
   // Compare tab view model — same lifted-to-App.tsx shape as tokensView,
   // fed its own tab's rail/content/props (see Scope note in issue #1).
@@ -289,7 +289,7 @@ function App() {
           {COMPONENT_ENTRIES.map((entry) => (
             <GallerySection key={entry.id} {...entry} hidden={shownEntries ? !shownEntries.has(entry.id) : false} />
           ))}
-          <PreviewScopeDialog system={active} onPatch={handlePatch} />
+          <PreviewScopeDialog system={active} onPatch={handlePatch} dark={darkOn} />
         </>
       ),
       rail: (
@@ -302,7 +302,7 @@ function App() {
       ),
       propsPanel: (
         <Props open={propsOpen}>
-          <PreviewProps system={active} onPatch={handlePatch} />
+          <PreviewProps system={active} onPatch={handlePatch} dark={darkOn} />
         </Props>
       ),
     },
