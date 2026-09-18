@@ -99,7 +99,7 @@ function App() {
 
   // Compare tab view model — same lifted-to-App.tsx shape as tokensView,
   // fed its own tab's rail/content/props (see Scope note in issue #1).
-  const compareView = useCompareView(systems);
+  const compareView = useCompareView(systems, darkOn);
   // Slug-bound mutation callbacks — useCallback (not inline closures) so the
   // memo()'d token rows downstream keep stable onSave/onMerge identities
   // across unrelated App re-renders (e.g. filter keystrokes).
@@ -357,7 +357,7 @@ function App() {
                   <span className="app-pill-reset">Reset</span>
                 </button>
               )}
-              {tab !== "compare" && hasDark && (
+              {hasDark && (
                 <label className="app-dark" title="Toggle the system's dark variant">
                   <Switch.Root className="app-dark-switch" checked={dark} onCheckedChange={setDark}>
                     <Switch.Thumb className="app-dark-thumb" />
