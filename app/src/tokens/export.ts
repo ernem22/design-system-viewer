@@ -18,6 +18,8 @@ export function download(filename: string, text: string, type: string) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([text], { type: `${type};charset=utf-8` }));
   a.download = filename;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
