@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { resolveSystemTokens } from "../systems/store.ts";
 import type { DesignSystem } from "../systems/store.ts";
 import { readViewUrl } from "../lib/urlState.ts";
@@ -46,17 +46,26 @@ export function useCompareView(systems: DesignSystem[]) {
     return linked && KNOWN_COMPONENT_IDS.has(linked) ? linked : DEFAULT_COMPONENT_ID;
   });
 
+  // Distinguishes "first load" from "the user cleared it": the picked
+  // initialiser above runs before the async systems fetch resolves, so an
+  // empty list at mount is not a choice. An empty list after a toggle is.
+  const userPickedRef = useRef(false);
+
   // Systems can be added/removed elsewhere (SystemSwitcher, Tokens tab) while
   // Compare sits inactive-but-mounted (Shell forceMounts every tab) — drop
   // any picked slug that no longer exists, same fallback as legacy's
   // fetchSystems().then(...) picked-repair.
   // Skipped while the list is still empty (first boot fetches it async) so a
-  // deep-linked ?cmp= isn't wiped before the systems it names arrive.
+  // deep-linked ?cmp= isn't wiped before the systems it names arrive. Once the
+  // systems do arrive, an untouched-but-empty selection seeds the default.
   useEffect(() => {
     if (systems.length === 0) return;
     setPicked((cur) => {
       const valid = cur.filter((slug) => systems.some((s) => s.slug === slug));
-      if (valid.length === cur.length) return cur;
+      if (valid.length === cur.length) {
+        if (cur.length === 0 && !userPickedRef.current) return systems.slice(0, 2).map((s) => s.slug);
+        return cur;
+      }
       if (valid.length) return valid;
       return systems.slice(0, 2).map((s) => s.slug);
     });
@@ -77,8 +86,10 @@ export function useCompareView(systems: DesignSystem[]) {
 
   const cols = useMemo(() => systems.filter((s) => picked.includes(s.slug)), [systems, picked]);
 
-  const toggle = (slug: string) =>
+  const toggle = (slug: string) => {
+    userPickedRef.current = true;
     setPicked((cur) => (cur.includes(slug) ? cur.filter((s) => s !== slug) : [...cur, slug].slice(-MAX_COLUMNS)));
+  };
 
   // One CSS-variable map per system — CompareColumn spreads this as inline
   // `style` so `var(--x)` inside that column resolves to its own tokens
