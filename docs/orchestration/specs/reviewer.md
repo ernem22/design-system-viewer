@@ -48,4 +48,4 @@ terminal handle from your preamble and --outcome succeeded:
     orca orchestration send --run <run id> --from <your terminal handle> \
       --type worker_done --subject "review pr <n>" \
       --body "<the acceptance block above + your report>" \
-      --task-id <task id> --dispatch-id <dispatch id> --outcome succeeded --json
+      --task-id <task id> --dispatch-id <dispatch id> --outcome=succeeded --json

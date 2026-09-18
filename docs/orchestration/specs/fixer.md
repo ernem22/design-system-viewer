@@ -52,4 +52,4 @@ terminal handle from your preamble and --outcome succeeded:
       --type worker_done --subject "fixer pr <n> done" \
       --body "<the acceptance block above + one line per finding>" \
       --task-id <task id> --dispatch-id <dispatch id> \
-      --outcome succeeded --files-modified <csv> --json
+      --outcome=succeeded --files-modified <csv> --json
