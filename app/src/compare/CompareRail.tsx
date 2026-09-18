@@ -1,17 +1,22 @@
+import { useMemo, useState } from "react";
 import * as Accordion from "@radix-ui/react-accordion";
 import * as Checkbox from "@radix-ui/react-checkbox";
 import { Icon } from "../lib/icons.tsx";
+import { SectionSearch } from "../shell/SectionSearch.tsx";
 import { systemCoveragePercent } from "../systems/store.ts";
 import type { DesignSystem } from "../systems/store.ts";
 import type { CompareViewModel } from "./useCompareView.ts";
+import { filterOptionGroups } from "./railFilter.ts";
 
 /**
  * Compare tab's rail: the system picker (up to `maxColumns` systems, as a
  * vertical chip list) and, in "component" mode, the option-group picker
  * (Basics / Components / Extras / Screens) — legacy's toolbar row of system chips plus its
  * `<select>` of comparable components, reshaped for the shell's side rail
- * instead of a page-level toolbar. Whole-panel open/close is owned by
- * App.tsx, same as every other tab's rail.
+ * instead of a page-level toolbar. Component mode also carries a
+ * SectionSearch filter (issue #38), since that `<select>`'s native
+ * type-ahead is gone once the options are plain buttons. Whole-panel
+ * open/close is owned by App.tsx, same as every other tab's rail.
  */
 export function CompareRail({
   systems,
@@ -23,12 +28,24 @@ export function CompareRail({
   open: boolean;
 }) {
   const { picked, toggle, maxColumns, mode, optionGroups, componentId, setComponentId } = view;
-  const defaultOpen = ["systems", ...optionGroups.map((g) => g.label)];
+  const [query, setQuery] = useState("");
+  const searching = query.trim().length > 0;
+  const visibleGroups = useMemo(() => filterOptionGroups(optionGroups, query), [optionGroups, query]);
+  const allLabels = ["systems", ...optionGroups.map((g) => g.label)];
+  // Controlled (like Rail) instead of `defaultValue`, so a search can force
+  // every surviving group open without discarding the user's own collapses.
+  const [openGroups, setOpenGroups] = useState<string[]>(allLabels);
+  const effectiveOpen = searching ? ["systems", ...visibleGroups.map((g) => g.label)] : openGroups;
 
   return (
     <div className="app-rail-clip" data-open={open}>
       <div className="app-rail-inner" inert={!open}>
-        <Accordion.Root type="multiple" defaultValue={defaultOpen}>
+        {mode === "component" && (
+          <div className="cmp-rail-search">
+            <SectionSearch value={query} onChange={setQuery} />
+          </div>
+        )}
+        <Accordion.Root type="multiple" value={effectiveOpen} onValueChange={setOpenGroups}>
           <Accordion.Item value="systems" className="app-rail-group">
             <Accordion.Header>
               <Accordion.Trigger className="app-rail-group-label">
@@ -74,7 +91,7 @@ export function CompareRail({
           </Accordion.Item>
 
           {mode === "component" &&
-            optionGroups.map((group) => (
+            visibleGroups.map((group) => (
               <Accordion.Item key={group.label} value={group.label} className="app-rail-group">
                 <Accordion.Header>
                   <Accordion.Trigger className="app-rail-group-label">
@@ -99,6 +116,9 @@ export function CompareRail({
               </Accordion.Item>
             ))}
         </Accordion.Root>
+        {mode === "component" && searching && visibleGroups.length === 0 && (
+          <p className="cmp-rail-empty">No components match “{query.trim()}”.</p>
+        )}
       </div>
     </div>
   );
