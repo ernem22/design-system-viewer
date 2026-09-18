@@ -6,8 +6,22 @@ outbound actions are `orca orchestration send` (type `status` or `worker_done`)
 and nothing else.
 
 YOUR RUNNING APP: the coordinator already installed, built and served this
-worktree at **http://localhost:<port>** (vite preview). State the asset hash you
-tested so the evidence is bound to a build.
+worktree at **http://localhost:<port>** (vite preview). 
+
+**STEP 0 — prove the build is the PR's build, before testing anything else.**
+Run `git log -1 --format='%h %s'` in this worktree and compare it with the PR's head
+commit (`gh pr view <pr> --json headRefOid`). State both in your report. If the
+worktree is on the base branch instead of the PR's branch, the fix under test is
+not in the bundle: report
+
+    status: blocked
+    role: tester
+    blocked: served build <sha> is not PR <n> head <sha> — worktree provisioned from the wrong branch
+
+and stop. A wrong build is a provisioning failure, not a code failure, and a
+`status: fail` for it wastes a Fixer cycle and hides the real defect. The reverse
+also holds: if the build IS the PR head and a criterion fails, that is a genuine
+`fail` — say so with the observed value.
 
 <If this is a re-test after a Fixer commit, say so here and say why the earlier
 pass does not carry over — which behaviour changed.>
