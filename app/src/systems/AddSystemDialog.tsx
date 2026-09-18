@@ -7,29 +7,14 @@ import type { PushToast } from "../lib/toasts.ts";
 import { CssPreview } from "../tokens/CssPreview.tsx";
 import { countTokens } from "../tokens/tokenUtils.ts";
 import { CssSourceBar } from "../tokens/CssSourceBar.tsx";
+import { AFTER_SAVE_TABS, readAfterSave, writeAfterSave } from "./afterSave.ts";
 // Dialog primitives (.tok-dialog*) + shared add-dialog language live with
 // the toolbar — imported here (not just in TokenToolbar) so the dialog stays
 // styled even with zero systems, when no toolbar renders.
 import "../tokens/TokenToolbar.css";
 import "./AddSystemDialog.css";
 
-const AFTER_SAVE_KEY = "dsv.app.afterSave";
-const AFTER_SAVE_TABS: [AppTab, string][] = [
-  ["tokens", "Tokens"],
-  ["preview", "Preview"],
-  ["compare", "Compare"],
-];
 const FULL_TEMPLATE_COUNT = (REFERENCE as { tokens: string[] }[]).reduce((n, g) => n + g.tokens.length, 0);
-
-function readAfterSave(): AppTab {
-  try {
-    const saved = localStorage.getItem(AFTER_SAVE_KEY);
-    if (AFTER_SAVE_TABS.some(([id]) => id === saved)) return saved as AppTab;
-  } catch {
-    /* storage unreachable */
-  }
-  return "preview";
-}
 
 /**
  * Add System dialog (controlled — the header button, the empty-state cards
@@ -58,12 +43,15 @@ export function AddSystemDialog({
   const [error, setError] = useState<string | null>(null);
   const [afterSave, setAfterSave] = useState<AppTab>(readAfterSave);
 
-  // Fresh form per open (a drop pre-fills it).
+  // Fresh form per open (a drop pre-fills it). Re-read the "Open in"
+  // preference too, so a legacy key migrated after this dialog mounted is
+  // reflected in the visible choice.
   useEffect(() => {
     if (!open) return;
     setName("");
     setCss(initialCss ?? "");
     setError(null);
+    setAfterSave(readAfterSave());
   }, [open, initialCss]);
 
   const save = () => {
@@ -159,11 +147,7 @@ export function AddSystemDialog({
                 onValueChange={(v) => {
                   if (!v) return;
                   setAfterSave(v as AppTab);
-                  try {
-                    localStorage.setItem(AFTER_SAVE_KEY, v);
-                  } catch {
-                    /* storage unreachable */
-                  }
+                  writeAfterSave(v as AppTab);
                 }}
               >
                 {AFTER_SAVE_TABS.map(([id, label]) => (
