@@ -550,11 +550,23 @@ export default function FoundationBody() {
           </div>
           <div className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>
             section rhythm — mobile{" "}
-            <span style={{ padding: "var(--mobile-section-spacing) 0", background: "var(--color-accent-subtle)" }}>
+            <span
+              style={{
+                padding: "var(--mobile-section-spacing) 0",
+                background: "var(--color-accent-subtle)",
+                color: "var(--color-text)",
+              }}
+            >
               pad
             </span>{" "}
-            · desktop{" "}
-            <span style={{ padding: "var(--desktop-section-spacing) 0", background: "var(--color-accent-muted)" }}>
+            - desktop{" "}
+            <span
+              style={{
+                padding: "var(--desktop-section-spacing) 0",
+                background: "var(--color-accent-muted)",
+                color: "var(--color-text)",
+              }}
+            >
               pad
             </span>
           </div>

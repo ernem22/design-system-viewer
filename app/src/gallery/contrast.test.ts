@@ -18,6 +18,7 @@ const read = (rel: string) =>
 
 const patternsCss = read("./components/patterns.css");
 const galleryCss = read("./gallery.css");
+const formsCss = read("./components/forms.css");
 const tokenInspectorCss = read("./tokenInspector.css");
 const screensCss = read("./components/screens/screens.css");
 const foundationTsx = read("./components/foundation.tsx");
@@ -68,7 +69,28 @@ const perp = {
   accentSubtle: "#542419",
   selected: "#783020",
   text: "#f2efe7",
+  bg: "#151715",
+  surface: "#20211f",
+  surfaceDisabled: "#30312d",
+  textMuted: "#aaa9a0",
+  textSecondary: "#d2d0c7",
+  onWarning: "#fffaf1",
+  warning: "#a87532",
+  onSuccess: "#fcfaf4",
+  success: "#66805e",
+  onInfo: "#fcfaf4",
+  info: "#657c7c",
+  neutral1000: "#0d0e0d",
 };
+
+/** color-mix(in srgb, a pct%, b) — `pct` is a's share (b gets pct-100).
+ *  Matches the browser's sRGB mix closely enough for a 4.5:1 gate. */
+function mix(a: string, b: string, pct: number): string {
+  const A = hexToRgb(a);
+  const B = hexToRgb(b);
+  const out = A.map((v, i) => Math.round(v * (pct / 100) + B[i] * (1 - pct / 100)));
+  return `#${out.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
 
 describe("issue #88 contrast repairs", () => {
   it("pairs surface-inverse with text-inverse so the inverse panel clears 4.5:1", () => {
@@ -95,16 +117,64 @@ describe("issue #88 contrast repairs", () => {
     expect(rule).toContain("var(--color-danger-subtle)");
   });
 
-  it("sets color: inherit on .dsv-cal-day so range/selected days stop rendering black", () => {
-    // audit: the button never set color, so .dsv-cal-day.is-range hit
-    // rgb(0,0,0) on accent-subtle = 1.64:1
-    expect(ruleText(patternsCss, ".dsv-cal-day")).toContain("color: inherit");
+  it("gives .dsv-cal-day its own token background + text (no UA buttonface regression)", () => {
+    // Regression: `color: inherit` made a plain day inherit the app's light
+    // text while its UA buttonface background (#f0f0f0) stayed unthemed ->
+    // rgb(242,239,231) on rgb(240,240,240) = 1.01:1. Plain days must get
+    // both halves of the pair from the token layer.
+    const plain = ruleText(patternsCss, ".dsv-cal-day");
+    expect(plain).toContain("color: var(--color-text)");
+    expect(plain).toContain("background: var(--color-surface)");
+    // The named range case must stay >= 4.5:1 (audit: 11.12:1 now).
+    expect(ruleText(patternsCss, ".dsv-cal-day.is-range")).toContain(
+      "var(--color-accent-subtle)",
+    );
     expect(contrast(perp.text, perp.accentSubtle)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(perp.text, perp.selected)).toBeGreaterThanOrEqual(4.5);
   });
 
+  it("keeps disabled buttons and labels readable with disabled-surface tokens", () => {
+    // .dsv-btn:disabled used opacity: 0.5, dropping on-accent/accent to
+    // 2.40:1 and accent-text/accent-subtle to 3.25:1.
+    expect(galleryCss).toContain(".dsv-btn:disabled, .dsv-btn[data-disabled]");
+    expect(galleryCss).toContain("background: var(--color-surface-disabled)");
+    expect(contrast(perp.textMuted, perp.surfaceDisabled)).toBeGreaterThanOrEqual(4.5);
+    // .dsv-control-label--disabled used opacity: 0.48 -> 4.47:1.
+    expect(ruleText(formsCss, ".dsv-control-label--disabled")).toContain(
+      "var(--color-text-muted)",
+    );
+    expect(contrast(perp.textMuted, perp.bg)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("darkens the solid badges enough for the existing on-<variant> text", () => {
+    // audit: on-warning/warning 3.84:1, on-success/success 4.18:1,
+    // on-info/info 4.26:1.
+    expect(ruleText(galleryCss, ".dsv-badge--warning-solid")).toContain(
+      "var(--color-neutral-1000)",
+    );
+    expect(ruleText(galleryCss, ".dsv-badge--success-solid")).toContain(
+      "var(--color-neutral-1000)",
+    );
+    expect(ruleText(galleryCss, ".dsv-badge--info-solid")).toContain(
+      "var(--color-neutral-1000)",
+    );
+    expect(contrast(perp.onWarning, mix(perp.warning, perp.neutral1000, 80))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(perp.onSuccess, mix(perp.success, perp.neutral1000, 80))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(perp.onInfo, mix(perp.info, perp.neutral1000, 80))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("uses the secondary text token for .dsv-muted inside a selected surface", () => {
+    // audit: --color-text-muted on --color-selected = 3.97:1.
+    expect(galleryCss).toContain(".dsv-list-item.is-selected .dsv-muted");
+    expect(contrast(perp.textSecondary, perp.selected)).toBeGreaterThanOrEqual(4.5);
+  });
+
   it("keeps the banner on inverse surfaces readable with the same text-inverse pairing", () => {
     expect(ruleText(galleryCss, ".dsv-banner--on-dark")).toContain("var(--color-text-inverse)");
+    // Ghost buttons on the light banner picked up --color-text-secondary
+    // (rgb(210,208,199) on rgb(247,245,239) = 1.42:1).
+    expect(galleryCss).toContain(".dsv-banner--on-dark .dsv-btn--ghost");
+    expect(contrast(perp.textInverse, perp.surfaceInverse)).toBeGreaterThanOrEqual(4.5);
   });
 
   it("uses tokens for the inspector swatch ring instead of a raw black literal", () => {

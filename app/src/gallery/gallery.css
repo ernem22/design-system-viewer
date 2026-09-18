@@ -77,7 +77,7 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
   transition: background var(--motion-hover), border-color var(--motion-hover), transform var(--motion-press);
 }
 .dsv-btn:active:not(:disabled) { transform: scale(var(--motion-scale-active)); }
-.dsv-btn:disabled, .dsv-btn[data-disabled] { opacity: 0.5; cursor: not-allowed; }
+.dsv-btn:disabled, .dsv-btn[data-disabled] { background: var(--color-surface-disabled); color: var(--color-text-muted); border-color: var(--color-border-disabled); cursor: not-allowed; }
 .dsv-btn--sm { height: var(--button-height-sm); font-size: var(--font-size-xs); padding: 0 var(--button-padding-x-sm); }
 .dsv-btn--lg { height: var(--button-height-lg); font-size: var(--font-size-base); padding: 0 var(--button-padding-x-lg); }
 .dsv-btn--xl { height: var(--button-height-xl); font-size: var(--font-size-base); padding: 0 var(--button-padding-x-xl); }
@@ -240,10 +240,13 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
 .dsv-badge--warning { background: var(--color-warning-subtle); color: var(--color-warning-text); border-color: var(--color-warning-border); }
 .dsv-badge--danger { background: var(--color-danger-subtle); color: var(--color-danger-text); border-color: var(--color-danger-border); }
 .dsv-badge--info { background: var(--color-info-subtle); color: var(--color-info-text); border-color: var(--color-info-border); }
-.dsv-badge--success-solid { background: var(--color-success); color: var(--color-on-success); border-color: transparent; }
-.dsv-badge--warning-solid { background: var(--color-warning); color: var(--color-on-warning); border-color: transparent; }
+/* Solid fills are darkened against --color-neutral-1000 so the existing
+   on-<variant> text token clears 4.5:1 (the raw -success/-warning/-info
+   tokens sat at 4.18/3.84/4.26 with on-<variant>). */
+.dsv-badge--success-solid { background: color-mix(in srgb, var(--color-success) 80%, var(--color-neutral-1000)); color: var(--color-on-success); border-color: transparent; }
+.dsv-badge--warning-solid { background: color-mix(in srgb, var(--color-warning) 80%, var(--color-neutral-1000)); color: var(--color-on-warning); border-color: transparent; }
 .dsv-badge--danger-solid { background: var(--color-danger); color: var(--color-on-danger); border-color: transparent; }
-.dsv-badge--info-solid { background: var(--color-info); color: var(--color-on-info); border-color: transparent; }
+.dsv-badge--info-solid { background: color-mix(in srgb, var(--color-info) 80%, var(--color-neutral-1000)); color: var(--color-on-info); border-color: transparent; }
 .dsv-kbd {
   font-family: var(--font-mono); font-size: var(--font-size-xs);
   background: var(--color-surface-sunken); color: var(--color-text-secondary);
@@ -314,6 +317,11 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
 .dsv-banner .close { margin-left: auto; background: none; border: none; color: inherit; opacity: 0.8; cursor: pointer; padding: var(--space-1); }
 
 .dsv-banner--on-dark { background: var(--color-surface-inverse); color: var(--color-text-inverse); }
+/* Ghost buttons inherit the inverse text pairing on the light banner instead
+   of --color-text-secondary (1.42:1 on surface-inverse). */
+.dsv-banner--on-dark .dsv-btn--ghost { color: var(--color-text-inverse); }
+.dsv-banner--on-dark .dsv-btn--ghost:hover:not(:disabled),
+.dsv-banner--on-dark .dsv-btn--ghost:active:not(:disabled) { color: var(--color-text-inverse); }
 
 .dsv-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
 
@@ -485,6 +493,11 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
 .dsv-list-item.is-selected { background: var(--color-selected); box-shadow: inset 2.5px 0 0 var(--color-accent); }
 
 .dsv-list-item.is-selected > svg, .dsv-table tr.is-selected td .dsv-muted { opacity: var(--opacity-selected); }
+
+/* --color-selected is too dark for --color-text-muted (3.97:1); muted text
+   inside a selected surface uses the secondary text token instead. */
+.dsv-list-item.is-selected .dsv-muted,
+.dsv-card.is-picked .dsv-muted { color: var(--color-text-secondary); }
 
 .dsv-card--tint { background: var(--color-tint-subtle); }
 
