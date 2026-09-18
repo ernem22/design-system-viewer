@@ -18,6 +18,10 @@ import { filterOptionGroups } from "./railFilter.ts";
  * type-ahead is gone once the options are plain buttons. Whole-panel
  * open/close is owned by App.tsx, same as every other tab's rail.
  */
+
+// Legacy collapsed the long Screens group by default; short groups stay open.
+const DEFAULT_COLLAPSED_GROUPS = ["Screens"];
+
 export function CompareRail({
   systems,
   view,
@@ -34,7 +38,10 @@ export function CompareRail({
   const allLabels = ["systems", ...optionGroups.map((g) => g.label)];
   // Controlled (like Rail) instead of `defaultValue`, so a search can force
   // every surviving group open without discarding the user's own collapses.
-  const [openGroups, setOpenGroups] = useState<string[]>(allLabels);
+  // Screens alone defaults collapsed (legacy: 27 links), short groups open.
+  const [openGroups, setOpenGroups] = useState<string[]>(() =>
+    allLabels.filter((label) => !DEFAULT_COLLAPSED_GROUPS.includes(label)),
+  );
   const effectiveOpen = searching ? ["systems", ...visibleGroups.map((g) => g.label)] : openGroups;
 
   return (
