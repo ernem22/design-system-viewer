@@ -9,6 +9,15 @@ Honour its stated outcome and its `Verify:` line exactly; do not widen it.
 <Where the user-visible behaviour currently goes wrong, in one paragraph, with
 the file:line the issue names.>
 
+**STEP 0 — reproduce the claim before you change anything.** An issue is a claim, not a
+fact, and a fix for a claim that is not true is a regression with a test. Before writing
+code: reproduce the behaviour the issue describes on the parent commit and record the
+exact command or steps plus the observed value. If you cannot reproduce it, STOP and
+report `status: unreproducible` with what you tried and what you saw instead — the
+coordinator closes or re-scopes the issue. Never implement a fix for behaviour you could
+not observe. (An issue labelled `scan:agent` without `measured:live` has never been
+observed on a running build at all; treat its text as a hypothesis.)
+
 WHAT SUCCESS LOOKS LIKE:
   - <observable criterion 1 — a wrong answer must be visible, not arguable>
   - <observable criterion 2>

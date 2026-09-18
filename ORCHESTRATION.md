@@ -457,6 +457,13 @@ Contract, identical in shape to the Tester's:
     element programmatically scrollable; the chrome's position measured before and
     after a rail click (a rail click once moved the whole layout by the topbar height);
     and no `overflow: hidden` on a layout container.
+  - **A user-journey sweep comes first**, because a bug a user can feel outranks a nit a
+    reader can find: drive the app's own journeys end to end — load a system, fetch a
+    stylesheet by URL, edit a token value and Reset, compare two systems, export, copy a
+    link, switch every tab and toggle every panel — and report each deviation from the
+    expected or legacy behaviour with its measurement. Static reading is the fallback,
+    not the method: a finding no journey can produce is a hypothesis and must be
+    labelled as one, not written as a defect.
   - **It reports findings, the coordinator decides.** A finding is not a fix and not
     an issue: the coordinator triages the list into issues, Coders or Fixers. Capped
     at the ten worst per axis, because a list nobody can act on is worse than a short
@@ -691,6 +698,25 @@ systems that already own them:
 
 A stage advances only on a structured `PASS`/`succeeded` signal or a green CI
 check; never on Hermes's own inference from partial output.
+
+**A claim is verified before it is fixed.** Every issue carries its provenance —
+`reported:user` (the user saw it), `measured:live` (a worker observed it on a running
+build), `scan:agent` (a code scan inferred it). An issue that has never been observed
+live (`scan:agent` without `measured:live`) is **not a Coder task yet**: it goes to a
+**claim verification** dispatch first — a read-only worker with the app served, whose
+only job is to reproduce the claim and report the observed value, or `unreproducible`.
+Verified → `measured:live`, and a Coder. Unreproducible → the issue is closed with the
+record of the attempt.
+
+Three rules make this cheap, and each one cost a real failure to learn:
+
+  - **The dispatch text quotes the issue body.** It is never written from a summary: a
+    summary once produced a task for a different issue than its card.
+  - **Every fix PR contains something RED on the parent commit** — a failing test, or a
+    live measurement that disagrees. A claim nobody can make red was never a defect.
+  - **A worker that cannot verify says so.** `## Not verified` with the reason is a
+    first-class result; a plausible-sounding gap filled by invention is the one outcome
+    the gates cannot catch.
 
 ## Issue-Label State Machine (parallel-safe)
 
@@ -1426,6 +1452,7 @@ the rules do not have to carry their narrative.
 | Three ids containing `free` were unusable — one needs a subscription, one had no channel, one had no tool-use endpoint | Probe reachability before planning around a model |
 | `element.click()` from `eval` reported success and did not switch a Radix tab | Use `orca click --element @ref`; programmatic clicks miss `mousedown` activation |
 | A user-reported layout shift ("the whole layout jumps up ~50px when I click a rail item") turned out to be `overflow: hidden` on the shell plus an anchor without `preventDefault`: hidden still scrolls programmatically, and native fragment navigation walks every scrollable ancestor | A one-line patch fixes the symptom; the class of bug needs a standard. The shell contract now lives in `app/CLAUDE.md` (one frame, one scroller, `overflow: clip` instead of `hidden`, in-app scroll targets the content scroller), is enforced by `shell/shellContract.test.ts`, and is measured every audit by the shell axis. When a bug is a layout *invariant* violation, write the invariant down and make something check it |
+| Every open issue was treated as a fact, and two claims turned out to be wrong: the coordinator's dispatch text for #27 described a different issue than its card, and a Reviewer's "`.app-toast-warn` is absent" was half wrong (the class was applied; only the CSS rule was missing) | A claim is verified before it is fixed. Provenance labels (`reported:user` / `measured:live` / `scan:agent`), a claim-verification dispatch for anything never observed on a running build, a reproduce-first STEP 0 in the Coder and Fixer templates, and the hard rule that every fix PR contains something RED on the parent commit — a claim nobody can make red was never a defect |
 | A bare `role=tab` query matched 9 elements, 6 of them gallery demos | Scope selectors to `.app-tabs` / the app's own container, in Orca and Playwright alike |
 | A Coder was handed dispatch text that described a different issue than its card — I wrote "an override on an undefined token is lost" for #27, whose real subject is "value-edits became permanent; Reset only clears swaps" | The coordinator's dispatch text is derived from the issue body — `gh issue view <n>` first, quoted — never from a summary or a filename. The worker caught it and asked; a less careful worker would have built the wrong feature and passed every gate |
 | Three Reviewers finished their analysis and could not report: `orca orchestration send` was denied by the reviewer permission allowlist I had just written (`gh`/`git`/`ls` allowed, `orca` missing) | Any read-only permission block must allow `orca *`. Reporting is the worker's only exit; a blocked report leaves a live-looking dispatch and an idle phase, and the verdict has to be recovered from the terminal by hand |
