@@ -16,15 +16,17 @@
 //     :root), so it only affects that node's descendants via normal CSS
 //     inheritance — every other place still reads the real --color-accent.
 //
-// Resolution precedence, light and dark alike: valueEdit > swap > authored
-// value. So a value edit on a token beats a swap that targets that same token
-// (the swap is only a redirect; the edited literal is what the user asked the
-// token to equal). A swap's source is resolved from the token's own
-// authored/edited value, never sideways through another component's scoped
-// swap (legacy). An override is keyed by token name only, so it applies in
-// whichever system defines that token and comes back untouched when you
-// switch back — an override on a token no system currently defines is kept,
-// not dropped.
+// Resolution precedence, light and dark alike (legacy parity): a scope's swap
+// is resolved first, and its source is read through the value-edit layer. So a
+// value edit on a swap's *source* token does affect what the scope reads,
+// while a value edit on the swapped-away *target* does not override the
+// redirect — the swap is a redirect to whatever the source resolves to. A
+// swap's source is never resolved sideways through another component's scoped
+// swap (legacy `valueInDemo`, preview/src/tokenOverrides.js:89-92, returns
+// `globalValue(source)`). An override is keyed by token name only, so it
+// applies in whichever system defines that token and comes back untouched when
+// you switch back — an override on a token no system currently defines is
+// kept, not dropped.
 //
 // A value edit is global, so it is mirrored into the document (`:root`, via
 // syncValueOverridesToDocument below) on every store change — not just read
@@ -123,34 +125,34 @@ export function resolvedValue(
   return overrides[name] ?? authoredOrComputed(authored, name);
 }
 
-/** What one component actually reads for a token, in the documented order
-    `valueEdit > swap > authored`. A value edit on the token itself wins even
-    when the same scope swaps that token away — the literal the user typed is
-    what the token equals, and a scoped redirect must not hide it. Otherwise a
-    swap resolves its source through the global layer; an unswapped token
-    resolves directly. Symmetric with resolvedValue, one level up the chain. */
+/** What one component actually reads for a token: swap-first, and a swap's
+    source resolves through the global value-edit layer. Mirrors legacy's
+    `valueInDemo` (preview/src/tokenOverrides.js:89-92):
+    `source ? globalValue(source) : globalValue(name)` — so a value edit on the
+    swap's *source* token (the token read instead) does affect the swap's
+    output, while a value edit on the swapped-away *target* does not override
+    the redirect. An unswapped token resolves its own authored/edited value. */
 export function valueInScope(authored: AuthoredValueOf, scopeId: string, name: string): string {
-  const edited = state.valueEdits[name];
-  if (edited !== undefined) return edited;
   const source = state.swaps[scopeId]?.[name];
   return resolvedValue(authored, source ?? name);
 }
 
 /** The inline custom properties a scope's swaps put on its own DOM node:
-    `target: var(source)`, except a target with a value edit gets the edited
-    literal instead, so `valueEdit > swap` holds on the page (a scoped inline
-    declaration would otherwise beat the `:root` override). Pure so the
-    precedence can be pinned without mounting; `useSectionScopeStyle` supplies
-    the live snapshots. */
+    `target: var(source)` for every swap, with no value-edit substitution on
+    the target. Matches legacy's `useSwapStyle` (preview/src/ui.jsx:324-326),
+    which always emits `var(source)`; a value edit on the source still shows
+    here because it is mirrored into `:root` (syncValueOverridesToDocument
+    above) and `var(source)` resolves through that. Pure so the swap order can
+    be pinned without mounting; `useSectionScopeStyle` supplies the live
+    swaps. */
 export function scopeStyleFor(
   swaps: Record<string, Record<string, string>>,
-  valueEdits: Record<string, string>,
   id: string,
 ): CSSProperties | undefined {
   const scope = swaps[id];
   if (!scope || Object.keys(scope).length === 0) return undefined;
   return Object.fromEntries(
-    Object.entries(scope).map(([target, source]) => [target, valueEdits[target] ?? `var(${source})`]),
+    Object.entries(scope).map(([target, source]) => [target, `var(${source})`]),
   ) as CSSProperties;
 }
 
