@@ -204,10 +204,13 @@ as any other worker.
 
 ### What the Dispatcher reads — and what it must not
 
-A Dispatcher that reads this whole file spends ~47k tokens before it starts a
-single worker. That was measured, on the first live run. It does not need the
-document; it needs the contract, its own template, and the one phase template it
-is filling.
+A Dispatcher does not need this document. Two live runs measured the same thing,
+and the second was told to read only the contract and its templates: the context
+is ~47–50k tokens at intake either way, because the baseline is opencode's own
+system prompt and tool schemas, not this file. What the read list below controls
+is the increment on top of that baseline — and this file is ~90k characters, so
+the increment is worth controlling. It needs the contract, its own template, and
+the one phase template it is filling. Nothing else.
 
   **Read:** `## Operational Contract`, `docs/orchestration/specs/dispatcher.md`,
   the one phase template being filled, and the issue or PR it serves.
