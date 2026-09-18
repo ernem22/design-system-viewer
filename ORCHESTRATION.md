@@ -1339,6 +1339,7 @@ the rules do not have to carry their narrative.
 | Symptom observed | Rule it produced |
 |---|---|
 | `pipeline.py` duplicated Orca's task/dispatch state | No second state layer; stateless mechanism is fine |
+| Specs told workers to run `orca orchestration message send` / `worker-done` — neither command exists | The exact CLI call, flags included, belongs in the template: a worker that has to guess the spelling of the command it reports with is a worker that reports nothing |
 | Worker reported `commit: <sha>` having never committed; `git diff --stat` looked clean because the file was untracked | Integrity check via `git log -1`, compare against pre-dispatch HEAD |
 | `--retry-of` rejected `task_not_startable` on a still-`ready` Task | Plain re-dispatch on the same Task ID is the first-line fallback |
 | `nex-n2.5-pro:free` hit `free-models-per-day` mid-run | Rate-limit tail read every dispatch; model demoted; exhausted-for-session set |

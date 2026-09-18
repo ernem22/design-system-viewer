@@ -1,8 +1,9 @@
 TESTER TEMPLATE — fill every `<>`, delete nothing.
 
 You verify behaviour in a RUNNING app. You write no file: no test, no fix, no
-scratch file inside the repo, no commit, no push, no label change. Only
-`orca orchestration message send` and `orca orchestration worker-done`.
+scratch file inside the repo, no commit, no push, no label change. Your only
+outbound actions are `orca orchestration send` (type `status` or `worker_done`)
+and nothing else.
 
 YOUR RUNNING APP: the coordinator already installed, built and served this
 worktree at **http://localhost:<port>** (vite preview). State the asset hash you
@@ -42,4 +43,9 @@ before: <...>
 
 Report `status: pass` only if every step you could produce held. Then send
 worker_done once, from this terminal, with the task id, dispatch id and terminal
-handle from your preamble and --outcome succeeded.
+handle from your preamble and --outcome succeeded:
+
+    orca orchestration send --run <run id> --from <your terminal handle> \
+      --type worker_done --subject "tester issue <n>" \
+      --body "<the acceptance block above + your observed/before lines>" \
+      --task-id <task id> --dispatch-id <dispatch id> --outcome succeeded --json
