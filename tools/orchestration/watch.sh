@@ -36,18 +36,29 @@ if [ -n "$SKIP_EXISTING" ]; then
   orca orchestration check --run "$RUN" --json > "$TMP" 2>/dev/null
   # The ack takes the DELIVERY id (result.deliveryId), not the message id: acking
   # with msg_... returns ok:false and leaves the queue untouched.
+  #
+  # It also PRINTS what it drains: a drain that acks unread is how a settlement
+  # gets lost (tester-69's did, swallowed between a read and an arming). The body
+  # is printed before the ack so the log keeps it either way.
   DID=$(node -e "
 const fs=require('fs');
 try{ const j=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
   const r=j.result||{};
   const list=r.deliveries||r.messages||[];
-  console.log(r.deliveryId||''); if(list.length) console.log('pending='+list.length);
+  for(const d of list){
+    const p=d.payload||{};
+    console.log('watch: PRE-EXISTING '+(d.type||'')+' '+(p.taskId||'-')+' at '+String(d.created_at||'').slice(11,19));
+    console.log((d.body||'').split('\n').slice(0,25).join('\n'));
+    console.log('---');
+  }
+  console.log('DELIVERY='+(r.deliveryId||''));
 }catch(e){}
 " "$TMP")
-  FIRST=$(printf '%s' "$DID" | head -1)
+  printf '%s\n' "$DID"
+  FIRST=$(printf '%s' "$DID" | grep '^DELIVERY=' | cut -d= -f2)
   if [ -n "$FIRST" ]; then
     orca orchestration check --run "$RUN" --ack "$FIRST" --json >/dev/null 2>&1 \
-      && echo "watch: acked pre-existing $FIRST"
+      && echo "watch: acked pre-existing $FIRST (printed above)"
   fi
 fi
 
