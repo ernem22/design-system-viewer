@@ -412,7 +412,14 @@ Consequences Hermes must honour:
 Labels in use: `auto-ok` (**set by the user on the issue**; Hermes may merge
 this one), `in-progress` (a Coder holds it), `needs-review` (PR pushed, awaiting
 a batch), `ready-for-review` (CI green + Reviewer PASS on a PR without
-`auto-ok` — the user's turn). Check `gh label list` and create missing
+`auto-ok` — the user's turn), `carbon-based` (a human wrote it).
+
+`carbon-based` exists because agents are the default here, so human work is the
+exception worth marking — the same way the rare thing on a shelf is what gets
+the label. It earns its keep beyond the joke: when something breaks, knowing
+whether an agent or a person wrote it changes where you look first. Commit
+author already distinguishes them (`orca-<role>` vs `ernem22`), but that does
+not show up in an issue or PR list, and the label does. Check `gh label list` and create missing
 ones once with `gh label create <name> --color <hex>`.
 
 **`needs-test` is retired, but must be drained, not deleted.** Four issues
