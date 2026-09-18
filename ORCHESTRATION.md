@@ -718,6 +718,25 @@ Three rules make this cheap, and each one cost a real failure to learn:
     first-class result; a plausible-sounding gap filled by invention is the one outcome
     the gates cannot catch.
 
+**Creating a task is the one step with no downstream check, so it carries its own.**
+Before an issue is opened:
+
+  - run `tools/orchestration/dupcheck.sh "<distinctive term>"` — a model asked "is this a
+    duplicate?" answers from memory and is wrong, while the search is mechanical. (It
+    paid for itself on its first run: the shell refactor's area already had three issues,
+    #18, #16 and the closed #15.)
+  - fill the evidence fields of `.github/ISSUE_TEMPLATE/agent-finding.md`: provenance,
+    the reproduction, the **observed value**, the `file:line`, and how a fix would be RED
+    on the parent. The observed value is the field that decides — a description of a
+    defect is not evidence of one.
+  - an issue that cannot fill them is opened with `repro:missing` and does not reach a
+    Coder. It goes to a verification dispatch, or it is closed with the record of the
+    attempt. Neither is a failure: "cannot verify" is a result.
+
+**A confidence score is not a gate.** Asking a model whether it is more than 70% sure
+returns "yes" from the same confident state that produced the wrong claim; the gate has
+to be external and falsifiable — a reproduction someone else can re-run.
+
 ## Issue-Label State Machine (parallel-safe)
 
 The durable backlog is **GitHub Issues**, not Orca's `task-list` — Orca Tasks
