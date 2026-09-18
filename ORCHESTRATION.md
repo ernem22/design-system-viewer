@@ -295,6 +295,12 @@ Repo-specific traps, verified 2026-09-18. Each Coder/Fixer Task spec must
 carry the ones relevant to its change, because a worker that discovers them
 by trial produces a silent false pass.
 
+- **The shell layout contract lives in `app/CLAUDE.md` (`## Shell layout`).** One
+  frame, one scroller: the shell owns the topbar/rail/props/content regions, a tab
+  supplies rail *content* rather than its own rail frame, exactly one region scrolls
+  (`.app-main`), and `overflow: hidden` is banned on layout containers because it still
+  scrolls programmatically. A change that adds a rail frame or a second scroll
+  container is out of contract, and every spec touching `shell/` must say so.
 - **Commands are `--prefix app`.** Root `npm test` runs
   `src/core`/`src/server` only and root `npm run build` builds `preview/` —
   **neither touches `app/` at all**. The real commands are
@@ -446,6 +452,11 @@ Contract, identical in shape to the Tester's:
     completeness (empty/loading/error per panel), layout robustness (overflow,
     clipping, truncation without an affordance), and dead or dishonest UI (controls
     that do nothing, labels that lie, duplicates).
+  - **Plus the shell contract axis**, because the layout standard in `app/CLAUDE.md` is
+    only real if something measures it: one scroller (`.app-main`) and no other
+    element programmatically scrollable; the chrome's position measured before and
+    after a rail click (a rail click once moved the whole layout by the topbar height);
+    and no `overflow: hidden` on a layout container.
   - **It reports findings, the coordinator decides.** A finding is not a fix and not
     an issue: the coordinator triages the list into issues, Coders or Fixers. Capped
     at the ten worst per axis, because a list nobody can act on is worse than a short
@@ -1414,6 +1425,7 @@ the rules do not have to carry their narrative.
 | `inkling:free` reviewed perfectly but, told to write a file, mangled the Windows path to `/workspaces/...` | Probe per role; read-only reasoning and file-editing tool use are different capabilities |
 | Three ids containing `free` were unusable — one needs a subscription, one had no channel, one had no tool-use endpoint | Probe reachability before planning around a model |
 | `element.click()` from `eval` reported success and did not switch a Radix tab | Use `orca click --element @ref`; programmatic clicks miss `mousedown` activation |
+| A user-reported layout shift ("the whole layout jumps up ~50px when I click a rail item") turned out to be `overflow: hidden` on the shell plus an anchor without `preventDefault`: hidden still scrolls programmatically, and native fragment navigation walks every scrollable ancestor | A one-line patch fixes the symptom; the class of bug needs a standard. The shell contract now lives in `app/CLAUDE.md` (one frame, one scroller, `overflow: clip` instead of `hidden`, in-app scroll targets the content scroller), is enforced by `shell/shellContract.test.ts`, and is measured every audit by the shell axis. When a bug is a layout *invariant* violation, write the invariant down and make something check it |
 | A bare `role=tab` query matched 9 elements, 6 of them gallery demos | Scope selectors to `.app-tabs` / the app's own container, in Orca and Playwright alike |
 | A Coder was handed dispatch text that described a different issue than its card — I wrote "an override on an undefined token is lost" for #27, whose real subject is "value-edits became permanent; Reset only clears swaps" | The coordinator's dispatch text is derived from the issue body — `gh issue view <n>` first, quoted — never from a summary or a filename. The worker caught it and asked; a less careful worker would have built the wrong feature and passed every gate |
 | Three Reviewers finished their analysis and could not report: `orca orchestration send` was denied by the reviewer permission allowlist I had just written (`gh`/`git`/`ls` allowed, `orca` missing) | Any read-only permission block must allow `orca *`. Reporting is the worker's only exit; a blocked report leaves a live-looking dispatch and an idle phase, and the verdict has to be recovered from the terminal by hand |
