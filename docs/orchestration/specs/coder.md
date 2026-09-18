@@ -38,6 +38,20 @@ pr: <number>
 changed: <files, one line>
 
 Send worker_done once, from this terminal, with the task id, dispatch id and
-terminal handle from your preamble. If the issue leaves a requirement genuinely
-ambiguous, send `orca orchestration message send` with the question and wait —
-never invent a requirement.
+terminal handle from your preamble — the exact call is:
+
+    orca orchestration send --run <run id> --from <your terminal handle> \
+      --type worker_done --subject "coder <n> done" \
+      --body "<the acceptance block below + your prose>" \
+      --task-id <task id> --dispatch-id <dispatch id> \
+      --outcome succeeded --files-modified <csv> --json
+
+If the issue leaves a requirement genuinely ambiguous, ask instead of guessing:
+
+    orca orchestration send --run <run id> --from <your terminal handle> \
+      --type question --subject "<the one thing you cannot decide>" \
+      --body "<what you know, what you need>" \
+      --to <coordinator terminal handle from your preamble> \
+      --task-id <task id> --dispatch-id <dispatch id> --json
+
+then wait. Never invent a requirement.

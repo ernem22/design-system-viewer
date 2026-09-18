@@ -54,10 +54,17 @@ run in the same wave.
 
 STEP 4 — ESCALATE, AND NOTHING ELSE.
 When CI is green and both gates report pass, send the coordinator ONE merge
-packet in the exact shape of `## The Dispatcher Role` (pr, head, ci, reviewer,
-tester, evidence, open risk). If a packet field is missing, the PR goes back to
-the phase that owes it — you do not guess. A blocker (stale worker, failed
-teardown, a phase that cannot proceed) goes to the coordinator immediately.
+packet in the exact shape of `## The Dispatcher Role`:
+
+    orca orchestration send --run <run id> --from <your terminal handle> \
+      --type status --subject "merge packet: pr <n>" \
+      --body "<the packet fields, one per line>" \
+      --to <coordinator terminal handle from your spec> \
+      --task-id <your task id> --dispatch-id <your dispatch id> --json
+
+If a packet field is missing, the PR goes back to the phase that owes it — you do
+not guess. A blocker (stale worker, failed teardown, a phase that cannot proceed)
+goes to the coordinator immediately with the same command and `--type escalation`.
 
 HEARTBEAT: every few minutes while you wait, so the stale sweep does not reclaim
 you.
