@@ -3,7 +3,7 @@
 
 .dsv-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-0-5); max-width: 320px; }
 
-.dsv-cal-day { aspect-ratio: 1; display: inline-flex; align-items: center; justify-content: center; font-size: var(--font-size-sm); border-radius: var(--radius-md); cursor: pointer; border: var(--border-width-thin) solid transparent; }
+.dsv-cal-day { aspect-ratio: 1; display: inline-flex; align-items: center; justify-content: center; font-size: var(--font-size-sm); color: inherit; border-radius: var(--radius-md); cursor: pointer; border: var(--border-width-thin) solid transparent; }
 
 .dsv-cal-day:hover { background: var(--color-hover-overlay); }
 

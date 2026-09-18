@@ -358,7 +358,7 @@ export default function FoundationBody() {
           <div
             style={{
               background: "var(--color-surface-inverse)",
-              color: "var(--color-text-on-accent)",
+              color: "var(--color-text-inverse)",
               borderRadius: "var(--radius-lg)",
               padding: "var(--space-4)",
               minWidth: 200,
