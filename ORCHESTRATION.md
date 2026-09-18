@@ -49,8 +49,8 @@ enforcement layer available. See Division of Labour.
 Verified pipeline shape:
 
 ```
-User-written issue → Coder → CI gate → Batch Reviewer ─→ auto-ok?  yes → Hermes merges
-        ↑_________________________________________|                 no  → user merges
+User-written issue → Coder → CI gate → Batch Reviewer → Tester ─→ auto-ok?  yes → Hermes merges
+        ↑_______________________________________________________|          no  → user merges
         (failure at any stage → fresh worker, fallback model)
 ```
 
@@ -66,7 +66,7 @@ the same verdict for free and cannot lie about it.
 |---|---|---|
 | `eslint`, `tsc -b`, `vite build`, `vitest run` | **CI** — `.github/workflows/pr-check.yml`, job/context `app` | Deterministic, machine-decidable, cannot misreport itself |
 | Is the diff good code? Does it match what the issue asked? | **Reviewer** worker | Judgment; CI cannot do it |
-| Does the changed UI actually behave correctly when running? | **Nobody, by default.** A Tester dispatch can check it on request | CI cannot, and Orca's browser cannot run in CI — so this is the standing hole, see Known Gaps |
+| Does the changed UI actually behave correctly when running? | **Tester** worker — a required stage for every PR that changes `app/src` (see Tester) | Judgment over the *running* app; CI cannot do it, and Orca's browser cannot run in CI |
 | New tests covering new behaviour | **Coder**, in the same commit | Tester may not write tests, so nobody else can grow coverage |
 | Merge decision and execution | **Hermes** | Control-plane action, explicitly in scope |
 
@@ -94,9 +94,13 @@ Consequences Hermes must honour:
   Communication Protocol) — nothing else.
 - Decide: pass → advance stage; fail → fresh worker + fallback model (capped
   attempts); ambiguous → escalate to the user.
-- Read the CI verdict from `gh pr checks`. When CI is green **and** Reviewer
-  PASS is in hand, the PR is *ready for the user* — post nothing, merge
-  nothing, and move on to the next issue. The user merges.
+- Dispatch a Tester against the PR branch for every PR that changes `app/src`
+  (see Tester), once CI is green and Reviewer PASS is in hand. Testers run in
+  parallel with other dispatches — see Parallel Worker Spawning.
+- Read the CI verdict from `gh pr checks`. When CI is green, Reviewer PASS and
+  Tester PASS are all in hand, the PR is *ready* — merged if the issue carries
+  `auto-ok`, otherwise left for the user under `ready-for-review`. Nothing else
+  authorizes either action.
 - Release/close settled workers; clean up worktrees created for a
   since-finished or abandoned attempt.
 
@@ -147,7 +151,7 @@ Two bounded exceptions, both O(1) and both in the per-worker call budget:
 |---|---|---|
 | Coder | Implements the task in its child worktree, **writes tests for the behaviour it adds** (see `app/` Facts), commits + pushes, opens the PR, flips the issue label | Rely on CI to decide whether its own change is correct; skip tests because "CI will catch it" — CI only runs tests that exist |
 | Reviewer (`--agent plan`) | Read-only diff/code review against the issue's stated intent, returns PASS/FAIL + fix list | Edit any file; implement fixes; restate what CI already reports (lint/types/build/unit results are not review findings) |
-| Tester *(on demand only)* | Drives the **running** app through Orca's built-in browser and reports the behaviour it observed. **Not a pipeline stage** — dispatched only when the user asks, because it needs this desktop awake and cannot gate a merge. See Driving The App | Run `npm test`/`tsc` and report counts — CI's job; write or modify any file; take a full `snapshot` as a matter of course |
+| Tester | Drives the **running build** through Orca's built-in browser and reports the behaviour it observed, before and after the change (see Tester). A required stage for every PR that changes `app/src`, and it does gate the merge | Run `npm test`/`tsc` and report counts — CI's job; write, add or modify any file; write tests; commit; take a full `snapshot` as a matter of course |
 | Fixer | Applies exactly the fix Reviewer or a failing CI check reported, nothing else | Re-scope or re-design the change |
 
 ## `app/` Facts Workers Must Be Told
@@ -162,33 +166,69 @@ by trial produces a silent false pass.
   `npm --prefix app test`, `npm --prefix app run build`,
   `npm --prefix app run lint`. A worker running the root scripts gets a green
   result that proves nothing about its change.
-- **A `.tsx` test file is silently ignored.** `app/vitest.config.ts` sets
-  `include: ['src/**/*.test.ts']`, which does not match `*.test.tsx`. Verified
-  by probe: a `.tsx` test whose body was `expect(1).toBe(2)` was not collected
-  and the suite still exited 0. A Coder that names a component test
-  `Component.test.tsx` produces a test that never runs, and both the Coder and
-  CI report green.
-- **Test environment is `node`, not a DOM.** Same config. DOM-dependent tests
-  must construct their own environment.
+- **The old `.tsx` include gap is fixed — do not repeat the stale warning.**
+  PR #47 put `include: ['src/**/*.test.ts', 'src/**/*.test.tsx']` into
+  `app/vitest.config.ts`, so a `.test.tsx` file now *is* collected. Verified
+  2026-09-18 by reading the config and by `npm --prefix app test`, which
+  collects `app/src/shell/Toasts.test.tsx`. A Coder told the old "`.tsx` is
+  silently ignored" story will avoid the one file layout the suite supports.
+- **Test environment is `node`, not a DOM.** Same config, and it is deliberate.
+  A file that needs a DOM opts in per file with a
+  `// @vitest-environment happy-dom` docblock — `app/src/shell/Toasts.test.tsx`
+  is the worked example. DOM-dependent tests without the docblock must build
+  their own `Window`.
+- **A fresh child worktree has no `app/node_modules`.** It is gitignored, and a
+  git worktree does not share one (verified: `app-reviewer-9d668e` and `coder-1`
+  have none; the two directories that do have one are ones where a worker ran
+  an install). Every Coder/Tester/Fixer spec that builds, tests or serves the
+  app must start with `npm --prefix app ci` — without it `vite build` and
+  `vitest` fail in ways a worker misreads as a broken change.
 - **The established pattern for testing a hook/component** is
   `app/src/lib/toasts.test.ts`: a `.ts` file, `createElement` instead of JSX,
   a hand-built `happy-dom` `Window`, and `react-dom/client` imported lazily so
   it never sees a document-less module scope. `@testing-library/react` is
   **not** a dependency. Point Coders at that file as the template rather than
   letting them invent an approach.
-- Current coverage, for calibration: 4 test files / 34 tests, all in
-  `src/lib/`, against 103 `.ts`/`.tsx` source files. There are zero component
-  tests. Treat "add a test" tasks as genuinely valuable, not as busywork.
+- Current coverage, for calibration: 5 test files / 39 tests against 99
+  non-test `.ts`/`.tsx` source files, all in `app/` and counted 2026-09-18 with
+  `npm --prefix app test`. Four of the five are `src/lib/` unit tests;
+  `src/shell/Toasts.test.tsx` is the only component test. Treat "add a test"
+  tasks as genuinely valuable, not as busywork.
 
-## Driving The App (Tester)
+## Tester
 
-Verified working 2026-09-18 against the real built app on `vite preview`.
-Loop: `orca tab create --url <url>` → `orca eval` to assert → `orca click
---element @ref` to interact → assert again. `orca console --limit N` reads page
-errors; an empty console is itself a signal.
+The Tester is a pipeline stage, not an on-demand tool: every PR that changes
+`app/src` gets a Tester dispatch before the merge decision. It is the only stage
+that observes the app *running*, so it is the only stage that can catch a change
+that compiles, lints, passes the unit suite and still does not do what the issue
+asked.
 
-Serve the built app, not the dev server, so the Tester tests what CI built:
-`npm --prefix app run build` then `npx vite preview --port 4173`.
+**Setup, in the Tester's own worktree.** `npm --prefix app ci` comes first — a
+fresh worktree has no `app/node_modules` (see `app/` Facts). Then serve the
+**built** app, never the dev server, so the Tester is looking at what CI built
+and what the user would get:
+
+```
+npm --prefix app ci
+npm --prefix app run build
+npx vite preview --port 4173
+```
+
+**The loop.** `orca tab create --url http://localhost:4173/` → `orca eval` to
+assert → `orca click --element <ref>` to interact → assert again. Read page
+errors with `orca console --json`: an empty `messages` array is itself a signal.
+Verified 2026-09-18 — pass `--json`, because the default text renderer crashes
+on an empty list (`Cannot read properties of undefined (reading 'length')`)
+while `--json` returns `{"messages": []}` cleanly.
+
+**Before/after is the point.** Asserting "the Compare tab works" on the PR head
+proves nothing about the change; the same assertion has to fail on what preceded
+it. In the Tester's worktree: observe the PR head, then `git checkout
+<base-commit>`, rebuild, re-serve, re-run the identical assertion, then
+`git checkout` back to the PR head. An assertion that passes on both sides has
+tested nothing about the change — report that instead of a pass, and report
+`before: not-run (<reason>)` when the change is genuinely non-behavioural
+(docs-only, test-only, type-only). Never omit the line.
 
 Four rules, each one learned the hard way:
 
@@ -208,59 +248,67 @@ Four rules, each one learned the hard way:
   **251 KB** — it will bury a worker's context in one call. A targeted `eval`
   returning a small JSON string costs ~400 bytes. Use `snapshot` only to obtain
   a ref, and filter its output to the roles/names needed rather than reading it
-  whole.
+  whole. Measured 2026-09-18: `orca snapshot --json` is 251,578 bytes, of which
+  127,747 is the text tree and the rest a `refs` map (`"e14": {"role":"tab",
+  "name":"Compare"}`). Parse it and read `result.refs` directly — the app's own
+  tab strip is `refs.e5` (tablist "Views") with `e12`/`e13`/`e14` =
+  Tokens/Preview/Compare. Pass refs bare (`--element e14`), not `@e14`.
 - **Retry once on `runtime_unavailable`.** The Orca runtime dropped a connection
   mid-session and recovered on the next call with no intervention. One retry,
   then report; do not treat the first drop as a failed dispatch.
 
 What a Tester reports is the observed behaviour and the URL/DOM state it
-observed it in — never "looks correct".
+observed it in — never "looks correct". A Tester writes nothing: no test, no
+fix, no scratch artefact inside the repo. `git status --porcelain` in its
+worktree must be clean after its `worker_done` (the dispatch's own
+`opencode.json` aside); a diff on a tracked file means the Tester overstepped
+and the dispatch failed whatever its verdict said. A discovered failure is a
+finding, not a fix — it goes into the report, and a separate Fixer dispatch
+fixes it.
 
 ## Model Assignment & Fallback
 
-Chosen by running the same probe through every plausible candidate on
-2026-09-18, not by reputation. Probe method and full results in
-`Model Selection Evidence` below.
+**Uniform by user decision, 2026-09-18: every worker role runs
+`opencode-go/deepseek-v4.1-flash`.** Primary and fallback are the same id, by
+instruction rather than because no second provider exists. What that costs is
+spelled out below; the probe-driven table it replaces is kept as history in
+`Model Selection Evidence`.
 
-| Role | Primary | Fallback | Providers |
-|---|---|---|---|
-| Coder | `google/gemini-3-flash-preview` | `orcarouter/deepseek/deepseek-v4-flash-free` | google → orcarouter |
-| Batch Reviewer | `opencode/muse-spark-1.3-contributor-free` | `google/gemini-3-flash-preview` | opencode → google |
-| Fixer | `google/gemini-3-flash-preview` | `orcarouter/deepseek/deepseek-v4-flash-free` | google → orcarouter |
+| Role | Primary | Fallback |
+|---|---|---|
+| Coder | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` |
+| Batch Reviewer | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` |
+| Tester | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` |
+| Fixer | `opencode-go/deepseek-v4.1-flash` | `opencode-go/deepseek-v4.1-flash` |
 
-The split is driven by the quotas, and it points the opposite way from the
-intuitive assignment. Gemini has **1,500 requests/day**, so it does volume:
-every Coder and Fixer dispatch. OpenCode Zen has **100 requests/day total**
-across its models, so Muse Spark is spent where one request covers the most
-ground — reviewing several PRs at once against its 1M-token context. The scarce
-model gets the job with the highest work-per-request, not the job that runs
-most often.
+Verified 2026-09-18 — the one claim in this section that was observed rather
+than inherited: a project-level `<worktree>/opencode.json` holding
+`{"model": "opencode-go/deepseek-v4.1-flash"}` resolves to exactly that id under
+`opencode debug config`, the agent terminal's header reads `DeepSeek V4.1 Flash
+OpenCode Go`, and two workers dispatched on it performed a real read and settled
+with `worker_done` in 18s. What is **not** measured is this model in the Coder
+and Reviewer seats specifically — the probe-per-role rule below still stands, and
+that is the first thing to re-measure if it disappoints.
 
-Rough budget: a batch review costs ~10–20 Zen requests, so 5–10 batches/day; at
-4 PRs each that is 20–40 PRs reviewed. A Coder dispatch costs ~30 Gemini
-requests, so ~50 dispatches/day. The two sides roughly balance.
+**The cost of uniformity, stated plainly.** The rule that a fallback must live
+on a different provider is now deliberately broken: one rate-limit event on
+`opencode-go` takes every role down at once, and there is no second provider to
+walk to. So the exhausted-model rule below becomes the stop rule — on the first
+rate-limit string, stop dispatching and escalate to the user, rather than
+re-dispatching into the same wall. Do not quietly reintroduce a second provider
+to fix that; choosing one is the user's call, not a dispatch decision.
 
-`opencode/mimo-v2.5-free` is **not** the Reviewer fallback despite scoring well,
-because Zen's 100/day is shared — a Zen fallback for a Zen primary empties the
-same bucket. Same reason `muse-spark` is not a Coder fallback: Coder volume
-would eat the review budget.
-
-**Accepted cost: the contributor endpoint trades data for price.** `-contributor-free`
-means Meta may train on the prompts and completions, and a batch Reviewer's
-prompt is this repository's diffs. Accepted knowingly while the budget is zero;
-this repo is public, which is what makes it tolerable. Do not point a
-contributor endpoint at a private repo without asking first. The exit is the
-non-contributor Muse Spark endpoint once there is budget — same model, no data
-trade.
+The quota-derived reasoning that picked the previous table — Gemini's 1,500
+request/day for volume, OpenCode Zen's 100/day for batch review, OpenRouter's
+50/day account-wide bucket — is retained in `Model Selection Evidence` rather
+than here, because none of it drives the assignment any more. It is still the
+reference to re-open if the uniform assignment is ever revisited.
 
 **A fallback must live on a different provider than its primary.** Quotas are
 enforced per account per provider, not per model, so a same-provider fallback
 shares the bucket that just emptied and fails for the identical reason. The
-old table broke this twice: three roles shared one `openrouter` fallback, and
-OpenRouter's free tier turns out to be **50 requests/day across the entire
-account**, shared by every `:free` model at once (1,000/day only after $10 of
-lifetime credit). One agentic dispatch spends dozens of requests, so no
-`openrouter/*:free` model belongs in this table at all.
+current table is a knowing exception to this, requested by the user; exceptions
+are asked for, never assumed.
 
 **Never pick a model for a role without probing that role.** The clearest
 result of the measurement run: `openrouter/thinkingmachines/inkling:free` is
@@ -271,12 +319,14 @@ rejection. A single "best free model" does not exist; read-only reasoning and
 file-editing tool use are different capabilities and must be measured
 separately.
 
-Reviewer changed away from the Nemotron family deliberately. All three of
-`mimo-v2.5-free`, `nemotron-3-ultra-free` and `inkling:free` produced the
-correct verdict in the correct format, so the tiebreak is the verified
-`worker_done` tax: Nemotron models in this project repeatedly finish and then
-fail to settle, costing a nudge per dispatch (see Worker Communication
-Protocol). At equal correctness there is no reason to pay it.
+The Reviewer was previously chosen away from the Nemotron family deliberately.
+All three of `mimo-v2.5-free`, `nemotron-3-ultra-free` and `inkling:free`
+produced the correct verdict in the correct format, so the tiebreak was the
+verified `worker_done` tax: Nemotron models in this project repeatedly finish
+and then fail to settle, costing a nudge per dispatch (see Worker Communication
+Protocol). That is still a rule — it just no longer selects the model, since the
+assignment is uniform. The automatic nudge stays in force for whichever model
+skips `worker_done`.
 
 `openrouter/nex-agi/nex-n2.5-pro:free` was the original Coder primary but was
 demoted after hitting OpenRouter's daily free-tier cap mid-run
@@ -284,13 +334,14 @@ demoted after hitting OpenRouter's daily free-tier cap mid-run
 default; use it only if the user asks or if every other free-tier option here
 is also capped that day.
 
-**One fallback is shared by three roles.** `nex-n2.5-mini:free` backs Coder,
-Tester and Fixer. If the daily cap is per-account, a single rate-limit event
-exhausts all three fallbacks at once, and per-dispatch fallback logic will
-walk into the same wall three times. So: once a model emits the rate-limit
-string, treat it as **exhausted for the remainder of the session** and skip it
-in every later fallback decision — do not re-select it and re-discover the cap
-per dispatch. This is run-scoped ephemeral state held in-turn, not a persisted
+**One model backs every role, so one cap stops the pipeline.** A single
+rate-limit event on `opencode-go` now exhausts Coder, Reviewer, Tester and Fixer
+at once, and there is no second provider in the table to walk to. So: once the
+rate-limit string appears, treat the model as **exhausted for the remainder of
+the session** — stop dispatching, treat every in-flight claim as unsettled, and
+escalate to the user with the exact string. Do not re-select the model and
+rediscover the cap per dispatch, and do not silently substitute another
+provider. This is run-scoped ephemeral state held in-turn, not a persisted
 ledger.
 
 **Rate-limit detection (every dispatch, not just on failure).** Before
@@ -353,6 +404,50 @@ worktree create → terminal create → terminal wait (tui-idle) → worker-star
 - Do not restate a worker's PASS/FAIL back to the user in expanded prose during
   the run — accumulate, report once at pipeline end or on failure.
 
+## Parallel Worker Spawning
+
+Hermes spawns several workers at once — that is the shape of the pipeline, not
+an optimization to defer. Nothing in the per-worker budget changes; running N
+budgets concurrently is intended, and the bounds are the ones below.
+
+**One Run, then a wave.** Bind one Run for the session and start every
+independent worker of the wave *before* waiting on any of them:
+
+```
+orca orchestration run-create --objective "<cycle objective>" --from <coordinator_handle> --json
+orca orchestration worker-start --spec "<worker A spec>" --terminal <handle A> --worktree "id:<wt A>" --run <run_id> --from <coordinator_handle> --json
+orca orchestration worker-start --spec "<worker B spec>" --terminal <handle B> --worktree "id:<wt B>" --run <run_id> --from <coordinator_handle> --json
+orca orchestration check --run <run_id> --wait --types "worker_done,escalation,question" --timeout-ms <n> --json
+```
+
+`--spec` creates the Task and its attempt in one call, replacing the separate
+`task-create`; with a terminal and a worktree already prepared that is three
+calls per worker instead of five. Verified 2026-09-18: two workers dispatched
+back-to-back into one Run both started, both did real reads on
+`opencode-go/deepseek-v4.1-flash`, and both settled with structured
+`worker_done` lines 18s after dispatch.
+
+**Deliveries are FIFO, one batch at a time.** A blocking `check` returns the
+oldest unacknowledged delivery, not the whole wave — two workers settle into
+two deliveries, and the second only arrives after `--ack <delivery_id>` on the
+first. So the shape is: `check --wait` → process and release that dispatch →
+`check --ack <delivery_id> --wait` → repeat until every dispatch of the wave has
+settled. A timeout or an empty result is a checkpoint, never a failure, and
+never a licence to re-dispatch.
+
+**`--from <coordinator_handle>` is mandatory when calling from a plain shell.**
+Invoked outside the coordinator's own Orca terminal, `run-create` and
+`worker-start` are fenced with `consumer_fenced: worker-start requires the
+coordinator terminal currently bound to the Task Run` until the Run is bound to
+a handle. Pass the coordinator terminal's handle explicitly, and the same
+identity on every call of the wave.
+
+**Fan-out bounds.** One Coder per `app/src` area at a time (see the Issue-Label
+State Machine) — a conflict rule, not a rate limit. Beyond that, size the wave
+to what the coordinator can process: the budget assumes roughly one `check
+--wait` per wave. Batch Review exists because review is the expensive seat, so
+fan out Coders and Testers, and batch Reviewers.
+
 ## Task Lifecycle
 
 ```
@@ -385,12 +480,17 @@ issue in one turn's context.
   → Hermes scans `--label needs-review`; if CI is green, dispatches a Reviewer
     against that PR branch; if CI is red, dispatches a Fixer with the failing
     output instead and leaves the label alone
-  → Batch Reviewer PASS + `scope_ok: yes` → if the issue carries `auto-ok`,
-    Hermes merges and closes the issue; otherwise it swaps the label to
-    `ready-for-review` and stops, and the user merges and closes
+  → Batch Reviewer PASS + `scope_ok: yes` → Hermes swaps the label to
+    `needs-verify` and dispatches a Tester against the PR branch
+  → Tester PASS → if the issue carries `auto-ok`, Hermes merges and closes the
+    issue; otherwise it swaps the label to `ready-for-review` and stops, and the
+    user merges and closes
   → Reviewer FAIL → Hermes creates a Fixer Task referencing the PR/issue and
     leaves the label at `needs-review` so it re-enters the queue after the
     Fixer pushes
+  → Tester FAIL → Hermes creates a Fixer Task carrying the exact observed
+    behaviour and puts the label back to `needs-review`: a fixed PR is
+    re-reviewed before it is re-tested, never re-tested on the Fixer's word
 ```
 
 **`Closes #<n>` does not close anything in this pipeline.** GitHub auto-closes
@@ -411,9 +511,10 @@ Consequences Hermes must honour:
 
 Labels in use: `auto-ok` (**set by the user on the issue**; Hermes may merge
 this one), `in-progress` (a Coder holds it), `needs-review` (PR pushed, awaiting
-a batch), `ready-for-review` (CI green + Reviewer PASS on a PR without
-`auto-ok` — the user's turn). Check `gh label list` and create missing
-ones once with `gh label create <name> --color <hex>`.
+a batch), `needs-verify` (Reviewer PASS — a Tester is dispatched or has it),
+`ready-for-review` (CI green + Reviewer PASS + Tester PASS on a PR without
+`auto-ok` — the user's turn). Check `gh label list` and create missing ones once
+with `gh label create <name> --color <hex>`.
 
 **`needs-test` is retired, but must be drained, not deleted.** Four issues
 (#41, #23, #21, #15) still carry it from the Tester-stage era, where it meant
@@ -423,9 +524,9 @@ removing the label from the repo: find the PR that references it; if that PR
 is already merged, the work is done and the issue only needs
 `gh issue close <n>`; if no PR exists or it is still open, strip `needs-test`
 and put the issue back to `needs-review` (or unlabeled, if no Coder has
-claimed it) so it re-enters the normal queue. If the Tester role is ever
-re-enabled (Known Gaps), use a fresh `needs-verify` label rather than reviving
-`needs-test`, whose old meaning was "run the suite".
+claimed it) so it re-enters the normal queue. The Tester role is re-enabled
+under this document and uses the fresh `needs-verify` label — never revive
+`needs-test`, whose old meaning was "run the suite", which is CI's job.
 
 **The Coder — not Hermes — flips its own labels**, because the Coder is what
 knows its PR is ready. Encode the exact
@@ -513,6 +614,20 @@ status: pass | fail
 reason: <short reason, only if fail>
 fix_required: <short actionable instruction, only if fail>
 ```
+
+Tester:
+
+```
+status: pass | fail
+observed: <what actually happened, one line, as it was observed>
+before: <the same assertion against the base commit, or: not-run (<reason>)>
+evidence: <the URL / DOM state / console result the observation came from>
+fix_required: <short actionable instruction, only if fail>
+```
+
+A Tester `pass` with no `observed:` and no `before:` line is not a pass — it is
+an unverifiable claim, the same class as a missing `worker_done`, and it goes
+back to the Tester rather than forward to a merge.
 
 Failure:
 
@@ -608,10 +723,10 @@ Gaps.
   head predates `pr-check.yml` and was checked anyway. Do not rebase an
   in-flight branch just to pick up a CI change.
 - **Who merges is decided by one label on the issue: `auto-ok`.**
-  - Issue carries `auto-ok` → Hermes merges once CI is green **and** the Batch
-    Reviewer returned PASS. Both, always.
+  - Issue carries `auto-ok` → Hermes merges once CI is green, the Batch
+    Reviewer returned PASS **and** a Tester PASS is in hand. All three, always.
   - No `auto-ok` → the PR is the user's. Hermes labels it
-    `ready-for-review` and stops.
+    `ready-for-review` and stops — after the Tester PASS, not instead of it.
   - The default is the user's. An unlabelled issue is never auto-merged, and
     Hermes never adds `auto-ok` itself.
 
@@ -661,8 +776,11 @@ not the template file, is what actually enforces these headings.
 
 ## Model Selection Evidence
 
-Recorded so the next model change is a measurement, not an opinion. Two probes,
-run through every plausible free candidate on this host, 2026-09-18.
+**History, not the current assignment.** The assignment is uniform
+`opencode-go/deepseek-v4.1-flash` (see Model Assignment & Fallback); everything
+below records the 2026-09-18 probe run that chose the table it replaced, and is
+kept so that re-picking a model stays a measurement rather than an opinion. Two
+probes, run through every plausible free candidate on this host, 2026-09-18.
 
 **Provider quotas, researched 2026-09-18 and then probed.** The published limit
 and the usable limit are different numbers; both columns matter.
@@ -785,9 +903,10 @@ a batch reviewer holding both diffs can. Require the block even when it is
 ## Continuous Operation Mode
 
 Once started, Hermes runs cycles **back-to-back without stopping for
-confirmation** — open issue → Coder → CI → batch review → merge (`auto-ok`) or
-hand over → next issue. It does not wait for the user on a `needs-human` PR
-before starting the next issue; those queue up while work continues.
+confirmation** — open issue → Coder → CI → batch review → Tester → merge
+(`auto-ok`) or hand over → next issue. It does not wait for the user on a
+`needs-human` PR before starting the next issue; those queue up while work
+continues.
 
 It stops when the user says stop, or when no unclaimed issue is left. An empty
 queue is a stop, not a prompt to invent work.
@@ -861,6 +980,9 @@ Before dispatching any worker:
 
 - [ ] Task spec states target, change, constraints, the relevant `app/` Facts,
       and the structured output-line format.
+- [ ] For a Tester spec: the PR branch, the issue's exact reproduction steps,
+      and the base commit the before/after assertion compares against (`npm
+      --prefix app ci` first — a fresh worktree has no `app/node_modules`).
 - [ ] Child worktree created from the correct base branch (one `git log -1` in
       the new worktree for the run's first worker on that branch; skip after).
 - [ ] `opencode.json` written with the role's primary model, and that model is
@@ -872,6 +994,9 @@ Before advancing a stage:
 - [ ] Settlement message received with a structured status line.
 - [ ] For a Coder/Fixer: integrity check done (SHA differs from pre-dispatch
       HEAD, author is `orca-<role>`, subject carries the role tag).
+- [ ] For a Tester: `git status --porcelain` clean in its worktree, and its
+      report carries `observed:` plus a `before:` line — or an explicit
+      `not-run (<reason>)`.
 - [ ] `status: succeeded`/`pass` → advance. `failed` → fallback per policy.
       Ambiguous → escalate, do not guess.
 - [ ] **`worker-release` called for every settled dispatch, in the same batch
@@ -948,29 +1073,35 @@ the rules do not have to carry their narrative.
 | A full `orca snapshot` of the app was 251 KB | Assert with targeted `eval`; use `snapshot` only to obtain a ref, filtered |
 | Tester dispatched to run `tsc`/`npm test` — a worker spent on a deterministic check it could misreport | Division of Labour; CI owns machine-decidable checks |
 | Root `npm test` green while testing zero `app/` code | All commands `--prefix app`, stated in every spec |
-| `.tsx` test with a failing assertion silently not collected; suite exited 0 | `app/` Facts: `.ts` only, node env, `toasts.test.ts` as template |
+| `.tsx` test with a failing assertion silently not collected; suite exited 0 | `app/` Facts must state the *current* config — the include glob was fixed in PR #47, and a stale warning steers Coders away from the layout the suite now supports |
 | PR #42 merged without its `[fixer]` role tag | Attribution verified via `git log -1`; hook recommended |
 | `Closes #15/#21/#23` on merged PRs #44/#45/#46 closed nothing; issues still open and labelled | Auto-close needs the default branch; Hermes closes issues explicitly |
+| Two workers settled into one Run, but the first `check --wait` returned one delivery | Deliveries are FIFO — ack the delivery, then check again for the rest of the wave |
+| `worker-start` refused with `consumer_fenced` for a Run created from a plain shell | Bind the Run to a coordinator handle and pass `--from <handle>` on every call of the wave |
+| `orca console` (text renderer) crashed on an empty log: `Cannot read properties of undefined (reading 'length')` | Read console logs with `orca console --json`; `{"messages": []}` is the valid empty answer |
+| `worker-release` on a manually created terminal returned `state: retained, reason: external_terminal` | Manually created terminals are external — release does not stop them; close the terminal explicitly |
+| A fresh child worktree had no `app/node_modules`, so `vite build` and `vitest` failed as if the change were broken | `npm --prefix app ci` is the first step of every spec that builds, tests or serves the app |
 
 ## Known Gaps
 
 Real, unfixed, and not to be papered over.
 
-- **Behavioural verification exists, but not in CI.** Orca's built-in browser
-  drives the real app and the Tester role uses it (see Driving The App). What it
-  cannot do is gate a merge: a client-hosted page renders in the paired
-  desktop's browser engine and every command returns `browser_host_unavailable`
-  while that desktop is closed, so it cannot run in GitHub Actions. The
-  consequence to hold onto: **a green CI check still does not mean the UI
-  works.** CI proves it compiles, lints and passes the unit suite. Behaviour is
-  proven by a Tester dispatch or by the user, both of which need this machine
-  awake.
-- **CI's unit-test leg is nearly empty.** 4 files, 0 component tests, and the
-  `.tsx` include gap means a well-intentioned component test can be added and
-  silently never run. Fixing `vitest.config.ts` (add `.tsx` to `include`, set a
-  DOM environment, wire the existing `@vitejs/plugin-react-swc`) is the
-  highest-value change available to this pipeline and belongs as a GitHub
-  issue, not as a coordinator-side edit.
+- **Behavioural verification needs this desktop awake.** The Tester drives the
+  real app through Orca's built-in browser and is a pipeline stage (see Tester),
+  so it does gate a merge — but only on a machine where the Orca desktop is
+  running. A client-hosted page renders in the paired desktop's browser engine
+  and every command returns `browser_host_unavailable` while that desktop is
+  closed, so it can never run in GitHub Actions. A Tester dispatch that hits
+  that reports `status: failed` with the exact string, never a pass: **a green
+  CI check still does not mean the UI works.** CI proves it compiles, lints and
+  passes the unit suite; behaviour is proven by the Tester, or by the user when
+  the desktop is down.
+- **CI's unit-test leg is thin, and the `.tsx` gap is closed.** The
+  `vitest.config.ts` fix landed in PR #47 (`.tsx` added to `include`, with
+  per-file `happy-dom` opt-in via docblock), so the "a component test is added
+  and silently never collected" trap is gone. What remains is volume: 5 files /
+  39 tests against 99 non-test source files, one component test. Growing that is
+  Coder work in the normal issue flow, not a coordinator-side edit.
 - **Attribution and cleanup are prose-enforced.** The role tag, the
   `orca-<role>` author and the release/rm/branch-delete sequence are all
   mechanically checkable and all currently depend on a model reading this file.
