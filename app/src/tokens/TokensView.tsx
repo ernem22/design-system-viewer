@@ -123,8 +123,9 @@ export function TokensView({
           )}
           {/* Contrast is global to the system, not to the filter — legacy
               appendContrast only ran filter-less (and never in schema mode,
-              which this branch already excludes). */}
-          {!searching && <ContrastSection tokens={view.tokens} />}
+              which this branch already excludes). It reads the resolved
+              value map, so a system's dark variant is measured too. */}
+          {!searching && <ContrastSection values={view.valueMap} />}
         </div>
       )}
     </div>

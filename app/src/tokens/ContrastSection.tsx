@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { contrastRatio, rating, CONTRAST_PAIRS } from "../../../src/core/contrast.js";
-import type { Token } from "../systems/store.ts";
 import "./ContrastSection.css";
 
 type ContrastPair = [fg: string, bg: string, label: string];
@@ -26,13 +25,17 @@ interface ContrastRow {
  * custom property (like the legacy gallery wrap did), so measurement does
  * not depend on whatever tokens App.tsx has applied to :root, nor on
  * effect ordering when switching systems.
+ *
+ * `values` is the same resolved per-token map the token panels display —
+ * `tokenValueMap`'s css -> groups -> (dark) order — so the audit measures the
+ * palette the user is actually shown, including a system's dark variant.
  */
-export function ContrastSection({ tokens }: { tokens: Token[] }) {
+export function ContrastSection({ values }: { values: Map<string, string> }) {
   const sectionRef = useRef<HTMLElement>(null);
   const appliedRef = useRef<string[]>([]);
   const [rows, setRows] = useState<ContrastRow[]>([]);
 
-  const names = useMemo(() => new Set(tokens.map((t) => t.name)), [tokens]);
+  const names = useMemo(() => new Set(values.keys()), [values]);
   // Only pairs whose tokens the system actually defines — legacy skipped
   // the whole section when no pair was fully present, this returns null.
   const pairs = useMemo(
@@ -49,8 +52,8 @@ export function ContrastSection({ tokens }: { tokens: Token[] }) {
     // Drop custom props for tokens removed since the last run, then carry
     // the current system (stale props would silently skew ratios).
     for (const n of appliedRef.current) if (!names.has(n)) sec.style.removeProperty(n);
-    for (const t of tokens) sec.style.setProperty(t.name, t.value);
-    appliedRef.current = tokens.map((t) => t.name);
+    for (const [name, value] of values) sec.style.setProperty(name, value);
+    appliedRef.current = [...values.keys()];
 
     const probe = document.createElement("span");
     probe.setAttribute("aria-hidden", "true");
@@ -74,7 +77,7 @@ export function ContrastSection({ tokens }: { tokens: Token[] }) {
     });
     probe.remove();
     setRows(next);
-  }, [tokens, names, pairs]);
+  }, [values, names, pairs]);
 
   if (pairs.length === 0) return null;
 
