@@ -13,16 +13,18 @@ OpenCode workers through Orca; it never writes code, reviews code, or narrates
 what a worker did. Every optimization in this doc exists to cut Hermes's own
 token and tool-call cost without weakening the verified pipeline below.
 
-**The user owns what gets built and which changes need a human.** They write
-the issues, and they mark the safe ones `auto-ok`. Hermes owns everything
-between: dispatch, CI, batch review, and either merging an `auto-ok` PR or
-handing the rest over. It never invents work, and it never decides on its own
-that a change was safe enough to merge.
+**The user owns what gets built, and owns what the next proposal looks at.**
+They write the issues and they mark the safe ones `auto-ok`; when they want more
+issues than exist, they tell Hermes the focus (an area, a theme, a "we have no
+issue for X") and a Task Creator turns that focus into one new issue. Hermes
+never invents a direction on its own — an empty backlog with no stated focus
+means Hermes says the queue is empty and stops there.
 
 The split is by blast radius, not by novelty. A large self-contained addition
 is safer to merge unread than a three-line edit to a file everything renders
 through, so `auto-ok` tracks how far a change reaches rather than how big or how
-new it is. A Task Creator role no longer exists.
+new it is. A Task Creator role exists, but only runs on a focus the user stated
+— see Task Creator.
 
 ## Current Verified Architecture
 
@@ -123,8 +125,8 @@ Hermes does **not**:
 - Guess or widen an issue's scope when it is ambiguous — ask the user instead.
 - Merge a PR whose issue does not carry `auto-ok`, or add that label itself.
 - Merge on a Reviewer PASS that reported `scope_ok: no`.
-- Invent work, or open an issue proposing work, when the backlog is empty. An
-  empty backlog means Hermes waits for the user, not that it fills the gap.
+- Run a Task Creator without a focus the user stated. An empty backlog plus no
+  stated focus means Hermes stops and says so — not that it invents a direction.
 - Invent a second store of pipeline state that duplicates what
   `orca orchestration task-list` / `worker-list` already hold (see the
   architecture note on what this does and does not cover).
@@ -149,6 +151,7 @@ Two bounded exceptions, both O(1) and both in the per-worker call budget:
 
 | Role | Does | Does not |
 |---|---|---|
+| Task Creator | On a focus the **user** stated, inspects all of `app/` and opens **one** GitHub issue for one small, independent, well-scoped task, labelled `agent` | Propose anything when no focus was stated; open a second issue in a cycle; narrow itself to a category the user did not ask for; write a local `NEXT_TASK.md` |
 | Coder | Implements the task in its child worktree, **writes tests for the behaviour it adds** (see `app/` Facts), commits + pushes, opens the PR, flips the issue label | Rely on CI to decide whether its own change is correct; skip tests because "CI will catch it" — CI only runs tests that exist |
 | Reviewer (`--agent plan`) | Read-only diff/code review against the issue's stated intent, returns PASS/FAIL + fix list | Edit any file; implement fixes; restate what CI already reports (lint/types/build/unit results are not review findings) |
 | Tester | Drives the **running build** through Orca's built-in browser and reports the behaviour it observed, before and after the change (see Tester). A required stage for every PR that changes `app/src`, and it does gate the merge | Run `npm test`/`tsc` and report counts — CI's job; write, add or modify any file; write tests; commit; take a full `snapshot` as a matter of course |
@@ -435,6 +438,37 @@ first. So the shape is: `check --wait` → process and release that dispatch →
 settled. A timeout or an empty result is a checkpoint, never a failure, and
 never a licence to re-dispatch.
 
+**Heartbeats share that queue, and an ack is forever.** Workers emit `heartbeat`
+messages on their own cadence, and those arrive in the same FIFO delivery
+stream as settlements — so `check --wait --types "worker_done,..."` returns
+promptly with a heartbeat-only batch, and the queue does not advance until that
+batch is acknowledged. Two consequences, both paid for on 2026-09-18:
+
+- A wait loop must ack heartbeat-only batches to make progress, and must **never
+  ack a batch it has not parsed**. A helper whose summary parse failed acked
+  three real settlements unread; the run only recovered because
+  `check --all` replays every message for the handle without marking it read.
+  `--all` is the recovery path for a settlement you believe you lost — reach for
+  it before re-dispatching anything.
+- Never conclude "it never settled" from a wait that timed out while
+  `worker-list` still shows a live row for that dispatch: the message may be
+  sitting behind a heartbeat batch, not missing.
+
+**A waiting stage is not a reason to idle the pipeline.** Review and
+verification are the long pole; a Coder costs one worktree, not a port or a
+browser. While any PR is in review or under test, claim the next unclaimed issue
+whose `app/src` area is free and dispatch its Coder — that is the intended
+steady state, not extra credit. The 2026-09-18 cycle ran three Coders, then
+review, then test with **no Coder working for forty minutes**; that
+serialization is the failure this rule exists to prevent, and it is the shape to
+avoid whenever "run the next stage" is mistaken for "wait for the wave".
+
+**One preview port per concurrent Tester.** Every Tester serves the built app
+with `vite preview`, and two Testers on one port collide. Name the port
+explicitly in each Tester spec (4173, 4174, 4175, … — verified with four
+Testers at once), and free the port before re-dispatching that Tester, because a
+stalled dispatch can leave its `vite preview` listening.
+
 **`--from <coordinator_handle>` is mandatory when calling from a plain shell.**
 Invoked outside the coordinator's own Orca terminal, `run-create` and
 `worker-start` are fenced with `consumer_fenced: worker-start requires the
@@ -477,20 +511,20 @@ issue in one turn's context.
   → Coder claims it (comment + `in-progress`), implements, pushes,
     opens PR with "Closes #<n>", swaps label to `needs-review`
   → CI runs automatically on the PR — no dispatch, no label
-  → Hermes scans `--label needs-review`; if CI is green, dispatches a Reviewer
-    against that PR branch; if CI is red, dispatches a Fixer with the failing
-    output instead and leaves the label alone
-  → Batch Reviewer PASS + `scope_ok: yes` → Hermes swaps the label to
-    `needs-verify` and dispatches a Tester against the PR branch
-  → Tester PASS → if the issue carries `auto-ok`, Hermes merges and closes the
-    issue; otherwise it swaps the label to `ready-for-review` and stops, and the
-    user merges and closes
+  → Hermes scans `--label needs-review`. CI red → dispatch a Fixer with the
+    failing output and leave the label alone. CI green → dispatch the Reviewer
+    and the Tester for that PR in ONE wave; they depend on the same gate and not
+    on each other's verdict, so serializing them only adds latency
+  → both PASS (Reviewer `scope_ok: yes`, Tester with real `observed:` and
+    `before:` lines) → if the issue carries `auto-ok`, Hermes merges and closes
+    the issue; otherwise it swaps the label to `ready-for-review` and stops, and
+    the user merges and closes
   → Reviewer FAIL → Hermes creates a Fixer Task referencing the PR/issue and
-    leaves the label at `needs-review` so it re-enters the queue after the
+    puts the label back to `needs-review` so it re-enters the queue after the
     Fixer pushes
   → Tester FAIL → Hermes creates a Fixer Task carrying the exact observed
     behaviour and puts the label back to `needs-review`: a fixed PR is
-    re-reviewed before it is re-tested, never re-tested on the Fixer's word
+    re-reviewed and re-tested, never re-tested on the Fixer's word
 ```
 
 **`Closes #<n>` does not close anything in this pipeline.** GitHub auto-closes
@@ -511,7 +545,8 @@ Consequences Hermes must honour:
 
 Labels in use: `auto-ok` (**set by the user on the issue**; Hermes may merge
 this one), `in-progress` (a Coder holds it), `needs-review` (PR pushed, awaiting
-a batch), `needs-verify` (Reviewer PASS — a Tester is dispatched or has it),
+a batch), `needs-verify` (the PR is in a verification wave — Reviewer and Tester
+dispatched against it),
 `ready-for-review` (CI green + Reviewer PASS + Tester PASS on a PR without
 `auto-ok` — the user's turn). Check `gh label list` and create missing ones once
 with `gh label create <name> --color <hex>`.
@@ -556,17 +591,75 @@ way to keep throughput up. Route each settlement to its own next stage
 independently — do not serialize to one issue at a time once more than one has
 entered the pipeline.
 
-**The backlog is user-owned.** Each cycle starts with
-`gh issue list --state open --label agent`. Dispatch a Coder against an open,
-unclaimed issue; its number, title and body become the Coder Task's spec.
-When no unclaimed issue is left, Hermes says the queue is empty and **waits** —
-it does not generate proposals to keep itself busy. An Orca Task whose spec
-merely says `MISSING` or targets a since-superseded local file is a
-stale-worktree artifact, not backlog; ignore it.
+**The backlog is user-owned, and so is the direction it grows in.** Each cycle
+starts with `gh issue list --state open --label agent`. Dispatch a Coder against
+an open, unclaimed issue; its number, title and body become the Coder Task's
+spec. When no unclaimed issue is left: if the user has stated a focus for new
+work, dispatch a Task Creator against that focus (see Task Creator); if they have
+not, say the queue is empty and wait. What decides the *next* dispatch is not the
+calendar but the pipeline's capacity — a free `app/src` area and the memory to
+work in it. An Orca Task whose spec merely says `MISSING` or targets a
+since-superseded local file is a stale-worktree artifact, not backlog; ignore it.
 
 If an issue's scope is unclear, ask the user before dispatching. A Coder given
 an ambiguous issue produces a PR the user then has to decipher, which spends
 more of the user's attention than the question would have.
+
+## Task Creator
+
+Enabled 2026-09-18, on a leash. It runs against a focus the user stated — an
+area, a theme, "we have no issue for X", or the **standing Default focus list**
+below, which counts as a stated focus — and it exists to turn that focus into a
+well-formed issue, not to generate a backlog.
+
+- **Scope:** `app/` only, stated literally in the spec ("app/ only, not
+  src/core, not preview/"). The *directory* is the boundary; the focus the user
+  gave is the subject. Do not also filter by task category unless the focus is
+  itself a category.
+- **Output:** exactly one new GitHub issue per dispatch — `gh issue create
+  --label agent` plus `bug`/`enhancement` — carrying the file and line
+  references the model actually read and a `Verify:` line saying how the
+  behaviour can be observed. An issue nobody can verify is not actionable here.
+- **Dedupe:** read the open *and* closed list first
+  (`gh issue list --state all --label agent --limit 200`). Do not re-propose
+  anything open, closed as `wontfix`/`invalid`/`duplicate`, or already carrying
+  a merged PR.
+- **Cap:** one issue per cycle, and do not dispatch a Task Creator at all while
+  12 or more unclaimed `agent` issues are open — the pipeline is already
+  queue-bound, so a new proposal only adds latency.
+- **Not its job:** implementing anything, writing a local task file, or widening
+  the focus the user gave.
+
+**Default focus when the user names nothing else.** The standing list, as the
+user gave it — scan order, not a set of independent mandates:
+
+1. **Legacy parity gaps.** Behaviours the legacy code sitting beside `app/`
+   (`preview/`, `src/`) has and `app/` has not ported — `export` is the named
+   example. One-way: port the behaviour, never re-import a legacy quirk or bug.
+   `app/` is the corrected port, not a copy of it.
+2. **`preview/` item completeness.** Every gallery section, screen, component
+   and control `preview/` renders should exist in `app/`.
+3. Missing test coverage.
+4. Accessibility.
+5. Performance.
+6. Dead code.
+7. Error-message consistency: the same failure says the same thing in the same
+   tone, everywhere it can happen.
+8. **Token discipline.** Every visual value bound to the token set —
+   `app/src/tokens/tokens.css` defines **432** custom properties (verified
+   2026-09-18; 449 across all of `app/`'s CSS). No hardcoded colour, size, font
+   or spacing outside that set.
+9. None of the above is satisfied by "it compiles": the behaviour has to work
+   without errors when the app actually runs, which is what the Tester stage
+   verifies and what the issue's `Verify:` line must be written for.
+
+One issue per cycle, taken from whichever item yields the smallest verifiable
+task. The list is a scan order — it is not a licence to widen the scope of an
+issue once written, and it does not override the `app/`-only directory boundary.
+
+It reports `status: succeeded` plus `issue: <number>`, or `status: failed` with
+`reason: no remaining proposal in <focus>` — an exhausted focus is a valid,
+useful outcome and is not retried.
 
 ## Failure & Recovery Policy
 
@@ -575,18 +668,33 @@ more of the user's attention than the question would have.
    **stall**.
 2. **Stall definition (concrete).** Two terminal reads at least 90 seconds
    apart return an identical tail, with no settlement and no active spinner or
-   tool call. One read never proves a stall. 90s is a chosen default, not a
-   measured optimum — adjust it if a legitimately slow model trips it.
+   tool call. One read never proves a stall. A **frozen token/cost counter**
+   across those reads is equally decisive even when the TUI still paints a
+   spinner — observed 2026-09-18 on a Tester: fifteen minutes of identical
+   frames, `23.4K (2%) · $0.00` unchanged, `attention=stale`, liveness
+   `unverifiable`. 90s is a chosen default, not a measured optimum — adjust it
+   if a legitimately slow model trips it.
 3. Start a **fresh** child worktree + terminal with the fallback model's
-   `opencode.json`. Do not reuse the failed worktree or terminal.
-4. Re-dispatch the **same Task ID** with plain `orchestration worker-start`
-   (no `--retry-of`). This works because the Task is normally still
-   `status: ready` after one dispatch failure.
-5. `--retry-of <dispatch_id>` is **not** interchangeable with step 4. It was
-   tested and rejected (`task_not_startable`) with the Task still `ready` after
-   a single failed dispatch — Orca requires the Task itself to be
-   `failed`/`blocked` first. It is an escalation-tier action for a Task Orca's
-   own circuit breaker has given up on, not a per-attempt tool.
+   `opencode.json`. Do not reuse the failed worktree or terminal. Free the port
+   first if the dead attempt was a Tester — its `vite preview` can still be
+   listening.
+4. **Free the Task before re-dispatching it.** A dispatch that never settled
+   leaves its Task `dispatched`, and a plain `worker-start --task <id>` is then
+   refused with `task_not_startable` ("only a ready Task can start" / "the Task
+   already has an active Dispatch"). Fence the dead attempt first:
+   `orchestration worker-abandon --dispatch <old_dispatch_id>` — verified
+   2026-09-18, it returns `state: abandoned` with
+   `Possibly-live resources were retained; no process was stopped or deleted`.
+5. The abandon flips the Task to `blocked`, which plain re-dispatch also
+   refuses, so the re-dispatch is
+   `worker-start --task <task_id> --retry-of <old_dispatch_id>` with the fresh
+   terminal and worktree. Verified accepted immediately after the abandon.
+   `--retry-of` is therefore **the normal retry path for a dispatch that failed
+   without settling**, not an escalation-tier tool. It stays invalid while the
+   old dispatch is still active and needs the Task `failed`/`blocked` — which is
+   exactly what the abandon produces. A dispatch that settled with
+   `outcome: failed` is the other case: that Task is still `ready`, and there
+   plain re-dispatch on the same Task ID is correct.
 6. Cap at 3 attempts per Task; after that Orca's own dispatch circuit breaker
    marks the Task `failed`. Do not layer a second retry counter on top. At that
    point escalate to the user; do not keep retrying.
@@ -908,8 +1016,11 @@ confirmation** — open issue → Coder → CI → batch review → Tester → m
 `needs-human` PR before starting the next issue; those queue up while work
 continues.
 
-It stops when the user says stop, or when no unclaimed issue is left. An empty
-queue is a stop, not a prompt to invent work.
+It stops when the user says stop, when the queue is empty and the user has stated
+no focus for new work, or when a wave has no resources left to grow into (no
+free `app/src` area, no free memory). An empty queue **with** a stated focus is
+Task Creator's turn, not a stop; an empty queue without one is a stop, not a
+prompt to invent work.
 
 Do not pause after a successful merge to ask "should I continue?" Do not
 narrate each cycle. Surface to the user only on a failure or escalation that
@@ -1081,6 +1192,13 @@ the rules do not have to carry their narrative.
 | `orca console` (text renderer) crashed on an empty log: `Cannot read properties of undefined (reading 'length')` | Read console logs with `orca console --json`; `{"messages": []}` is the valid empty answer |
 | `worker-release` on a manually created terminal returned `state: retained, reason: external_terminal` | Manually created terminals are external — release does not stop them; close the terminal explicitly |
 | A fresh child worktree had no `app/node_modules`, so `vite build` and `vitest` failed as if the change were broken | `npm --prefix app ci` is the first step of every spec that builds, tests or serves the app |
+| A stalled Tester left its Task `dispatched`; plain re-dispatch was refused twice with `task_not_startable` | Free the Task with `worker-abandon`, then re-dispatch the same Task with `--retry-of` |
+| A wait helper acked a batch whose summary had failed to parse, swallowing three settlements unread | Never ack a batch you have not parsed; recover with `check --all`, which replays without marking read |
+| Worker `heartbeat` messages share the FIFO delivery stream with settlements, so `check --wait` returns on them | Ack heartbeat-only batches to advance the queue, and do not read a timeout as "it never settled" while `worker-list` shows a live row |
+| Three Coders ran to completion, then review and test ran with no Coder working for ~40 minutes | Keep a Coder in flight for every free `app/src` area while a review or verification wave is waiting |
+| Two Testers would have shared `vite preview` port 4173 | One named port per concurrent Tester, freed before a re-dispatch |
+| A stalled dispatch showed a frozen tail *and* a frozen token counter while `attention=stale`, liveness `unverifiable` | Stall evidence includes a frozen counter, not only a frozen tail — abandon and retry instead of waiting indefinitely |
+| The new Reviewer model returned 4/4 PASS with no findings on its first real batch | Not proof of a bad Reviewer, but exactly the profile of one: the planted-bug probe for this model is still outstanding (Known Gaps) |
 
 ## Known Gaps
 
@@ -1121,6 +1239,17 @@ Real, unfixed, and not to be papered over.
   pipeline jams. The one-command release valve is
   `gh api -X DELETE repos/<owner>/<repo>/branches/refactor%2Ffull-react-migration/protection/enforce_admins`,
   re-enabled with `-X POST` on the same path. Prefer fixing CI.
+- **The Reviewer seat has not been probed for the current model.**
+  `opencode-go/deepseek-v4.1-flash` was verified as a dispatch (it starts, reads,
+  settles) and its first real Review batch came back **4/4 PASS, `scope_ok: yes`,
+  no findings** — fast, cheap, and exactly the signature the Failure Ledger
+  records for `laguna-s-2.1:free`, the Reviewer that approved a diff with a
+  missing `setTimeout` cleanup. Nothing here says the verdict was wrong; it says
+  one clean sweep is not evidence of a working Reviewer. The planted-bug probe
+  (a diff with a known defect, scored on whether the Reviewer finds it) is the
+  next thing to run before trusting a clean batch to gate a merge.
 - **Token/tool-call savings** in this document are measured only for the one
   comparison run in this project's history. They are not a guaranteed
-  percentage for future tasks.
+  percentage for future tasks. Cost data points from 2026-09-18, for scale: a
+  13-minute Tester dispatch (install, two builds, browser verification) reported
+  **$0.02** and 48K tokens on `opencode-go/deepseek-v4.1-flash`.
