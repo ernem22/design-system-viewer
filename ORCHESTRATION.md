@@ -206,16 +206,33 @@ that observes the app *running*, so it is the only stage that can catch a change
 that compiles, lints, passes the unit suite and still does not do what the issue
 asked.
 
-**Setup, in the Tester's own worktree.** `npm --prefix app ci` comes first — a
-fresh worktree has no `app/node_modules` (see `app/` Facts). Then serve the
-**built** app, never the dev server, so the Tester is looking at what CI built
-and what the user would get:
+**Setup is the coordinator's job, done before the dispatch.** Install, build and
+serve in the Tester's worktree, then hand the Tester a URL:
 
 ```
+# coordinator, in the Tester's worktree, before worker-start:
 npm --prefix app ci
 npm --prefix app run build
-npx vite preview --port 4173
+npx vite preview --port <port> --strictPort      # one port per concurrent Tester
 ```
+
+The spec then says: a server is already serving this worktree's `app/` on
+`http://localhost:<port>`; **do not start a server, and do not use PowerShell
+`Start-Process`**. To serve a different build, rebuild in place
+(`npm --prefix app run build`) — the running server reads the files per request
+— and add `?v=<epoch>` if a cached asset worries you.
+
+Why the coordinator owns this, verified 2026-09-18: a Tester that launched the
+server itself with `Start-Process ... -RedirectStandardOutput` hung forever,
+because PowerShell waits on the detached child's inherited handles before the
+command returns. Two Testers died that way mid-verification, one of them twice,
+each burning a dispatch and 30-60 minutes of wall clock. The install and the
+build also come off the Tester's critical path, which is where the machine's
+disk and memory pressure used to break them.
+
+`orca eval` takes one expression, and inline quotes, `?` and `:` get eaten by
+the layers between the shell and the page. Write the expression to a file and
+pass `orca eval --expression "$(cat expr.js)"`.
 
 **The loop.** `orca tab create --url http://localhost:4173/` → `orca eval` to
 assert → `orca click --element <ref>` to interact → assert again. Read page
@@ -699,6 +716,14 @@ useful outcome and is not retried.
    marks the Task `failed`. Do not layer a second retry counter on top. At that
    point escalate to the user; do not keep retrying.
 7. Never re-run a worker that already succeeded "to compare" or "to be sure."
+8. **A retry that changes the instructions needs a new Task.** `--task` and
+   `--spec` are mutually exclusive, and `worker-start --task <id> --retry-of
+   <dispatch>` replays the spec stored on that Task. So a retry whose spec must
+   change — a rewritten harness, a corrected port, a constraint the worker
+   misread — cannot reuse the Task: create it fresh with `--spec`, and accept
+   that the old Task stays `blocked`, which is an honest record of the attempt
+   that failed. Verified 2026-09-18, when a Tester retry had to be a new Task
+   precisely because its stored spec contained the sequence that had wedged it.
 
 ## Worker Communication Protocol
 
@@ -1198,7 +1223,12 @@ the rules do not have to carry their narrative.
 | Three Coders ran to completion, then review and test ran with no Coder working for ~40 minutes | Keep a Coder in flight for every free `app/src` area while a review or verification wave is waiting |
 | Two Testers would have shared `vite preview` port 4173 | One named port per concurrent Tester, freed before a re-dispatch |
 | A stalled dispatch showed a frozen tail *and* a frozen token counter while `attention=stale`, liveness `unverifiable` | Stall evidence includes a frozen counter, not only a frozen tail — abandon and retry instead of waiting indefinitely |
-| The new Reviewer model returned 4/4 PASS with no findings on its first real batch | Not proof of a bad Reviewer, but exactly the profile of one: the planted-bug probe for this model is still outstanding (Known Gaps) |
+| The new Reviewer model returned 4/4 PASS with no findings on its first real batch | Not proof of a bad Reviewer, but exactly the profile of one — the planted-bug probe for this model is still outstanding (Known Gaps) |
+| A worker launched `vite preview` via PowerShell `Start-Process ... -RedirectStandardOutput`; its tool call never returned | The coordinator installs, builds and serves before the dispatch; the spec forbids the worker from starting any server |
+| `npm ci` died with `TAR_ENTRY_ERROR ENOSPC` and the failure read like a broken install | Check free disk before blaming a change; a full disk breaks installs and slows every build on the box |
+| `orca` calls inside a background (non-TTY) shell returned `stdin is not a tty`, and a pipe swallowed the exit code | Keep orca calls in the foreground; background only `npm` steps |
+| A worker abandoned with `worker-abandon` kept heartbeating; Orca rejected it `dispatch_capability_invalid` | The process is still alive after an abandon — close its terminal and remove its worktree explicitly |
+| One `npm ci` took 80s alone and 4.5 minutes with three siblings on the same box | Concurrency is not free: installs and builds contend, so a wider wave has a wall-clock ceiling and disk pressure makes it worse |
 
 ## Known Gaps
 
@@ -1239,15 +1269,19 @@ Real, unfixed, and not to be papered over.
   pipeline jams. The one-command release valve is
   `gh api -X DELETE repos/<owner>/<repo>/branches/refactor%2Ffull-react-migration/protection/enforce_admins`,
   re-enabled with `-X POST` on the same path. Prefer fixing CI.
-- **The Reviewer seat has not been probed for the current model.**
+- **The Reviewer seat has not been *measured* for the current model.**
   `opencode-go/deepseek-v4.1-flash` was verified as a dispatch (it starts, reads,
-  settles) and its first real Review batch came back **4/4 PASS, `scope_ok: yes`,
-  no findings** — fast, cheap, and exactly the signature the Failure Ledger
-  records for `laguna-s-2.1:free`, the Reviewer that approved a diff with a
-  missing `setTimeout` cleanup. Nothing here says the verdict was wrong; it says
-  one clean sweep is not evidence of a working Reviewer. The planted-bug probe
-  (a diff with a known defect, scored on whether the Reviewer finds it) is the
-  next thing to run before trusting a clean batch to gate a merge.
+  settles). Its first Review batch came back **4/4 PASS, `scope_ok: yes`, no
+  findings** — fast, cheap, and exactly the signature the Failure Ledger records
+  for `laguna-s-2.1:free`, the Reviewer that once approved a diff with a missing
+  `setTimeout` cleanup. Then, on PR #59, the same model returned **`fail`** with
+  three specific findings, quoted the PR's own measurement back at it (the probe
+  showed a call-count win but 15.64ms new vs 1.80ms old in wall time), a Fixer
+  closed all three, and a second review confirmed each closure file:line by
+  file:line. So it is not a rubber stamp — but "it failed one PR well and passed
+  four others" is not a score either. The planted-bug probe (a diff with a known
+  defect, scored on whether the Reviewer finds it) is what would make this
+  measurable, and it is still outstanding.
 - **Token/tool-call savings** in this document are measured only for the one
   comparison run in this project's history. They are not a guaranteed
   percentage for future tasks. Cost data points from 2026-09-18, for scale: a
