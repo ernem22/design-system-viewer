@@ -13,6 +13,17 @@ OpenCode workers through Orca; it never writes code, reviews code, or narrates
 what a worker did. Every optimization in this doc exists to cut Hermes's own
 token and tool-call cost without weakening the verified pipeline below.
 
+**The user owns what gets built and which changes need a human.** They write
+the issues, and they mark the safe ones `auto-ok`. Hermes owns everything
+between: dispatch, CI, batch review, and either merging an `auto-ok` PR or
+handing the rest over. It never invents work, and it never decides on its own
+that a change was safe enough to merge.
+
+The split is by blast radius, not by novelty. A large self-contained addition
+is safer to merge unread than a three-line edit to a file everything renders
+through, so `auto-ok` tracks how far a change reaches rather than how big or how
+new it is. A Task Creator role no longer exists.
+
 ## Current Verified Architecture
 
 ```
@@ -38,9 +49,9 @@ enforcement layer available. See Division of Labour.
 Verified pipeline shape:
 
 ```
-Task Creator / GitHub issue → Coder → CI gate → Reviewer → PR merge (Hermes)
-                 ↑______________________________|
-                 (failure at any stage → fresh worker, fallback model)
+User-written issue → Coder → CI gate → Batch Reviewer ─→ auto-ok?  yes → Hermes merges
+        ↑_________________________________________|                 no  → user merges
+        (failure at any stage → fresh worker, fallback model)
 ```
 
 ## Division of Labour: machine vs worker
@@ -55,7 +66,7 @@ the same verdict for free and cannot lie about it.
 |---|---|---|
 | `eslint`, `tsc -b`, `vite build`, `vitest run` | **CI** — `.github/workflows/pr-check.yml`, job/context `app` | Deterministic, machine-decidable, cannot misreport itself |
 | Is the diff good code? Does it match what the issue asked? | **Reviewer** worker | Judgment; CI cannot do it |
-| Does the changed UI actually behave correctly when running? | **Tester** worker — currently SUSPENDED, see Known Gaps | Judgment; but not executable on this repo yet |
+| Does the changed UI actually behave correctly when running? | **Nobody, by default.** A Tester dispatch can check it on request | CI cannot, and Orca's browser cannot run in CI — so this is the standing hole, see Known Gaps |
 | New tests covering new behaviour | **Coder**, in the same commit | Tester may not write tests, so nobody else can grow coverage |
 | Merge decision and execution | **Hermes** | Control-plane action, explicitly in scope |
 
@@ -83,8 +94,9 @@ Consequences Hermes must honour:
   Communication Protocol) — nothing else.
 - Decide: pass → advance stage; fail → fresh worker + fallback model (capped
   attempts); ambiguous → escalate to the user.
-- Read the CI verdict from `gh pr checks` before merging; merge once the CI
-  gate is green **and** Reviewer PASS is in hand.
+- Read the CI verdict from `gh pr checks`. When CI is green **and** Reviewer
+  PASS is in hand, the PR is *ready for the user* — post nothing, merge
+  nothing, and move on to the next issue. The user merges.
 - Release/close settled workers; clean up worktrees created for a
   since-finished or abandoned attempt.
 
@@ -104,7 +116,11 @@ Hermes does **not**:
 - Poll status in a tight loop (`check` without `--wait`, repeated).
 - Re-inspect the repository (`git log`, `ls`, full-tree reads) once scope and
   branch are already established for the run.
-- Guess or widen Task Creator's scope when it is ambiguous — escalate instead.
+- Guess or widen an issue's scope when it is ambiguous — ask the user instead.
+- Merge a PR whose issue does not carry `auto-ok`, or add that label itself.
+- Merge on a Reviewer PASS that reported `scope_ok: no`.
+- Invent work, or open an issue proposing work, when the backlog is empty. An
+  empty backlog means Hermes waits for the user, not that it fills the gap.
 - Invent a second store of pipeline state that duplicates what
   `orca orchestration task-list` / `worker-list` already hold (see the
   architecture note on what this does and does not cover).
@@ -129,10 +145,9 @@ Two bounded exceptions, both O(1) and both in the per-worker call budget:
 
 | Role | Does | Does not |
 |---|---|---|
-| Task Creator | Inspects the **whole** of `app/` with no artificial restriction on task type — missing features, bugs, poor/duplicated code, weak test coverage, anything — and opens **one GitHub issue** for one small, independent, well-scoped task | Implement anything; write a local `NEXT_TASK.md`; narrow itself to one category (e.g. "tests only") unless the user explicitly asked for that category this run |
 | Coder | Implements the task in its child worktree, **writes tests for the behaviour it adds** (see `app/` Facts), commits + pushes, opens the PR, flips the issue label | Rely on CI to decide whether its own change is correct; skip tests because "CI will catch it" — CI only runs tests that exist |
 | Reviewer (`--agent plan`) | Read-only diff/code review against the issue's stated intent, returns PASS/FAIL + fix list | Edit any file; implement fixes; restate what CI already reports (lint/types/build/unit results are not review findings) |
-| Tester | **SUSPENDED** — see Known Gaps. Contract when re-enabled: exercise the *running* app and confirm the issue's described behaviour actually happens, reporting the observed behaviour | Run `npm test`/`tsc` and report the counts — that is CI's job and never justified a worker dispatch; write, add or modify any file |
+| Tester *(on demand only)* | Drives the **running** app through Orca's built-in browser and reports the behaviour it observed. **Not a pipeline stage** — dispatched only when the user asks, because it needs this desktop awake and cannot gate a merge. See Driving The App | Run `npm test`/`tsc` and report counts — CI's job; write or modify any file; take a full `snapshot` as a matter of course |
 | Fixer | Applies exactly the fix Reviewer or a failing CI check reported, nothing else | Re-scope or re-design the change |
 
 ## `app/` Facts Workers Must Be Told
@@ -165,17 +180,103 @@ by trial produces a silent false pass.
   `src/lib/`, against 103 `.ts`/`.tsx` source files. There are zero component
   tests. Treat "add a test" tasks as genuinely valuable, not as busywork.
 
+## Driving The App (Tester)
+
+Verified working 2026-09-18 against the real built app on `vite preview`.
+Loop: `orca tab create --url <url>` → `orca eval` to assert → `orca click
+--element @ref` to interact → assert again. `orca console --limit N` reads page
+errors; an empty console is itself a signal.
+
+Serve the built app, not the dev server, so the Tester tests what CI built:
+`npm --prefix app run build` then `npx vite preview --port 4173`.
+
+Four rules, each one learned the hard way:
+
+- **Never use `.click()` from `eval`.** Radix components activate on
+  `mousedown`, so a programmatic `element.click()` returns success and changes
+  nothing — the command reports `ok: true`, the tab does not switch, and a
+  Tester that only checks for errors reports a false pass. Use
+  `orca click --element @ref`, which produces real input. Verified both ways:
+  `.click()` on the Compare tab did nothing; `orca click --element @e14`
+  switched the tab *and* updated the URL to `?tab=compare`.
+- **Scope every selector to the app's own chrome.** The gallery renders Radix
+  demo components, so the page has **9** elements with `role=tab` of which only
+  3 are the app's views — a bare `role=tab` query, in Orca or Playwright, can
+  silently assert against a demo. Query inside `.app-tabs` (or the equivalent
+  container) instead. `app-*` is shell, `dsv-*` is gallery.
+- **`snapshot` is a last resort, not the loop.** A full snapshot of this app is
+  **251 KB** — it will bury a worker's context in one call. A targeted `eval`
+  returning a small JSON string costs ~400 bytes. Use `snapshot` only to obtain
+  a ref, and filter its output to the roles/names needed rather than reading it
+  whole.
+- **Retry once on `runtime_unavailable`.** The Orca runtime dropped a connection
+  mid-session and recovered on the next call with no intervention. One retry,
+  then report; do not treat the first drop as a failed dispatch.
+
+What a Tester reports is the observed behaviour and the URL/DOM state it
+observed it in — never "looks correct".
+
 ## Model Assignment & Fallback
 
-Verified working IDs (via `opencode models` on this host and live
-`opencode debug config` resolution):
+Chosen by running the same probe through every plausible candidate on
+2026-09-18, not by reputation. Probe method and full results in
+`Model Selection Evidence` below.
 
-| Role | Primary | Fallback |
-|---|---|---|
-| Coder | `opencode/muse-spark-1.3-contributor-free` | `openrouter/nex-agi/nex-n2.5-mini:free` |
-| Reviewer | `opencode/nemotron-3-ultra-free` | `opencode/nemotron-3.5-lightning-free` |
-| Fixer | `opencode/muse-spark-1.3-contributor-free` | `openrouter/nex-agi/nex-n2.5-mini:free` |
-| Task Creator | `opencode/nemotron-3-ultra-free` | `openrouter/openrouter/free` |
+| Role | Primary | Fallback | Providers |
+|---|---|---|---|
+| Coder | `google/gemini-3-flash-preview` | `orcarouter/deepseek/deepseek-v4-flash-free` | google → orcarouter |
+| Batch Reviewer | `opencode/muse-spark-1.3-contributor-free` | `google/gemini-3-flash-preview` | opencode → google |
+| Fixer | `google/gemini-3-flash-preview` | `orcarouter/deepseek/deepseek-v4-flash-free` | google → orcarouter |
+
+The split is driven by the quotas, and it points the opposite way from the
+intuitive assignment. Gemini has **1,500 requests/day**, so it does volume:
+every Coder and Fixer dispatch. OpenCode Zen has **100 requests/day total**
+across its models, so Muse Spark is spent where one request covers the most
+ground — reviewing several PRs at once against its 1M-token context. The scarce
+model gets the job with the highest work-per-request, not the job that runs
+most often.
+
+Rough budget: a batch review costs ~10–20 Zen requests, so 5–10 batches/day; at
+4 PRs each that is 20–40 PRs reviewed. A Coder dispatch costs ~30 Gemini
+requests, so ~50 dispatches/day. The two sides roughly balance.
+
+`opencode/mimo-v2.5-free` is **not** the Reviewer fallback despite scoring well,
+because Zen's 100/day is shared — a Zen fallback for a Zen primary empties the
+same bucket. Same reason `muse-spark` is not a Coder fallback: Coder volume
+would eat the review budget.
+
+**Accepted cost: the contributor endpoint trades data for price.** `-contributor-free`
+means Meta may train on the prompts and completions, and a batch Reviewer's
+prompt is this repository's diffs. Accepted knowingly while the budget is zero;
+this repo is public, which is what makes it tolerable. Do not point a
+contributor endpoint at a private repo without asking first. The exit is the
+non-contributor Muse Spark endpoint once there is budget — same model, no data
+trade.
+
+**A fallback must live on a different provider than its primary.** Quotas are
+enforced per account per provider, not per model, so a same-provider fallback
+shares the bucket that just emptied and fails for the identical reason. The
+old table broke this twice: three roles shared one `openrouter` fallback, and
+OpenRouter's free tier turns out to be **50 requests/day across the entire
+account**, shared by every `:free` model at once (1,000/day only after $10 of
+lifetime credit). One agentic dispatch spends dozens of requests, so no
+`openrouter/*:free` model belongs in this table at all.
+
+**Never pick a model for a role without probing that role.** The clearest
+result of the measurement run: `openrouter/thinkingmachines/inkling:free` is
+one of the best Reviewers available here (correct verdict, exact output format,
+11s) and is **completely unusable as a Coder** — given a file to write it
+mangled the Windows path to `/workspaces/...` and died on a permission
+rejection. A single "best free model" does not exist; read-only reasoning and
+file-editing tool use are different capabilities and must be measured
+separately.
+
+Reviewer changed away from the Nemotron family deliberately. All three of
+`mimo-v2.5-free`, `nemotron-3-ultra-free` and `inkling:free` produced the
+correct verdict in the correct format, so the tiebreak is the verified
+`worker_done` tax: Nemotron models in this project repeatedly finish and then
+fail to settle, costing a nudge per dispatch (see Worker Communication
+Protocol). At equal correctness there is no reason to pay it.
 
 `openrouter/nex-agi/nex-n2.5-pro:free` was the original Coder primary but was
 demoted after hitting OpenRouter's daily free-tier cap mid-run
@@ -284,8 +385,9 @@ issue in one turn's context.
   → Hermes scans `--label needs-review`; if CI is green, dispatches a Reviewer
     against that PR branch; if CI is red, dispatches a Fixer with the failing
     output instead and leaves the label alone
-  → Reviewer PASS → Hermes merges (see Merge Policy), then **explicitly closes
-    the issue** — `gh issue close <n>`
+  → Batch Reviewer PASS + `scope_ok: yes` → if the issue carries `auto-ok`,
+    Hermes merges and closes the issue; otherwise it swaps the label to
+    `ready-for-review` and stops, and the user merges and closes
   → Reviewer FAIL → Hermes creates a Fixer Task referencing the PR/issue and
     leaves the label at `needs-review` so it re-enters the queue after the
     Fixer pushes
@@ -304,11 +406,14 @@ Consequences Hermes must honour:
   side-effect. Keep `Closes #<n>` in the PR body for traceability, but treat
   `gh issue close <n>` as part of the merge action.
 - The open-issue backlog is therefore only as accurate as that step. A
-  permanently-inflated backlog silently disables the "skip Task Creator when
-  unclaimed issues exist" rule, because completed work still looks unclaimed.
+  permanently-inflated backlog makes the queue-empty stop condition
+  unreachable, because completed work still looks unclaimed.
 
-Labels in use: `needs-review`, `in-progress`. Check `gh label list` and create
-missing ones once with `gh label create <name> --color <hex>`.
+Labels in use: `auto-ok` (**set by the user on the issue**; Hermes may merge
+this one), `in-progress` (a Coder holds it), `needs-review` (PR pushed, awaiting
+a batch), `ready-for-review` (CI green + Reviewer PASS on a PR without
+`auto-ok` — the user's turn). Check `gh label list` and create missing
+ones once with `gh label create <name> --color <hex>`.
 
 **`needs-test` is retired, but must be drained, not deleted.** Four issues
 (#41, #23, #21, #15) still carry it from the Tester-stage era, where it meant
@@ -330,6 +435,19 @@ labels and dispatches the next role; it does not flip a label a worker owned,
 except as a corrective action when a `worker_done` claims the flip and the
 label is verifiably still missing.
 
+**One Coder per area at a time.** Parallel dispatch is throughput, but two
+Coders editing the same area produce PRs that both pass CI and then conflict on
+merge — and conflict resolution lands on the user, who did not write either
+change. `strict: false` on the branch protection deliberately does not force
+branches up to date, so nothing catches this for you.
+
+Areas are the `app/src` subtrees: `shell/`, `gallery/`, `tokens/`, `compare/`,
+`preview/`, `systems/`, `lib/`. Before dispatching a Coder, read the areas of
+the issues already `in-progress`; if the new issue touches an area already
+claimed, leave it and take the next one. The open backlog clusters heavily —
+several issues each in compare and in fonts — so this check is not theoretical.
+When an issue spans two areas, it counts as claiming both.
+
 **Parallel dispatch is expected.** Hermes may have several Coder/Reviewer/Fixer
 worktrees in flight against different issues at once. Each still follows the
 fixed per-worker budget; running several budgets concurrently is the intended
@@ -337,14 +455,17 @@ way to keep throughput up. Route each settlement to its own next stage
 independently — do not serialize to one issue at a time once more than one has
 entered the pipeline.
 
-**Task Creator is not mandatory every cycle.** Before dispatching one, run
-`gh issue list --state open --label agent` once. If an open, unclaimed issue
-exists, skip Task Creator and dispatch a Coder directly against it (its number,
-title and body become the Coder Task's spec). Only dispatch a fresh Task
-Creator when that backlog is empty — there is no value in generating more
-proposals while dozens sit open. An Orca Task whose spec merely says `MISSING`
-or targets a since-superseded local file is a stale-worktree artifact, not
-backlog; recognize and ignore it.
+**The backlog is user-owned.** Each cycle starts with
+`gh issue list --state open --label agent`. Dispatch a Coder against an open,
+unclaimed issue; its number, title and body become the Coder Task's spec.
+When no unclaimed issue is left, Hermes says the queue is empty and **waits** —
+it does not generate proposals to keep itself busy. An Orca Task whose spec
+merely says `MISSING` or targets a since-superseded local file is a
+stale-worktree artifact, not backlog; ignore it.
+
+If an issue's scope is unclear, ask the user before dispatching. A Coder given
+an ambiguous issue produces a PR the user then has to decipher, which spends
+more of the user's attention than the question would have.
 
 ## Failure & Recovery Policy
 
@@ -379,7 +500,7 @@ and is not re-read.
 
 ```
 status: succeeded | failed
-role: coder | reviewer | fixer | task_creator
+role: coder | reviewer | tester | fixer
 task: <task_id>
 commit: <sha | none>
 tests: pass | fail | n/a      # advisory only — CI is the gate
@@ -410,8 +531,8 @@ does not automatically send `worker_done` when it stops talking. This is not
 plan-mode-specific: Nemotron-family models (`nemotron-3-ultra-free`,
 `nemotron-3.5-lightning-free`) in **any** role have repeatedly finished, printed
 their verdict in the transcript, and simply stopped without calling
-`orchestration send --type worker_done` — observed on Task Creator and Reviewer
-dispatches alike.
+`orchestration send --type worker_done` — observed across roles, not only in
+plan mode.
 
 **Automatic nudge policy — do this without asking the user.** After **two
 consecutive** full `check --wait` timeouts with no message, read the terminal
@@ -440,8 +561,7 @@ worker's model or personal identity.
 - **Message**: prefix the subject with the role tag —
   `[coder] test(app): add useToasts hook tests`,
   `[fixer] fix(app): satisfy tsc for toasts.test.ts mountProbe container`,
-  `[task_creator] docs: open issue for cycle N`. Valid tags: `[task_creator]`,
-  `[coder]`, `[reviewer]`, `[tester]`, `[fixer]`. Encode this in every Task
+  Valid tags: `[coder]`, `[reviewer]`, `[tester]`, `[fixer]`. Encode this in every Task
   spec's commit instruction; it is not left to the worker's judgment.
 - **Author**: set `git config --worktree user.name`/`user.email` in each
   worker's worktree before it commits (or instruct the worker to do so as its
@@ -471,7 +591,7 @@ branch `ernem22/fixer-1` with no `[fixer]` tag. A `commit-msg` hook checking
 the subject against the tag list would make the rule mechanical; see Known
 Gaps.
 
-## Merge Policy
+## Delivery & Approval
 
 - The CI gate is `.github/workflows/pr-check.yml`, job/context **`app`**,
   running `npm run lint`, `npm run build` (`tsc -b && vite build`) and
@@ -487,33 +607,190 @@ Gaps.
   cut before the workflow landed is still checked — verified on PR #48, whose
   head predates `pr-check.yml` and was checked anyway. Do not rebase an
   in-flight branch just to pick up a CI change.
-- PR opens after the Coder pushes. Merge requires **CI green** (`gh pr checks
-  <pr>`) **and Reviewer PASS**. Both, always.
-- Use `gh pr merge --squash --auto`. Auto-merge is enabled on this repo, so
-  GitHub merges the PR itself the moment the `app` check goes green and Hermes
-  does not block waiting for it. Only fall back to
-  `gh pr checks <pr> --watch` + `gh pr merge --squash` if `--auto` is refused.
+- **Who merges is decided by one label on the issue: `auto-ok`.**
+  - Issue carries `auto-ok` → Hermes merges once CI is green **and** the Batch
+    Reviewer returned PASS. Both, always.
+  - No `auto-ok` → the PR is the user's. Hermes labels it
+    `ready-for-review` and stops.
+  - The default is the user's. An unlabelled issue is never auto-merged, and
+    Hermes never adds `auto-ok` itself.
+
+  The label is set by the user when they write the issue, because they already
+  know whether the work is self-contained or reaches into existing code — that
+  judgement does not need to be re-derived from a diff. Its accuracy is not
+  machine-checked anywhere, deliberately: the cost of being wrong is one
+  over-reaching PR merged without a human, and the Reviewer's existing
+  "changed nothing the issue did not ask for" rule is what guards it.
 - `delete_branch_on_merge` is enabled, so the merged head branch is deleted
   automatically. The explicit remote-branch deletion in the cleanup checklist
   is now only needed for branches abandoned without a merge.
 - Squash-merge unless the repo's convention says otherwise. All merged PRs base
   onto `refactor/full-react-migration`.
-- After the merge, `gh issue close <n>` for the issue the PR resolves. GitHub
-  will not do it — see the Issue-Label State Machine.
+- Whoever merges also closes the issue — `gh issue close <n>`. GitHub will not
+  do it (see the Issue-Label State Machine), so for an `auto-ok` PR that step
+  belongs to Hermes, and for everything else to the user.
 - Coder/Fixer must commit **and push** — Reviewer worktrees cannot see
   uncommitted changes in a sibling worktree, and `--base-branch` off a branch
   with only uncommitted work silently falls back to that branch's last real
   commit.
-- Hermes performs the merge directly; this is a control-plane decision,
-  explicitly in scope.
+- A PR is **done** when it is merged (`auto-ok`) or labelled
+  `ready-for-review` (everything else). Either way Hermes stops touching it and
+  moves to the next issue.
+
+## PR Body
+
+Most PRs are read by the Batch Reviewer and then merged; only `needs-human` ones
+reach the user. So the body is a short audit record, not an essay. Four
+headings, from `.github/pull_request_template.md`:
+
+```
+## What this changes     — links the issue, one plain paragraph
+## Verified              — pasted command output, and observed behaviour if UI changed
+## Not verified          — what nobody checked, and any known risk
+## Scope                 — app/ only, nothing unrelated touched
+```
+
+One rule carries the weight: **evidence, not assertion.** `tests: pass` is a
+worker's belief; CI is the authority on lint, types, build and unit tests, so
+repeating those claims adds nothing. What the body must add is what a machine
+did not check — which is exactly what `## Not verified` is for. A worker that
+writes "I did not check the other callsites" is doing its job, not confessing.
+
+`gh pr create --body` bypasses the template silently, so the Coder Task spec,
+not the template file, is what actually enforces these headings.
+
+## Model Selection Evidence
+
+Recorded so the next model change is a measurement, not an opinion. Two probes,
+run through every plausible free candidate on this host, 2026-09-18.
+
+**Provider quotas, researched 2026-09-18 and then probed.** The published limit
+and the usable limit are different numbers; both columns matter.
+
+| Provider | Published free limit | What a probe actually did |
+|---|---|---|
+| `google` | Gemini 3 Flash: 1,500 req/day, 10 RPM, 250k tok/min | Passed both probes with real tool use. The only candidate whose quota also fits sustained agent work |
+| `opencode` (Zen) | not published | `muse-spark-1.3` 4/4 Coder, `mimo-v2.5` correct Reviewer. No cap seen in this project's history |
+| `orcarouter` | not published | `deepseek-v4-flash-free` 4/4 Coder |
+| `openrouter` | **50 req/day account-wide**, all `:free` models sharing one bucket | Works per call, but the bucket is far too small for agentic dispatch — this is what the recorded `free-models-per-day` failure was |
+| `groq` | 1,000 req/day, but **8,000 tok/min** | **Could not complete one request.** The agent's own context is ~14k tokens: `Limit 8000, Requested 14170`. Structurally unusable here, not merely tight |
+| `cerebras` | 1M tok/day, but **8,192-token context cap** | Not probed — the context cap alone cannot hold a file plus instructions |
+| `mistral` | ~1B tok/month, but **2 RPM** | `codestral-latest` 4/4 in 10s (fastest correct Coder), then `magistral-medium` hit `Rate limit exceeded` on the very next call. 2 RPM cannot support parallel dispatch |
+| `nvidia` | 40 RPM account-wide | `nemotron-3-super-120b` correct Reviewer in 27.7s. `qwen3-coder-480b` returned **410 Gone — end of life 2026-06-11** |
+| `deepseek` (native) | paid | `Insufficient Balance` on both flash and pro |
+| `apinex` | advertised as free | `qwen-3.8-max` demands a subscription |
+| `tokenrouter` | — | `glm-5.3-free`: no available channel |
+
+Read that table as one lesson: **a free tier fails in whichever dimension you
+did not check.** Groq's request/day looked generous and its tokens/minute made
+it useless. Cerebras's tokens/day is the largest here and its context cap makes
+it useless. Mistral has a billion tokens a month behind a 2-requests-minute
+door. OpenRouter publishes per-model pages and enforces one account-wide
+counter. Check requests/day, requests/minute, tokens/minute, tokens/day and
+context window before adopting a model, then probe it anyway.
+
+Runners-up worth remembering, in case a primary has to be replaced:
+`mistral/codestral-latest` (correct and fastest, but printed rather than wrote
+the file, and 2 RPM), `nvidia/nemotron-3-super-120b-a12b` (correct Reviewer,
+40 RPM shared, Nemotron `worker_done` tax), `opencode/nemotron-3-ultra-free`
+and `openrouter/thinkingmachines/inkling:free` (both correct Reviewers, both
+carrying a tax — Nemotron's settle failure, OpenRouter's 50/day bucket).
+
+**Reviewer probe** — a diff whose `useEffect` creates a `setTimeout` and never
+clears it, plus a demand for exactly three output lines. Scored on finding the
+missing cleanup and on obeying the format.
+
+| Model | Verdict | Format | Time |
+|---|---|---|---|
+| `opencode/mimo-v2.5-free` | correct | exact | 9.3s |
+| `opencode/nemotron-3-ultra-free` | correct | exact | 10.8s |
+| `openrouter/thinkingmachines/inkling:free` | correct | exact | 11.3s |
+| `openrouter/poolside/laguna-s-2.1:free` | **false PASS** | — | 50.7s |
+| `apinex/free/qwen-3.8-max` | unusable — paid subscription | — | 8.8s |
+| `tokenrouter/z-ai/glm-5.3-free` | unusable — no available channel | — | 79.7s |
+| `openrouter/z-ai/glm-5.2:free` | unusable — no tool-use endpoint | — | 6.4s |
+| `google/gemini-3-flash-preview` | correct | exact | 16.6s |
+| `nvidia/nvidia/nemotron-3-super-120b-a12b` | correct | exact | 27.7s |
+| `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` | no output in 10+ min | — | — |
+| `groq/openai/gpt-oss-120b` | unusable — 8k tok/min < 14k context | — | — |
+| `mistral/magistral-medium-latest` | unusable — `Rate limit exceeded` at 2 RPM | — | 80.9s |
+| `deepseek/deepseek-v4-pro` | unusable — `Insufficient Balance` | — | 13.4s |
+
+**Coder probe** — write one small module under four mechanically checkable
+constraints (named export, specific edge-case behaviour, exactly one WHY
+comment, explicit `.ts` import extensions).
+
+| Model | Constraints | Tool use | Time |
+|---|---|---|---|
+| `opencode/muse-spark-1.3-contributor-free` | 4/4 | read the dir, wrote the file | 20.8s |
+| `orcarouter/deepseek/deepseek-v4-flash-free` | 4/4 | globbed, wrote the file | 22.1s |
+| `google/gemini-3-flash-preview` | 4/4 | wrote the file | 20.9s |
+| `mistral/codestral-latest` | 4/4 | printed only, never wrote | 10.1s |
+| `openrouter/cohere/north-mini-code:free` | 3.5/4 | printed only, never wrote | 17.4s |
+| `openrouter/thinkingmachines/inkling:free` | 0/4 | **mangled the Windows path**, permission-rejected | 14.2s |
+| `groq/openai/gpt-oss-120b` | — | unusable — 8k tok/min < 14k context | — |
+| `deepseek/deepseek-v4-flash` | — | unusable — `Insufficient Balance` | 9.6s |
+| `nvidia/qwen/qwen3-coder-480b-a35b-instruct` | — | unusable — **410 Gone**, EOL 2026-06-11 | 6.0s |
+
+Three findings worth carrying forward:
+
+- **`free` in a model id does not mean usable.** `apinex/free/qwen-3.8-max`
+  demands a subscription; `glm-5.3-free` has no channel; `glm-5.2:free` has no
+  tool-use endpoint. Probe reachability before planning around a model.
+- **A false PASS is the worst Reviewer failure and it is not rare.**
+  `laguna-s-2.1` spent 50s and approved code with an obvious bug. A Reviewer
+  that never fails anything is indistinguishable from no Reviewer.
+- **Bigger is not better on free tiers.** The 550B Nemotron produced nothing in
+  ten minutes; the fastest correct Reviewer took nine seconds.
+
+## Batch Review
+
+Review is batched because OpenCode Zen allows **100 requests/day** across all its
+models. One Muse Spark dispatch reading several PRs against its 1M-token context
+is how that quota becomes usable — and it buys something per-PR review cannot.
+
+**Trigger:** 3 or more PRs holding `needs-review` with a green `app` check.
+Ceiling **5**. Below 3, wait. Above 5, split — attention per diff falls as the
+batch grows, and attention is the whole reason for using the strongest model.
+
+**Input** per PR: the issue body, `gh pr diff <n>`, the PR body. Nothing else.
+
+**Output** — one block per PR, then one cross-PR block:
+
+```
+pr: <number>
+status: pass | fail
+reason: <short, only if fail>
+fix_required: <short actionable, only if fail>
+scope_ok: yes | no        # did it change anything the issue did not ask for?
+```
+
+```
+conflicts: <pr>+<pr> on <path> | none
+```
+
+**A batch missing a block for any PR in it is rejected whole** — same class as a
+missing `worker_done`. Never infer a PASS for a PR the reviewer did not name.
+
+`scope_ok` is load-bearing, not decoration: with `auto-ok` merging on the
+Reviewer's word, this field is the only thing standing between an over-reaching
+Coder and an unreviewed merge. A `no` blocks the merge regardless of `status`.
+
+**The cross-PR block is a reason to batch, not a bonus.** Open PRs all branch
+from the same base with `strict: false`, so two touching one file both report
+green and collide only at merge. A per-PR reviewer structurally cannot see that;
+a batch reviewer holding both diffs can. Require the block even when it is
+`none`.
 
 ## Continuous Operation Mode
 
 Once started, Hermes runs cycles **back-to-back without stopping for
-confirmation** — issue/Task Creator → Coder → CI → Reviewer → (Fixer if
-needed) → merge → next cycle — until either the user says stop, or `app/`'s
-migration is judged complete (Task Creator reports nothing worth doing, or the
-user says the goal is met).
+confirmation** — open issue → Coder → CI → batch review → merge (`auto-ok`) or
+hand over → next issue. It does not wait for the user on a `needs-human` PR
+before starting the next issue; those queue up while work continues.
+
+It stops when the user says stop, or when no unclaimed issue is left. An empty
+queue is a stop, not a prompt to invent work.
 
 Do not pause after a successful merge to ask "should I continue?" Do not
 narrate each cycle. Surface to the user only on a failure or escalation that
@@ -524,16 +801,18 @@ the audit trail, not a running commentary.
 
 ## Scope Control
 
-Task Creator's spec must state the top-level scope boundary explicitly and
-literally ("app/ only, not src/core, not preview/"). An unscoped "find
-something small and independent" lets the model pick the wrong directory.
+Every Coder/Fixer Task spec states the scope boundary explicitly and literally
+("app/ only, not src/core, not preview/"). Left implicit, a model will wander
+into the wrong directory — it happened once here, with `src/core` edited when
+the user meant `app/`.
 
-**Directory scope is the only boundary Hermes may impose.** Do not also
-constrain *what kind* of task Task Creator proposes ("tests only", "avoid
-recently-touched files") unless the user asked for that category this run.
-Give Task Creator the full directory, let it inspect everything in scope —
-missing features, bugs, duplicated code, weak abstractions, missing tests —
-and let it choose on its own judgment.
+**Hermes narrows an issue's scope, never widens it, and never reinterprets it.**
+The issue body is the user's instruction; a Coder that "also fixed" something
+adjacent has produced a PR the user now has to separate in their head. If an
+issue looks like it should be bigger, that is a question for the user, not a
+liberty for the Coder. Encode "change nothing the issue did not ask for" in the
+spec, and keep the `## Scope` checkboxes in the PR template as the visible
+receipt.
 
 ## State & Context Management
 
@@ -661,6 +940,12 @@ the rules do not have to carry their narrative.
 | Squash merge made the branch's commit a non-ancestor, so an ancestry check said "unique commits, do not delete" for fully-merged work | Ask `gh pr list --head <branch> --state merged`, never `git log -1` vs `origin/<branch>` |
 | `gh pr merge --delete-branch` left the remote branch alive: the local checkout switch failed first in a worktree setup | Verify `state: MERGED` separately; delete the remote branch explicitly |
 | Protection was set with `enforce_admins: false` while the coordinator is a repo admin — the gate did not bind the actor it existed to bind | `enforce_admins: true`; the gate is only real when the merging actor cannot bypass it |
+| `laguna-s-2.1:free` reviewed a diff with an obvious missing-cleanup bug and returned `status: pass` | Probe every Reviewer candidate with a planted bug; a Reviewer that never fails anything is no Reviewer |
+| `inkling:free` reviewed perfectly but, told to write a file, mangled the Windows path to `/workspaces/...` | Probe per role; read-only reasoning and file-editing tool use are different capabilities |
+| Three ids containing `free` were unusable — one needs a subscription, one had no channel, one had no tool-use endpoint | Probe reachability before planning around a model |
+| `element.click()` from `eval` reported success and did not switch a Radix tab | Use `orca click --element @ref`; programmatic clicks miss `mousedown` activation |
+| A bare `role=tab` query matched 9 elements, 6 of them gallery demos | Scope selectors to `.app-tabs` / the app's own container, in Orca and Playwright alike |
+| A full `orca snapshot` of the app was 251 KB | Assert with targeted `eval`; use `snapshot` only to obtain a ref, filtered |
 | Tester dispatched to run `tsc`/`npm test` — a worker spent on a deterministic check it could misreport | Division of Labour; CI owns machine-decidable checks |
 | Root `npm test` green while testing zero `app/` code | All commands `--prefix app`, stated in every spec |
 | `.tsx` test with a failing assertion silently not collected; suite exited 0 | `app/` Facts: `.ts` only, node env, `toasts.test.ts` as template |
@@ -671,14 +956,15 @@ the rules do not have to carry their narrative.
 
 Real, unfixed, and not to be papered over.
 
-- **Behavioural verification is not automated.** The Tester role is suspended
-  because it is not executable here: `app/` has no Playwright, Puppeteer or
-  `@testing-library/react`, so a worker cannot drive the UI, and Tester is
-  forbidden to write files. Until a headless browser is added — or
-  `vitest.config.ts` is fixed to collect `.tsx` under a DOM environment so
-  component tests are possible — **whether the migrated UI actually works is
-  verified by the human, not by this pipeline.** CI proves it compiles, lints
-  and passes 34 lib tests. That is all it proves.
+- **Behavioural verification exists, but not in CI.** Orca's built-in browser
+  drives the real app and the Tester role uses it (see Driving The App). What it
+  cannot do is gate a merge: a client-hosted page renders in the paired
+  desktop's browser engine and every command returns `browser_host_unavailable`
+  while that desktop is closed, so it cannot run in GitHub Actions. The
+  consequence to hold onto: **a green CI check still does not mean the UI
+  works.** CI proves it compiles, lints and passes the unit suite. Behaviour is
+  proven by a Tester dispatch or by the user, both of which need this machine
+  awake.
 - **CI's unit-test leg is nearly empty.** 4 files, 0 component tests, and the
   `.tsx` include gap means a well-intentioned component test can be added and
   silently never run. Fixing `vitest.config.ts` (add `.tsx` to `include`, set a
