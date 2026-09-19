@@ -1,0 +1,126 @@
+/* Preview-tab token inspector — ported from preview/src/styles/components.css's
+   token drawer block. Class names keep their dsv-* prefix (gallery scope);
+   rules stay on bare var(--token) with no fallbacks, like the rest of the
+   gallery. The mobile dialog shell (.dsv-drawer-overlay/.dsv-drawer) lives
+   here too — the shell is in preview/PreviewProps.tsx but it only renders
+   these classes. */
+.dsv-props-empty {
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
+  text-align: center; color: var(--color-text-muted);
+  padding: var(--space-8) var(--space-2); font-size: var(--font-size-sm);
+}
+.dsv-props-empty p { margin: 0; }
+.dsv-props-empty b { color: var(--color-text); font-weight: var(--font-weight-semibold); }
+
+/* ── token count badge in each Demo header ── */
+.dsv-token-drawer-trigger {
+  appearance: none; flex: none; display: inline-flex; align-items: center; gap: var(--space-1);
+  font: inherit; font-size: var(--font-size-xs); font-family: var(--font-mono);
+  background: var(--color-surface-sunken); color: var(--color-text-muted);
+  border: var(--border-width-thin) solid var(--color-border-subtle);
+  border-radius: var(--radius-sm); padding: 2px var(--space-1-5); cursor: pointer;
+  transition: border-color var(--motion-hover), background var(--motion-hover), color var(--motion-hover);
+}
+.dsv-token-drawer-trigger:hover { border-color: var(--color-border-strong); background: var(--color-surface); color: var(--color-text); }
+.dsv-token-drawer-trigger.has-edits {
+  background: var(--color-accent-subtle); color: var(--color-accent-text); border-color: var(--color-accent-border);
+}
+/* selected trigger reads as pressed */
+.dsv-token-drawer-trigger.is-active {
+  background: var(--color-accent-subtle); color: var(--color-accent-text); border-color: var(--color-accent-border);
+}
+.dsv-token-swatch {
+  width: 9px; height: 9px; border-radius: var(--radius-full); flex: none;
+  box-shadow: inset 0 0 0 var(--border-width-thin) rgba(0, 0, 0, 0.15);
+}
+
+/* ── mobile overlay dialog shell (small screens only — desktop docks) ── */
+.dsv-drawer-overlay {
+  position: fixed; inset: 0; background: var(--color-scrim); z-index: var(--z-modal);
+  animation: dsv-fade var(--motion-enter);
+}
+.dsv-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: var(--z-modal);
+  width: min(420px, 100vw); max-width: 100vw; background: var(--color-surface-overlay); color: var(--color-text);
+  border-left: var(--border-width-thin) solid var(--color-border-subtle);
+  box-shadow: var(--shadow-xl); display: flex; flex-direction: column;
+  animation: dsv-drawer-in var(--motion-modal);
+}
+@keyframes dsv-drawer-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+/* ── shared panel head/body (docked props panel + mobile dialog) ── */
+.dsv-drawer-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-bottom: var(--border-width-thin) solid var(--color-border-subtle);
+}
+.dsv-drawer-head h3 { margin: 0; font-size: var(--font-size-base); font-weight: var(--font-weight-semibold); }
+.dsv-drawer-head p { margin: var(--space-0-5) 0 0; font-size: var(--font-size-xs); }
+.dsv-drawer-reset {
+  appearance: none; display: block; width: calc(100% - 2 * var(--space-4)); margin: var(--space-3) var(--space-4) 0;
+  padding: var(--space-1-5) var(--space-2-5); background: var(--color-accent-subtle); color: var(--color-accent-text);
+  border: var(--border-width-thin) solid var(--color-accent-border); border-radius: var(--radius-md);
+  font: inherit; font-size: var(--font-size-xs); font-weight: var(--font-weight-medium); cursor: pointer; text-align: left;
+}
+/* reset button rendered inside the padded body (empty state) rather than
+   between head and body — full-bleed margins don't apply there. */
+.dsv-drawer-reset--inline { width: 100%; margin: var(--space-3) 0 0; }
+.dsv-drawer-body { flex: 1; overflow-y: auto; padding: var(--space-2) var(--space-4) var(--space-4); }
+.dsv-drawer-group { margin-top: var(--space-4); }
+.dsv-drawer-group-label {
+  font-size: 10.5px; font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: var(--letter-spacing-wide);
+  color: var(--color-text-muted); margin-bottom: var(--space-1-5);
+}
+.dsv-token-row {
+  padding: var(--space-2) 0; border-bottom: var(--border-width-thin) solid var(--color-border-subtle);
+}
+.dsv-token-row:last-child { border-bottom: none; }
+.dsv-token-row-main { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-1-5); font-size: var(--font-size-xs); }
+.dsv-token-row-name { font-family: var(--font-mono); color: var(--color-text); }
+.dsv-token-row-value { font-family: var(--font-mono); color: var(--color-text-muted); max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsv-token-row-swap {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  background: var(--color-accent-subtle); color: var(--color-accent-text);
+  border-radius: var(--radius-sm); padding: 1px var(--space-1) 1px var(--space-1-5); font-family: var(--font-mono);
+}
+.dsv-token-row-undo {
+  appearance: none; display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: none; color: inherit; opacity: 0.7; cursor: pointer; padding: 1px;
+}
+.dsv-token-row-undo:hover { opacity: 1; color: var(--color-danger-text); }
+.dsv-token-row-actions { display: flex; gap: var(--space-2); margin-left: auto; flex: none; }
+.dsv-token-row-actions button {
+  appearance: none; background: none; border: none; color: var(--color-text-secondary); cursor: pointer;
+  font: inherit; font-size: var(--font-size-xs); font-weight: var(--font-weight-medium);
+  padding: var(--space-0-5) var(--space-1); border-radius: var(--radius-sm);
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.dsv-token-row-actions button:hover, .dsv-token-row-actions button.is-active { color: var(--color-accent-text); background: var(--color-accent-subtle); text-decoration: none; }
+.dsv-token-editor { width: 100%; margin-top: var(--space-2); }
+.dsv-token-value-editor { display: flex; align-items: center; gap: var(--space-1-5); }
+.dsv-token-color-input {
+  width: var(--input-height-sm); height: var(--input-height-sm); padding: 2px; flex: none;
+  border: var(--border-width-thin) solid var(--color-border); border-radius: var(--radius-sm); cursor: pointer; background: none;
+}
+/* text field reuses the gallery .dsv-input base — size/type treatment only. */
+.dsv-token-value-input { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: var(--font-size-xs); }
+.dsv-token-picker-search {
+  display: flex; align-items: center; gap: var(--space-1-5);
+  border: var(--border-width-thin) solid var(--color-border); border-radius: var(--radius-md);
+  padding: 0 var(--space-2); margin-bottom: var(--space-2); color: var(--color-text-muted);
+}
+.dsv-token-picker-search input {
+  flex: 1; min-width: 0; border: none; background: none; font: inherit; color: var(--color-text);
+  height: var(--input-height-sm); outline: none;
+}
+.dsv-token-picker-search input::placeholder { color: var(--color-text-disabled); }
+.dsv-token-picker-list { display: flex; flex-direction: column; gap: 1px; max-height: 13rem; overflow-y: auto; }
+.dsv-token-picker-item {
+  appearance: none; display: flex; align-items: center; gap: var(--space-2);
+  background: none; border: none; border-radius: var(--radius-sm); cursor: pointer;
+  padding: var(--space-1-5) var(--space-2); text-align: left; color: var(--color-text-secondary); font-size: var(--font-size-xs);
+}
+.dsv-token-picker-item:hover, .dsv-token-picker-item:focus-visible { background: var(--color-hover-overlay); color: var(--color-text); }
+.dsv-token-picker-name { font-family: var(--font-mono); }
+.dsv-token-picker-group { margin-left: auto; font-size: 10.5px; flex: none; }
+.dsv-token-picker-empty, .dsv-token-picker-more { padding: var(--space-2); font-size: var(--font-size-xs); text-align: center; }

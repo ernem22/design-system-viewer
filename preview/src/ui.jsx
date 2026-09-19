@@ -30,6 +30,8 @@ export function Icon({ name, size = 16, className = "", ...rest }) {
     chevronDown: <polyline points="6 9 12 15 18 9" />,
     chevronRight: <polyline points="9 18 15 12 9 6" />,
     chevronLeft: <polyline points="15 18 9 12 15 6" />,
+    chevronsRight: <><polyline points="13 17 18 12 13 7" /><polyline points="6 17 11 12 6 7" /></>,
+    chevronsLeft: <><polyline points="11 17 6 12 11 7" /><polyline points="18 17 13 12 18 7" /></>,
     x: <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></>,
     search: <><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>,
     eye: <><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></>,
@@ -53,6 +55,7 @@ export function Icon({ name, size = 16, className = "", ...rest }) {
     file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></>,
     clock: <><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>,
     user: <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>,
+    link: <><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></>,
     settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.2.61.79 1.05 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></>,
   };
   return <svg {...p} aria-hidden="true">{paths[name] || null}</svg>;
@@ -201,6 +204,40 @@ function TokenRow({ id, name, ctx }) {
 /** Drawer listing every token a Demo uses — swap what it reads here only, or edit the token's own value everywhere. */
 function TokenDrawer({ title, id, tokens, ctx }) {
   const portalContainer = usePortalContainer();
+  return (
+    <Dialog.Portal container={portalContainer}>
+      <Dialog.Overlay className="dsv-drawer-overlay" />
+      <Dialog.Content className="dsv-drawer">
+        <TokenPanelHead title={title} tokens={tokens} />
+        <TokenPanelBody id={id} tokens={tokens} ctx={ctx} />
+      </Dialog.Content>
+    </Dialog.Portal>
+  );
+}
+
+/** Shared head + body so the mobile overlay dialog and the docked desktop
+   properties panel render the exact same content. */
+function TokenPanelHead({ title, tokens, onClose }) {
+  // Radix Title/Description need a Dialog ancestor — the docked panel isn't
+  // one, so it renders plain elements there.
+  const heading = onClose
+    ? (<div><h3>{title}</h3><p className="dsv-muted">{tokens.length} token{tokens.length === 1 ? "" : "s"} used here</p></div>)
+    : (<div><Dialog.Title asChild><h3>{title}</h3></Dialog.Title><Dialog.Description asChild><p className="dsv-muted">{tokens.length} token{tokens.length === 1 ? "" : "s"} used here</p></Dialog.Description></div>);
+  return (
+    <div className="dsv-drawer-head">
+      {heading}
+      {onClose ? (
+        <button type="button" className="dsv-btn dsv-btn--ghost dsv-icon-btn" aria-label="Close panel" onClick={onClose}><Icon name="x" size={16} /></button>
+      ) : (
+        <Dialog.Close asChild>
+          <button type="button" className="dsv-btn dsv-btn--ghost dsv-icon-btn" aria-label="Close"><Icon name="x" size={16} /></button>
+        </Dialog.Close>
+      )}
+    </div>
+  );
+}
+
+function TokenPanelBody({ id, tokens, ctx }) {
   const groups = useMemo(() => {
     const byKind = new Map();
     for (const t of tokens) {
@@ -213,33 +250,73 @@ function TokenDrawer({ title, id, tokens, ctx }) {
   const swapCount = Object.keys(ctx.swaps[id] || {}).length;
 
   return (
-    <Dialog.Portal container={portalContainer}>
-      <Dialog.Overlay className="dsv-drawer-overlay" />
-      <Dialog.Content className="dsv-drawer">
+    <>
+      {swapCount > 0 && (
+        <button type="button" className="dsv-drawer-reset" onClick={() => ctx.clearSwapsIn(id)}>
+          Reset {swapCount} swap{swapCount === 1 ? "" : "s"} in this component
+        </button>
+      )}
+      <div className="dsv-drawer-body">
+        {groups.map(([kind, names]) => (
+          <div key={kind} className="dsv-drawer-group">
+            <div className="dsv-drawer-group-label">{KIND_LABEL[kind]}</div>
+            {names.map((name) => <TokenRow key={name} id={id} name={name} ctx={ctx} />)}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/** Docked right-panel content: the selected scope's tokens, or the empty
+   state (global edits + "pick a component" hint) when nothing is selected. */
+export function SelectedScopePanel() {
+  const ctx = useTokenOverrides();
+  if (!ctx) return null;
+  const sel = ctx.selected;
+  if (!sel) {
+    const edits = Object.entries(ctx.valueEdits);
+    return (
+      <>
         <div className="dsv-drawer-head">
           <div>
-            <Dialog.Title asChild><h3>{title}</h3></Dialog.Title>
-            <Dialog.Description asChild><p className="dsv-muted">{tokens.length} token{tokens.length === 1 ? "" : "s"} used here</p></Dialog.Description>
+            <h3>Properties</h3>
+            <p className="dsv-muted">No component selected</p>
           </div>
-          <Dialog.Close asChild>
-            <button type="button" className="dsv-btn dsv-btn--ghost dsv-icon-btn" aria-label="Close"><Icon name="x" size={16} /></button>
-          </Dialog.Close>
         </div>
-        {swapCount > 0 && (
-          <button type="button" className="dsv-drawer-reset" onClick={() => ctx.clearSwapsIn(id)}>
-            Reset {swapCount} swap{swapCount === 1 ? "" : "s"} in this component
-          </button>
-        )}
         <div className="dsv-drawer-body">
-          {groups.map(([kind, names]) => (
-            <div key={kind} className="dsv-drawer-group">
-              <div className="dsv-drawer-group-label">{KIND_LABEL[kind]}</div>
-              {names.map((name) => <TokenRow key={name} id={id} name={name} ctx={ctx} />)}
+          <div className="dsv-props-empty">
+            <Icon name="sliders" size={20} />
+            <p>Click a component's <b>token count badge</b> to inspect its tokens here.</p>
+          </div>
+          {edits.length > 0 && (
+            <div className="dsv-drawer-group">
+              <div className="dsv-drawer-group-label">Global value edits ({edits.length})</div>
+              {edits.map(([name, value]) => (
+                <div key={name} className="dsv-token-row">
+                  <div className="dsv-token-row-main">
+                    <code className="dsv-token-row-name">{name}</code>
+                    <span className="dsv-token-row-value" title={value}>{shortValue(value)}</span>
+                    <span className="dsv-token-row-actions">
+                      <button type="button" onClick={() => ctx.clearValueEdit(name)}>Revert</button>
+                    </span>
+                  </div>
+                </div>
+              ))}
+              <button type="button" className="dsv-drawer-reset" style={{ width: "100%", margin: "12px 0 0" }} onClick={ctx.clearAll}>
+                Reset all edits
+              </button>
             </div>
-          ))}
+          )}
         </div>
-      </Dialog.Content>
-    </Dialog.Portal>
+      </>
+    );
+  }
+  return (
+    <>
+      <TokenPanelHead title={sel.title} tokens={sel.tokens} onClose={ctx.clearSelection} />
+      <TokenPanelBody id={sel.id} tokens={sel.tokens} ctx={ctx} />
+    </>
   );
 }
 
@@ -252,20 +329,34 @@ function useSwapStyle(ctx, id) {
 /** The small "N tokens" icon that opens a scope's drawer — shared by Demo and Screen. */
 function TokenScopeTrigger({ id, title, tokens }) {
   const ctx = useTokenOverrides();
-  const [open, setOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   if (!ctx || !tokens.length) return null; // Compare, or nothing tracked here
   const hasEdits = Object.keys(ctx.swaps[id] || {}).length > 0;
+  const isActive = ctx.selected?.id === id;
+
+  // Desktop docks the scope into the persistent right properties panel
+  // (Figma-style); small screens keep the overlay dialog.
+  const onClick = () => {
+    if (window.matchMedia?.("(max-width: 760px)").matches) setMobileOpen(true);
+    else ctx.selectScope(isActive ? null : { id, title, tokens });
+  };
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
-      <Dialog.Trigger asChild>
-        <button type="button" className={`dsv-token-drawer-trigger${hasEdits ? " has-edits" : ""}`} title={`${tokens.length} tokens used here — click to inspect or edit`}>
-          <Icon name="sliders" size={13} />
-          {tokens.length}
-        </button>
-      </Dialog.Trigger>
-      {open && <TokenDrawer title={title} id={id} tokens={tokens} ctx={ctx} />}
-    </Dialog.Root>
+    <>
+      <button
+        type="button"
+        className={`dsv-token-drawer-trigger${hasEdits ? " has-edits" : ""}${isActive ? " is-active" : ""}`}
+        title={`${tokens.length} tokens used here — click to inspect or edit`}
+        aria-pressed={isActive}
+        onClick={onClick}
+      >
+        <Icon name="sliders" size={13} />
+        {tokens.length}
+      </button>
+      <Dialog.Root open={mobileOpen} onOpenChange={setMobileOpen}>
+        {mobileOpen && <TokenDrawer title={title} id={id} tokens={tokens} ctx={ctx} />}
+      </Dialog.Root>
+    </>
   );
 }
 

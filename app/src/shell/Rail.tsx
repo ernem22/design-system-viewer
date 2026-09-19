@@ -1,0 +1,139 @@
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import * as Accordion from "@radix-ui/react-accordion";
+import { Icon } from "../lib/icons.tsx";
+import { useScrollSpy } from "../lib/scrollspy.ts";
+import { writeSectionHash } from "../lib/urlState.ts";
+import type { RailGroups } from "../lib/railTypes.ts";
+
+export interface RailProps {
+  groups: RailGroups;
+  /** True while a search query is narrowing `groups` — every group present
+     is then guaranteed to hold at least one match, so all of them are
+     forced open instead of leaving a result hidden behind a group the user
+     collapsed earlier. */
+  searching?: boolean;
+  /** Mirror the current section into location.hash (deep-link section sync,
+     ported from preview/src/App.jsx's scrollspy). True only for the visible
+     tab's Rail — inactive tabs stay forceMounted (display:none) where every
+     rect measures ~0 and the scan would report a bogus first section — and
+     only after App's initial #hash restore, so the first scan can't clobber
+     a deep link before it lands. */
+  syncSection?: boolean;
+}
+
+/** Sidebar content: shows sections grouped (collapse via Radix Accordion) and
+   tracks which section is on screen — the active link gets `aria-current` plus
+   a sliding highlight, and its group opens automatically if the user had
+   collapsed it. The frame that scrolls it is owned once by Shell
+   (RailFrame.tsx); this component renders inside it and finds that scroller to
+   measure the indicator, so no tab can bring a second one. */
+export default function Rail({ groups, searching = false, syncSection = false }: RailProps) {
+  // Memoized so `searching` mode (which uses this array as-is, see below)
+  // doesn't hand Accordion/useLayoutEffect a new array identity every render.
+  const labels = useMemo(() => groups.map(([label]) => label), [groups]);
+  // Every group open by default. Not persisted: a fresh session always starts here.
+  const [openGroups, setOpenGroups] = useState<string[]>(() => labels);
+  // Groups that appear later (systems load async, schema/gallery switch)
+  // start open too; only a group the user has seen and collapsed stays shut.
+  const seenLabels = useRef(new Set(labels));
+  useEffect(() => {
+    const fresh = labels.filter((l) => !seenLabels.current.has(l));
+    if (!fresh.length) return;
+    for (const l of fresh) seenLabels.current.add(l);
+    setOpenGroups((current) => [...current, ...fresh.filter((l) => !current.includes(l))]);
+  }, [labels]);
+
+  const linkIds = useMemo(() => groups.flatMap(([, links]) => links.map((l) => l.id)), [groups]);
+  // pinTo: clicking a link owns the highlight until the user's next own
+  // scroll (see lib/scrollspy.ts) — the observer can't follow a click to a
+  // demo that can never scroll up into its band (e.g. the last child).
+  const [activeId, pinTo] = useScrollSpy(linkIds);
+
+  // A collapsed group must never hide the section scrollspy just marked active.
+  useEffect(() => {
+    if (!activeId) return;
+    const owner = groups.find(([, links]) => links.some((l) => l.id === activeId))?.[0];
+    if (owner)
+      setOpenGroups((current) => (current.includes(owner) ? current : [...current, owner]));
+  }, [activeId, groups]);
+
+  // Deep-link section sync via replaceState — no history entry per scroll,
+  // and the querystring half of the URL is preserved (App owns that half).
+  useEffect(() => {
+    if (syncSection && activeId) writeSectionHash(activeId);
+  }, [syncSection, activeId]);
+
+  const effectiveOpenGroups = searching ? labels : openGroups;
+
+  // Sliding highlight behind the active link, measured in the rail's own
+  // content-space (viewport delta + scrollTop) so it scrolls natively with
+  // the rail instead of needing a scroll listener. The scroll element is the
+  // shared RailFrame scroller, found from this content's own node — Rail no
+  // longer owns it, so it must not query by id/class at document scope.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [indicator, setIndicator] = useState<{ top: number; height: number } | null>(null);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const rail = rootRef.current?.closest<HTMLElement>(".app-rail-inner") ?? null;
+      const link =
+        activeId && rail?.querySelector<HTMLAnchorElement>(`a[href="#${CSS.escape(activeId)}"]`);
+      if (!rail || !link || !link.getClientRects().length) {
+        setIndicator(null);
+        return;
+      }
+      const railRect = rail.getBoundingClientRect();
+      const linkRect = link.getBoundingClientRect();
+      setIndicator({ top: linkRect.top - railRect.top + rail.scrollTop, height: linkRect.height });
+    };
+    measure();
+    const raf = requestAnimationFrame(measure); // after this paint settles (collapse/filter reflow)
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", measure);
+    };
+  }, [activeId, effectiveOpenGroups]);
+
+  return (
+    <>
+      {indicator && (
+        <span
+          className="app-rail-indicator"
+          style={{ top: indicator.top, height: indicator.height }}
+          aria-hidden="true"
+        />
+      )}
+      <Accordion.Root
+        ref={rootRef}
+        type="multiple"
+        value={effectiveOpenGroups}
+        onValueChange={setOpenGroups}
+      >
+        {groups.map(([label, links]) => (
+          <Accordion.Item key={label} value={label} className="app-rail-group">
+            <Accordion.Header>
+              <Accordion.Trigger className="app-rail-group-label">
+                <Icon name="chevronDown" size={11} className="app-rail-group-chevron" />
+                <span>{label}</span>
+                <span className="app-rail-count">{links.length}</span>
+              </Accordion.Trigger>
+            </Accordion.Header>
+            <Accordion.Content className="app-rail-group-items">
+              {links.map((l) => (
+                <a
+                  key={l.id}
+                  href={`#${l.id}`}
+                  className="app-rail-link"
+                  aria-current={l.id === activeId ? "true" : undefined}
+                  onClick={() => pinTo(l.id)}
+                >
+                  {l.label}
+                </a>
+              ))}
+            </Accordion.Content>
+          </Accordion.Item>
+        ))}
+      </Accordion.Root>
+    </>
+  );
+}

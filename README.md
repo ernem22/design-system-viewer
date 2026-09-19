@@ -41,6 +41,11 @@ shareable link.
 - `src/server/` — static server + `/api/systems`
 - `src/viewer/` — the Tokens tab
 - `preview/` — the React/Radix app (Preview + Compare)
+- `app/` — the React/TS migration app (`refactor/full-react-migration` branch);
+  see `app/CLAUDE.md` for its code style
+- `ORCHESTRATION.md` — source of truth for the Hermes/Orca autonomous worker
+  pipeline (Coder/Reviewer/Tester/PR) that develops `app/`; read this before
+  spawning or resuming any orchestration run
 
 ## Limits
 

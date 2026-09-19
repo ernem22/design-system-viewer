@@ -1,0 +1,339 @@
+/* Tokens toolbar: filter, show-missing, schema toggle, export/delete. */
+
+.tok-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.tok-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.tok-filter-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.tok-search-ico {
+  position: absolute;
+  left: var(--space-3);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.tok-filter {
+  height: var(--space-8);
+  padding-left: var(--space-8);
+  padding-right: var(--space-8);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-md);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font-size: var(--font-size-sm);
+  min-width: 220px;
+}
+
+.tok-filter::placeholder {
+  color: var(--color-input-placeholder);
+}
+
+.tok-filter-clear {
+  position: absolute;
+  right: var(--space-2);
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-lg);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 var(--space-1);
+}
+
+.tok-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tok-check {
+  appearance: none;
+  margin: 0;
+  width: var(--space-4);
+  height: var(--space-4);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-input-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.tok-check[data-state="checked"] {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.tok-check-indicator {
+  display: flex;
+  color: var(--color-on-accent);
+}
+
+.tok-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.tok-btn {
+  height: var(--space-8);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tok-btn:hover {
+  border-color: var(--color-border-strong);
+}
+
+.tok-btn[data-state="on"] {
+  background: var(--color-accent-subtle);
+  border-color: var(--color-accent-border);
+}
+
+.tok-btn-danger {
+  color: var(--color-danger);
+}
+
+.tok-menu {
+  min-width: 200px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-overlay);
+  padding: var(--space-1);
+  box-shadow: var(--shadow-md);
+  z-index: var(--z-modal);
+  /* long previews (missing list, warnings) must scroll, not overflow */
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.tok-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.tok-menu-item code {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.tok-menu-item[data-highlighted] {
+  background: var(--color-accent-subtle);
+}
+
+.tok-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--color-hover-overlay);
+  z-index: var(--z-overlay);
+}
+
+.tok-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(420px, 92vw);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-overlay);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-md);
+  z-index: var(--z-modal);
+  /* long previews (missing list, warnings) must scroll, not overflow */
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.tok-dialog-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+.tok-dialog-desc {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.tok-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* Shared Add-dialog language (AddSystemDialog + TokenDialog): wide layout,
+   name/css fields, live preview and row/error helpers. The .tok-dialog +
+   overlay/title/desc/actions primitives above stay the single base. */
+
+.tok-dialog-wide {
+  width: min(560px, 94vw);
+}
+
+.tok-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.tok-input,
+.tok-textarea {
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-md);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font-size: var(--font-size-sm);
+  padding: var(--space-2) var(--space-3);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tok-textarea {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  resize: vertical;
+}
+
+.tok-dialog-meta {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.tok-dialog-error {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+}
+
+.tok-btn-primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.tok-dialog-preview {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.tok-dialog-preview .ok {
+  color: var(--color-success);
+}
+
+.tok-dialog-preview .warn {
+  color: var(--color-warning);
+}
+
+.tok-dialog-preview details {
+  margin-top: var(--space-2);
+}
+
+.tok-dialog-preview summary {
+  cursor: pointer;
+  font-weight: var(--font-weight-medium);
+}
+
+.tok-dialog-preview code {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-warning);
+  margin-inline-end: var(--space-2);
+}
+
+.tok-dialog-row {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.tok-dialog-grp {
+  margin-top: var(--space-2);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.tok-source {
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.tok-source-url {
+  flex: 1;
+  min-width: 0;
+}
+
+.tok-segment {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-inline-end: auto;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.tok-seg {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.tok-seg-item {
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+}
+
+.tok-seg-item[data-state="on"] {
+  background: var(--color-accent-subtle);
+  color: var(--color-text);
+}

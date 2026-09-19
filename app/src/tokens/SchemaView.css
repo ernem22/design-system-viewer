@@ -1,0 +1,22 @@
+/* Schema checklist: layout + ✓/✗ cells. Group/table/empty primitives shared
+   with TokenGroup.tsx/rows.tsx live in TokenGroup.css. */
+
+.tok-schema {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.tok-yes {
+  color: var(--color-success);
+}
+
+.tok-no {
+  color: var(--color-danger);
+}
+
+.tok-missing-inline {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  margin-left: var(--space-2);
+}

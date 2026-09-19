@@ -1,0 +1,80 @@
+.app-welcome {
+  max-width: 560px;
+  margin: 10vh auto 0;
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.app-welcome h2 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-lg);
+  color: var(--color-text);
+}
+
+.app-welcome p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.app-welcome code {
+  font-family: var(--font-mono);
+}
+
+.app-welcome-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-5) 0 var(--space-4);
+}
+
+.app-welcome-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-5) var(--space-4);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.app-welcome-card:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.app-welcome-card b {
+  color: var(--color-text);
+}
+
+.app-welcome-card svg {
+  color: var(--color-accent);
+}
+
+.app-welcome-hint {
+  color: var(--color-text-muted);
+}
+
+.app-drop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--color-hover-overlay);
+  z-index: var(--z-overlay);
+  pointer-events: none;
+}
+
+.app-drop-box {
+  padding: var(--space-6) var(--space-8);
+  border: 2px dashed var(--color-accent);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-overlay);
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
