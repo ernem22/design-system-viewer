@@ -16,30 +16,54 @@ function system(slug: string, name = slug): DesignSystem {
   return { slug, name, css: "", groups: [], createdAt: "", updatedAt: "" };
 }
 
+/** Issue #22: a system that ships a dark variant overriding one of its two
+    group tokens, so a resolved-for-dark read is distinguishable from light. */
+function darkSystem(): DesignSystem {
+  return {
+    slug: "aurora",
+    name: "Aurora",
+    css: ":root { --color-bg: #f8fafc; --color-accent: #6366f1; }",
+    groups: [
+      {
+        id: "surface",
+        label: "Surface / Elevation",
+        kind: "color",
+        tokens: [
+          { name: "--color-bg", value: "#f8fafc" },
+          { name: "--color-accent", value: "#6366f1" },
+        ],
+      },
+    ],
+    themes: { dark: [{ name: "--color-bg", value: "#0a0f1c" }] },
+    createdAt: "",
+    updatedAt: "",
+  };
+}
+
 const firstTwo = ["aurora", "chatgpt"];
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 let view: CompareViewModel | null = null;
 
-function Harness({ systems }: { systems: DesignSystem[] }) {
-  view = useCompareView(systems);
+function Harness({ systems, dark = false }: { systems: DesignSystem[]; dark?: boolean }) {
+  view = useCompareView(systems, dark);
   return null;
 }
 
-async function mount(systems: DesignSystem[]): Promise<void> {
+async function mount(systems: DesignSystem[], dark = false): Promise<void> {
   const { createRoot } = await import("react-dom/client");
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => {
-    root!.render(<Harness systems={systems} />);
+    root!.render(<Harness systems={systems} dark={dark} />);
   });
 }
 
-async function rerender(systems: DesignSystem[]): Promise<void> {
+async function rerender(systems: DesignSystem[], dark = false): Promise<void> {
   await act(async () => {
-    root!.render(<Harness systems={systems} />);
+    root!.render(<Harness systems={systems} dark={dark} />);
   });
 }
 
@@ -100,5 +124,37 @@ describe("useCompareView default selection", () => {
 
     await rerender([system("aurora"), system("chatgpt"), system("claude")]);
     expect(view!.picked).toEqual(firstTwo);
+  });
+});
+
+describe("useCompareView dark variant (#22)", () => {
+  it("resolves styleFor to the light value when dark is off", async () => {
+    await mount([darkSystem()]);
+    expect(view!.styleFor.get("aurora")?.["--color-bg"]).toBe("#f8fafc");
+  });
+
+  it("resolves styleFor to the dark override when dark is on", async () => {
+    await mount([darkSystem()], true);
+    expect(view!.styleFor.get("aurora")?.["--color-bg"]).toBe("#0a0f1c");
+  });
+
+  it("overlays dark per token, leaving non-overridden tokens light", async () => {
+    await mount([darkSystem()], true);
+    expect(view!.styleFor.get("aurora")?.["--color-accent"]).toBe("#6366f1");
+  });
+
+  it("feeds the diff table's groups the dark override when dark is on", async () => {
+    await mount([darkSystem()], true);
+    const token = view!.cols[0]?.groups
+      .flatMap((g) => g.tokens)
+      .find((t) => t.name === "--color-bg");
+    expect(token?.value).toBe("#0a0f1c");
+  });
+
+  it("never mutates the stored system when overlaying dark", async () => {
+    const sys = darkSystem();
+    await mount([sys], true);
+    expect(sys.groups[0]?.tokens[0]?.value).toBe("#f8fafc");
+    expect(sys.themes?.dark?.[0]?.value).toBe("#0a0f1c");
   });
 });
