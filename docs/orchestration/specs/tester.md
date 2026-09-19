@@ -55,8 +55,26 @@ build: <asset hash served on :PORT>
 observed: <...>
 before: <...>
 
-THEN POST A VERDICT BLOCK AS A PR COMMENT — the merge gate is computed by GitHub from
-comments, not from the coordinator reading your message:
+**Reporting is the last step and the one that wedges workers, so make it boring.** Write the
+body to a file, then pass the file — never fight the shell over multi-line quoting:
+
+    cat > /tmp/body.txt <<'EOF'
+    status: pass
+    role: tester
+    task: <task id>
+    commit: n/a
+    tests: n/a
+    build: <asset hash>
+    observed: <...>
+    before: <...>
+    EOF
+    # bash:  orca orchestration send ... --body "$(cat /tmp/body.txt)"
+    # if the body cannot be passed whole (a shell that eats newlines), send a ONE-LINE
+    # body with just `status: <x> role: tester task: <id> build: <hash>` and put the
+    # detail in a PR comment instead: `gh pr comment <n> --body-file /tmp/detail.md`.
+    # A one-line verdict that lands beats a perfect multi-line one that never does.
+
+Then post the verdict block as a PR comment, which is what the merge gate reads:
 
     gh pr comment <n> --body "$(printf '```dsv-verdict\nstatus: pass\nrole: tester\ncommit: %s\nbuild: %s\n```\n' "$(git rev-parse --short HEAD)" "<the asset hash you served>")"
 

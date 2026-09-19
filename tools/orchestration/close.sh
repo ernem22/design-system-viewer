@@ -30,9 +30,17 @@ for pr in $(gh pr list --repo "$REPO" --state open --json number --jq '.[].numbe
   # compile against the API main has since moved to (this happened twice — a test written
   # against a newer `useTokensView` signature landed on a branch that still had the old
   # one). Report it here, before anyone dispatches a Tester.
-  behind=$(git rev-list --count "$head".."origin/$BASE" 2>/dev/null || echo 0)
+  #
+  # Compare against the PR's OWN base, never the pipeline's. A PR opened against the repo's
+  # default branch (`main`) instead of the pipeline base shows a diff of the entire
+  # migration — 245 files where the real change is 3 — and against `$BASE` it merely looks
+  # "1 commit behind", so the wrong comparison hides the fault instead of reporting it.
+  prbase=$(gh pr view "$pr" --repo "$REPO" --json baseRefName --jq .baseRefName 2>/dev/null)
+  [ -z "$prbase" ] && prbase="$BASE"
+  behind=$(git rev-list --count "$head".."origin/$prbase" 2>/dev/null || echo 0)
   note=""
-  [ "${behind:-0}" -gt 0 ] && note=" [BEHIND $BASE by $behind commits — rebase before the next wave]"
+  [ "${behind:-0}" -gt 0 ] && note=" [BEHIND $prbase by $behind commits — rebase before the next wave]"
+  [ "$prbase" != "$BASE" ] && note="$note [WRONG BASE: this PR targets $prbase; the pipeline merges into $BASE]"
 
   case "$gate" in
     success*)

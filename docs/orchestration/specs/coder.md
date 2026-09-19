@@ -31,9 +31,15 @@ EVIDENCE — run all of these and paste the real numbers into the PR body:
     and paste its failing assertion.
   - Anything you could not run, in a `## Not verified` section — no guessing.
 
-DELIVERY: commit with a `[coder]` prefix in the subject, push your branch, open a
-PR against `refactor/full-react-migration` titled
-`[coder] <fix|feat|perf>(app): <what changed> (#<n>)`, and label the issue
+DELIVERY: commit with a `[coder]` prefix in the subject, push your branch, then open the
+PR with the base PINNED. Never let it default: the repo's default branch is `main`, which
+is NOT the pipeline's base, and a PR that defaults there drags the whole migration into it
+(one did, and the diff was 245 files instead of 3).
+
+    gh pr create --base refactor/full-react-migration \
+      --title "[coder] <fix|feat|perf>(app): <what changed> (#<n>)" --body-file <file>
+
+Title format `[coder] <fix|feat|perf>(app): <what changed> (#<n>)`, and label the issue
 `needs-review`. Do not merge, do not close the issue, do not approve anything.
 
 OBSERVABLE ACCEPTANCE — your worker_done body must start with exactly:
@@ -58,6 +64,13 @@ about to run carries all of:
     --outcome=succeeded          (equals sign; the space form is rejected)
     --files-modified <csv>
     --dispatch-capability <token from your preamble>
+
+**Push to the PR's own branch, never a new one.** A commit sitting on
+`<role>/<something>` instead of the branch the PR tracks leaves the PR at its old head:
+the coordinator sees the old commit, the review and test waves run against code that does
+not contain your fix, and your report looks correct while the change is invisible. The
+branch is named in your spec; push with `git push origin HEAD:<that branch>` and say in
+your report which branch you pushed to.
 
 TWO OPERATIONAL RULES, both learned from a real failure:
   - **`--outcome=succeeded`, with the equals sign.** The space form

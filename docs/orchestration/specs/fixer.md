@@ -58,3 +58,18 @@ then reaches the coordinator only as a rejection echo — no settlement, no verd
 Check the command carries `--task-id`, `--dispatch-id`, `--outcome=succeeded`
 (equals sign; the space form is rejected), `--files-modified <csv>` and the
 capability token.
+
+**Push to the PR's own branch, never a new one.** A fixer that commits onto
+`<role>/<something>` leaves the PR at its old head: the re-review and re-test then run
+against code without the fix, and the report looks correct while the change is invisible.
+The branch is named in your spec; push with `git push origin HEAD:<that branch>` and say
+in your report which branch you pushed to.
+
+**Verify it landed before you report** — this is the check, not a courtesy:
+
+    git ls-remote origin refs/heads/<that branch>     # must show your commit's sha
+
+A commit that only exists in your worktree, or on a branch nobody tracks, is invisible to
+every gate: the PR keeps its old head, the coordinator's merge attempt is refused, and the
+work is re-done by someone else. It happened three times in one session, so it is the
+last thing you do before sending `worker_done`.
