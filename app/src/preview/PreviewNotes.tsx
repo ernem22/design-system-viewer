@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { parseTokens } from "../../../src/core/parse.js";
 import { coverage } from "../../../src/core/schema.js";
 import { fontFamiliesIn } from "../lib/fonts.ts";
+import { Welcome } from "../shell/Welcome.tsx";
 import type { DesignSystem, Token } from "../systems/store.ts";
 import type { CoverageInfo } from "../tokens/useTokensView.ts";
 
@@ -68,12 +69,60 @@ function FontNote({ css }: { css: string }) {
   );
 }
 
-export function PreviewNotes({ system }: { system: DesignSystem | null }) {
-  if (!system) return null;
+function noop(): void {}
+
+/** Zero-systems Preview state: reuses the app's existing empty-state chrome
+   (shell/Welcome.tsx, the same paste/upload affordances the Tokens tab shows)
+   rather than inventing a Preview-only look. */
+function PreviewEmpty({ onPaste, onUpload }: { onPaste: () => void; onUpload: () => void }) {
+  return <Welcome onPaste={onPaste} onUpload={onUpload} />;
+}
+
+/** Load-failure notice, distinct from the empty state. The message is the
+   legacy viewer's report (preview/src/App.jsx:411) verbatim — the reason is
+   the one the systems load already carries, not a string invented here. Like
+   legacy it is a *notice*: the seed fallback keeps rendering the gallery with
+   its tokens, and this says what happened on the way there. */
+function PreviewError({ error }: { error: string }) {
+  return (
+    <div className="dsv-err" role="alert">
+      Failed to load system ({error}). Components shown with fallback tokens.
+    </div>
+  );
+}
+
+/**
+ * Preview's load states. While the index is in flight: a loading placeholder.
+ * When the load failed: the failure notice, then the schema/font notes for
+ * whatever fallback system is active (the gallery below keeps rendering with
+ * the seed's tokens, matching legacy). With zero systems and no failure: the
+ * app's empty state, which App shows without the gallery.
+ */
+export function PreviewNotes({
+  system,
+  loading = false,
+  error = null,
+  onPaste = noop,
+  onUpload = noop,
+}: {
+  system: DesignSystem | null;
+  loading?: boolean;
+  error?: string | null;
+  onPaste?: () => void;
+  onUpload?: () => void;
+}) {
+  if (loading) return <p className="app-placeholder app-loading">Loading systems…</p>;
   return (
     <>
-      <SchemaNote css={system.css} />
-      <FontNote css={system.css} />
+      {error && <PreviewError error={error} />}
+      {system ? (
+        <>
+          <SchemaNote css={system.css} />
+          <FontNote css={system.css} />
+        </>
+      ) : (
+        !error && <PreviewEmpty onPaste={onPaste} onUpload={onUpload} />
+      )}
     </>
   );
 }
