@@ -10,14 +10,17 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { tokensForDemo } from "../lib/tokenUsage.ts";
 import {
   ALL_TOKENS,
-  clearAllSwaps,
+  clearAll,
   clearSwap,
   clearSwapsIn,
+  clearValueEdit,
   demoId,
   kindOf,
   openScope,
+  scopeStyleFor,
   selectScope,
   setSwap,
+  setValueEdit,
   useInspector,
 } from "../lib/tokenOverrides.ts";
 import type { TokenKind } from "../lib/tokenOverrides.ts";
@@ -98,20 +101,22 @@ function SwapPicker({
   );
 }
 
-/** Inline "change what this token equals" editor — global, edits the token
-    itself via patchToken. Draft commits on blur/Enter (Esc cancels), matching
-    the Tokens tab InlineEditor; the color input commits each pick. */
+/** Inline "change what this token equals" editor — global, but a Preview
+    what-if: draft commits to the ephemeral override layer (Esc cancels),
+    never through patchToken into the stored system (#27). The color input
+    commits each pick. A saved override is what makes the row's "edited"
+    badge appear; Reset (both layers) reverts it. */
 function ValueEditor({
   name,
   value,
-  onSave,
+  onSetValueEdit,
 }: {
   name: string;
   value: string;
-  onSave: (name: string, value: string) => void;
+  onSetValueEdit: (name: string, value: string) => void;
 }) {
   const [draft, setDraft] = useState(value);
-  // A patch from anywhere (this editor's own save included) refreshes the
+  // A change from anywhere (this editor's own commit included) refreshes the
   // draft, so a reopened or externally-changed value never shows stale text.
   useEffect(() => {
     setDraft(value);
@@ -119,7 +124,7 @@ function ValueEditor({
 
   const commit = (v: string) => {
     const trimmed = v.trim();
-    if (trimmed && trimmed !== value) onSave(name, trimmed);
+    if (trimmed && trimmed !== value) onSetValueEdit(name, trimmed);
   };
 
   return (
@@ -129,7 +134,7 @@ function ValueEditor({
           type="color"
           className="dsv-token-color-input"
           value={hexOf(value)}
-          onChange={(e) => onSave(name, e.target.value)}
+          onChange={(e) => onSetValueEdit(name, e.target.value)}
           aria-label={`${name} color picker`}
         />
       )}
@@ -161,17 +166,19 @@ function TokenRow({
   scopeId,
   name,
   valueOf,
-  onPatch,
 }: {
   scopeId: string;
   name: string;
   valueOf: (token: string) => string;
-  onPatch: (name: string, value: string) => void;
 }) {
-  const { swaps } = useInspector();
+  const { swaps, valueEdits } = useInspector();
   const [mode, setMode] = useState<"swap" | "edit" | null>(null); // null | "swap" | "edit"
   const swappedTo = swaps[scopeId]?.[name];
-  const value = swappedTo ? valueOf(swappedTo) : valueOf(name);
+  const isValueEdited = name in valueEdits;
+  // Swap-first (legacy valueInDemo): a swapped token reads the source's
+  // resolved value; a value edit on the swapped-away target does not override
+  // the redirect, while the source still resolves through the value-edit layer.
+  const value = valueOf(swappedTo ?? name);
 
   return (
     <div className="dsv-token-row">
@@ -194,6 +201,19 @@ function TokenRow({
         ) : (
           <span className="dsv-token-row-value" title={value}>
             {shortValue(value)}
+          </span>
+        )}
+        {isValueEdited && (
+          <span className="dsv-token-row-edited" title={`${name} value overridden — affects every use of this token`}>
+            edited
+            <button
+              type="button"
+              className="dsv-token-row-undo"
+              title={`Revert ${name}'s value`}
+              onClick={() => clearValueEdit(name)}
+            >
+              <Icon name="x" size={10} />
+            </button>
           </span>
         )}
         <span className="dsv-token-row-actions">
@@ -223,7 +243,7 @@ function TokenRow({
           }}
         />
       )}
-      {mode === "edit" && <ValueEditor name={name} value={valueOf(name)} onSave={onPatch} />}
+      {mode === "edit" && <ValueEditor name={name} value={valueOf(name)} onSetValueEdit={setValueEdit} />}
     </div>
   );
 }
@@ -289,12 +309,10 @@ function ScopePanelBody({
   scopeId,
   tokens,
   valueOf,
-  onPatch,
 }: {
   scopeId: string;
   tokens: string[];
   valueOf: (token: string) => string;
-  onPatch: (name: string, value: string) => void;
 }) {
   const { swaps } = useInspector();
   const groups = useMemo(() => {
@@ -323,7 +341,7 @@ function ScopePanelBody({
           <div key={kind} className="dsv-drawer-group">
             <div className="dsv-drawer-group-label">{KIND_LABEL[kind]}</div>
             {names.map((name) => (
-              <TokenRow key={name} scopeId={scopeId} name={name} valueOf={valueOf} onPatch={onPatch} />
+              <TokenRow key={name} scopeId={scopeId} name={name} valueOf={valueOf} />
             ))}
           </div>
         ))}
@@ -333,19 +351,18 @@ function ScopePanelBody({
 }
 
 /** Docked right-panel content and mobile dialog body: the selected scope's
-    tokens, or the empty state when nothing is selected. Value edits write
-    through App's patchToken (persistent system edits); swaps stay ephemeral
-    in the inspector store. */
+    tokens, or the empty state when nothing is selected. Both edits are
+    EPHEMERAL here (value overrides + scoped swaps) — nothing reaches the
+    stored system; the Tokens tab's inline editor is the persistent path. */
 export function ScopePanel({
   valueOf,
-  onPatch,
   inDialog = false,
 }: {
   valueOf: (token: string) => string;
-  onPatch: (name: string, value: string) => void;
   inDialog?: boolean;
 }) {
-  const { selected, swaps } = useInspector();
+  const { selected, swaps, valueEdits } = useInspector();
+  const valueEditCount = Object.keys(valueEdits).length;
   if (!selected) {
     const totalSwaps = Object.values(swaps).reduce((n, demo) => n + Object.keys(demo).length, 0);
     return (
@@ -363,6 +380,20 @@ export function ScopePanel({
               Click a component&apos;s <b>token count badge</b> to inspect its tokens here.
             </p>
           </div>
+          {valueEditCount > 0 && (
+            <div className="dsv-drawer-group">
+              <div className="dsv-drawer-group-label">
+                Value overrides ({valueEditCount})
+              </div>
+              <button
+                type="button"
+                className="dsv-drawer-reset dsv-drawer-reset--inline"
+                onClick={() => Object.keys(valueEdits).forEach(clearValueEdit)}
+              >
+                Revert all value overrides
+              </button>
+            </div>
+          )}
           {totalSwaps > 0 && (
             <div className="dsv-drawer-group">
               <div className="dsv-drawer-group-label">
@@ -371,7 +402,7 @@ export function ScopePanel({
               <button
                 type="button"
                 className="dsv-drawer-reset dsv-drawer-reset--inline"
-                onClick={clearAllSwaps}
+                onClick={clearAll}
               >
                 Reset all swaps
               </button>
@@ -389,7 +420,7 @@ export function ScopePanel({
         inDialog={inDialog}
         onClose={() => selectScope(null)}
       />
-      <ScopePanelBody scopeId={selected.id} tokens={selected.tokens} valueOf={valueOf} onPatch={onPatch} />
+      <ScopePanelBody scopeId={selected.id} tokens={selected.tokens} valueOf={valueOf} />
     </>
   );
 }
@@ -440,21 +471,17 @@ export function SectionScopeTrigger({
 
 /** Inline style scoping a component's token swaps to its own subtree —
     each swap becomes `target: var(source)` on the Demo node, so only that
-    node's descendants pick it up via inheritance. */
+    node's descendants pick it up via inheritance. Swap-first: a value edit on
+    the source shows through the `:root` override (see scopeStyleFor). */
 export function useScopeStyle(title: string): CSSProperties | undefined {
   return useSectionScopeStyle(demoId(title));
 }
 
 /** Section-level twin, keyed by gallery entry id — applied on the
     GallerySection node so screen swaps inherit across the whole Body
-    without leaking into sibling sections. */
+    without leaking into sibling sections. `var(source)` always; a value edit
+    on the source shows through the `:root` document override it mirrors. */
 export function useSectionScopeStyle(id: string): CSSProperties | undefined {
   const { swaps } = useInspector();
-  return useMemo(() => {
-    const scope = swaps[id];
-    if (!scope || Object.keys(scope).length === 0) return undefined;
-    return Object.fromEntries(
-      Object.entries(scope).map(([target, source]) => [target, `var(${source})`]),
-    ) as CSSProperties;
-  }, [swaps, id]);
+  return useMemo(() => scopeStyleFor(swaps, id), [swaps, id]);
 }

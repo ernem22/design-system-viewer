@@ -13,7 +13,7 @@ import { readCssFile, useCssFileDrop } from "./lib/cssImport.ts";
 import { useGoogleFonts } from "./lib/googleFonts.ts";
 import { Icon } from "./lib/icons.tsx";
 import { useToasts } from "./lib/toasts.ts";
-import { clearAllSwaps, useInspector } from "./lib/tokenOverrides.ts";
+import { clearAll, countOverrides, useInspector } from "./lib/tokenOverrides.ts";
 import { useSystems, resolveSystemTokens } from "./systems/store.ts";
 import { usePanelOpen } from "./lib/panelStorage.ts";
 import SystemSwitcher from "./systems/SystemSwitcher.tsx";
@@ -185,12 +185,12 @@ function App() {
 
   // Selecting a component's token badge with the panel closed would look
   // like a dead click — selecting always reveals the panel (legacy).
-  const { selected: inspected, swaps } = useInspector();
-  const inspectedId = inspected?.id;
+  const inspector = useInspector();
+  const inspectedId = inspector.selected?.id;
   useEffect(() => {
     if (inspectedId) revealProps();
   }, [inspectedId, revealProps]);
-  const swapCount = Object.values(swaps).reduce((n, m) => n + Object.keys(m).length, 0);
+  const overrideCount = countOverrides(inspector);
 
   // Dynamic Google Fonts, scoped per consumer (issue #40): the active system's
   // families serve Tokens/Preview, Compare owns its picked columns'. Each scope
@@ -299,7 +299,7 @@ function App() {
           {COMPONENT_ENTRIES.map((entry) => (
             <GallerySection key={entry.id} {...entry} hidden={shownEntries ? !shownEntries.has(entry.id) : false} />
           ))}
-          <PreviewScopeDialog system={active} onPatch={handlePatch} dark={darkOn} />
+          <PreviewScopeDialog system={active} dark={darkOn} />
         </>
       ) : (
         <PreviewNotes
@@ -320,7 +320,7 @@ function App() {
       ),
       propsPanel: (
         <Props open={propsOpen}>
-          <PreviewProps system={active} onPatch={handlePatch} dark={darkOn} />
+          <PreviewProps system={active} dark={darkOn} />
         </Props>
       ),
     },
@@ -364,14 +364,14 @@ function App() {
           }
           actions={
             <>
-              {tab === "preview" && swapCount > 0 && (
+              {tab === "preview" && overrideCount > 0 && (
                 <button
                   type="button"
                   className="app-pill"
-                  onClick={clearAllSwaps}
-                  title="Reset every scoped token swap"
+                  onClick={clearAll}
+                  title="Reset every Preview token edit (values and swaps)"
                 >
-                  {swapCount} swap{swapCount === 1 ? "" : "s"}
+                  {overrideCount} edit{overrideCount === 1 ? "" : "s"}
                   <span className="app-pill-reset">Reset</span>
                 </button>
               )}
