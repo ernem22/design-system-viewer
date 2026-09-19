@@ -1,0 +1,96 @@
+/* Forms section — checkbox/radio/switch/slider/select/toggle controls plus
+   input adornment/state variants. Ported from preview/src/styles/components.css. */
+
+.dsv-control-label { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm); }
+.dsv-control-label--disabled { opacity: var(--opacity-disabled); }
+
+.dsv-input-wrap { position: relative; display: flex; align-items: center; }
+.dsv-input-wrap .dsv-input { flex: 1; }
+.dsv-adorn { position: absolute; color: var(--color-text-muted); font-size: var(--font-size-sm); display: inline-flex; pointer-events: none; }
+.dsv-adorn--prefix { left: var(--space-3); }
+.dsv-adorn--suffix { right: var(--space-3); }
+.dsv-input-wrap--prefix .dsv-input { padding-left: var(--space-8); }
+.dsv-input-wrap--suffix .dsv-input { padding-right: var(--space-12); }
+.dsv-input--success { border-color: var(--color-success-border); }
+.dsv-counter { font-size: var(--font-size-xs); color: var(--color-text-muted); font-family: var(--font-mono); }
+.dsv-input--inset { box-shadow: var(--shadow-inner); background: var(--color-surface-sunken); }
+.dsv-input--themed {
+  background: var(--color-input-bg); border-color: var(--color-input-border); color: var(--color-input-text);
+}
+.dsv-input--themed::placeholder { color: var(--color-input-placeholder); }
+.dsv-input--themed:hover:not(:disabled) { background: var(--color-input-bg-hover); border-color: var(--color-input-border-hover); }
+.dsv-input--themed:disabled { background: var(--color-input-bg-disabled); }
+.dsv-input--themed:focus-visible { border-color: var(--color-input-border-focus); }
+.dsv-input--themed[aria-invalid="true"] { border-color: var(--color-input-border-error); }
+
+.dsv-disabled-box {
+  background: var(--color-surface-disabled);
+  border: var(--border-width-thin) solid var(--color-border-disabled);
+  border-radius: var(--radius-md); padding: var(--space-4);
+  color: var(--color-icon-disabled); min-width: var(--space-56);
+}
+.dsv-disabled-box--dim { opacity: var(--opacity-disabled); }
+.dsv-disabled-box-note { font-size: var(--font-size-xs); margin-top: var(--space-1); }
+
+.dsv-check {
+  width: var(--size-icon-md); height: var(--size-icon-md);
+  border: var(--border-width-thin) solid var(--color-border-strong);
+  border-radius: var(--radius-sm); background: var(--color-surface);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--color-on-accent); flex: none;
+}
+.dsv-check[data-state="checked"], .dsv-check[data-state="indeterminate"] { background: var(--color-accent); border-color: var(--color-accent); }
+.dsv-check[data-disabled] { opacity: 0.5; }
+.dsv-radio {
+  width: var(--size-icon-md); height: var(--size-icon-md); border-radius: var(--radius-full);
+  border: var(--border-width-thin) solid var(--color-border-strong);
+  background: var(--color-surface); flex: none;
+}
+.dsv-radio[data-state="checked"] { border-color: var(--color-accent); }
+.dsv-radio-indicator { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; position: relative; }
+.dsv-radio-indicator::after { content: ""; width: 50%; height: 50%; border-radius: var(--radius-full); background: var(--color-accent); }
+.dsv-switch {
+  width: 40px; height: 22px; border-radius: var(--radius-full);
+  background: var(--color-border-strong); position: relative; flex: none;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.dsv-switch[data-state="checked"] { background: var(--color-accent); }
+.dsv-switch[data-disabled] { opacity: 0.5; }
+.dsv-switch-thumb {
+  display: block; width: 18px; height: 18px; border-radius: var(--radius-full);
+  background: var(--color-on-accent); box-shadow: var(--shadow-sm);
+  transform: translateX(2px); transition: transform var(--duration-fast) var(--ease-out);
+}
+.dsv-switch[data-state="checked"] .dsv-switch-thumb { transform: translateX(20px); }
+
+.dsv-slider { position: relative; display: flex; align-items: center; width: min(200px, 100%); height: var(--size-control-md); touch-action: none; user-select: none; flex: none; }
+.dsv-slider-track { position: relative; flex-grow: 1; background: var(--color-surface-sunken); border-radius: var(--radius-full); height: 4px; }
+.dsv-slider-range { position: absolute; background: var(--color-accent); border-radius: var(--radius-full); height: 100%; }
+.dsv-slider-thumb {
+  display: block; width: var(--size-icon-md); height: var(--size-icon-md);
+  background: var(--color-surface); border: var(--border-width-thick) solid var(--color-accent);
+  border-radius: var(--radius-full); box-shadow: var(--shadow-sm);
+}
+
+.dsv-select-trigger {
+  display: inline-flex; align-items: center; justify-content: space-between; gap: var(--control-icon-gap);
+  height: var(--input-height-md); min-width: min(180px, 100%); max-width: 100%; padding: 0 var(--input-padding-x);
+  font: inherit; font-size: var(--font-size-sm);
+  background: var(--color-surface); color: var(--color-input-text);
+  border: var(--input-border-width) solid var(--color-border); border-radius: var(--input-radius); cursor: pointer;
+}
+.dsv-select-content {
+  background: var(--color-surface-raised); border: var(--border-width-thin) solid var(--color-border-subtle);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); padding: var(--space-1-5);
+  z-index: var(--z-popover);
+}
+.dsv-select-item {
+  display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm);
+  padding: var(--space-1-5) var(--space-2) var(--space-1-5) var(--space-6);
+  border-radius: var(--radius-md); color: var(--color-text-secondary); cursor: pointer;
+  outline: none; user-select: none; position: relative;
+}
+.dsv-select-item[data-highlighted] { background: var(--color-accent-subtle); color: var(--color-accent-text); }
+.dsv-select-item[data-state="checked"] { color: var(--color-text); font-weight: var(--font-weight-medium); }
+.dsv-select-item-indicator { position: absolute; left: var(--space-2); display: inline-flex; }
+.dsv-select-label { padding: var(--space-1-5) var(--space-2); font-size: var(--font-size-xs); color: var(--color-text-muted); }

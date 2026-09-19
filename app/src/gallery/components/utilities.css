@@ -1,0 +1,4 @@
+/* Utilities section — everything else here reuses shared button/toolbar
+   classes from gallery.css/navigation.css; only the note text needs its own rule. */
+
+.dsv-utilities-note { font-size: var(--font-size-sm); }

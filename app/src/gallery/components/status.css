@@ -1,0 +1,83 @@
+/* Status & loading section — ported from preview/src/styles/components.css. */
+.dsv-dur-list { display: flex; flex-direction: column; gap: var(--space-2); width: 100%; max-width: 520px; }
+
+.dsv-dur-row {
+  display: flex; align-items: center; gap: var(--space-3);
+  background: var(--color-surface); border: var(--border-width-thin) solid var(--color-border-subtle);
+  border-radius: var(--radius-md); padding: var(--space-2) var(--space-3);
+}
+
+.dsv-dur-dot { width: 12px; height: 12px; flex: none; border-radius: var(--radius-full); background: var(--color-accent); animation: dsv-blink 1s var(--ease-in-out) infinite; }
+
+.dsv-dur-meta { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+
+.dsv-dur-meta strong { font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); min-width: 56px; }
+
+.dsv-dur-track {
+  flex: 1; min-width: 80px; height: 6px; border-radius: var(--radius-full);
+  background: var(--color-surface-sunken); overflow: hidden; position: relative;
+}
+
+.dsv-dur-fill {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 28px; border-radius: var(--radius-full);
+  background: var(--color-accent); animation: dsv-dur-slide 1s var(--ease-in-out) infinite alternate;
+}
+
+.dsv-blur-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-3); width: 100%; }
+
+.dsv-blur-card {
+  background: var(--color-surface); border: var(--border-width-thin) solid var(--color-border-subtle);
+  border-radius: var(--radius-lg); padding: var(--space-4);
+  display: flex; flex-direction: column; gap: var(--space-3); min-width: 0;
+}
+
+.dsv-blur-card-title { font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: var(--letter-spacing-wide); color: var(--color-text-muted); }
+
+.dsv-blur-tile-wrap { position: relative; width: 56px; height: 56px; border-radius: var(--radius-md); overflow: hidden; background: var(--color-accent-muted); border: var(--border-width-thin) solid var(--color-border-subtle); display: inline-flex; align-items: center; justify-content: center; }
+
+.dsv-blur-tile-bg { font-weight: var(--font-weight-bold); font-size: var(--font-size-lg); color: var(--color-accent-text); }
+
+.dsv-blur-tile-fg {
+  position: absolute; inset: 0; display: inline-flex; align-items: center; justify-content: center;
+  font-weight: var(--font-weight-bold); font-size: var(--font-size-lg);
+  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+  -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0);
+}
+
+.dsv-outline-chip {
+  font-size: var(--font-size-xs); font-family: var(--font-mono);
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
+  background: var(--color-surface); box-shadow: var(--shadow-outline);
+}
+
+.dsv-focus-demo:focus-visible { outline: var(--focus-ring-width) solid var(--color-focus-ring); outline-offset: var(--focus-ring-offset); box-shadow: var(--shadow-focus); }
+
+.dsv-bounce-dot--sm { width: 12px; height: 12px; animation-duration: 1s; }
+
+.dsv-bounce-dot--lg { width: 28px; height: 28px; animation-duration: 1.8s; }
+
+.dsv-skeleton { background: var(--color-surface-sunken); border-radius: var(--radius-sm); animation: dsv-pulse var(--duration-slowest) var(--ease-in-out) infinite; }
+
+.dsv-blur-sm { filter: blur(var(--blur-sm)); }
+
+.dsv-blur-md { filter: blur(var(--blur-md)); }
+
+.dsv-blur-lg { filter: blur(var(--blur-lg)); }
+
+.dsv-blur-xl { filter: blur(var(--blur-xl)); }
+
+.dsv-outline-card { box-shadow: var(--shadow-outline); border-radius: var(--radius-lg); background: var(--color-surface); padding: var(--space-4); flex-wrap: wrap; }
+
+.dsv-bounce-dot {
+  width: var(--size-icon-lg); height: var(--size-icon-lg); border-radius: var(--radius-full);
+  background: var(--color-accent-secondary);
+  animation: dsv-bounce 1.4s var(--ease-bounce) infinite;
+}
+
+.dsv-hover-fade { transition: opacity var(--motion-hover); }
+
+.dsv-hover-fade:hover { opacity: var(--opacity-hover); }
+
+.dsv-pressable { transition: transform var(--motion-press), opacity var(--motion-press); }
+
+.dsv-pressable:active { transform: scale(var(--motion-scale-active)); opacity: var(--opacity-active); }
