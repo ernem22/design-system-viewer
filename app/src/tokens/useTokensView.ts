@@ -50,6 +50,30 @@ export interface VisibleGroup {
   missing: string[];
 }
 
+/**
+ * Single source of truth for a system's token values, shared by the Tokens
+ * tab and the Preview inspector. Resolved per token in the order App feeds
+ * `:root`: `css` first (the authored source), then `groups` over the top
+ * token-by-token (groups win, so a groups/css divergence resolves to the value
+ * actually applied), then the active `themes.dark` override (what
+ * store.resolveSystemTokens adds when dark is on). Reading `css` per token
+ * instead of wholesale keeps a token authored only in `css` visible rather
+ * than dropping it. `dark` comes from the caller because the toggle lives in
+ * App; absent a caller it defaults off. Pure and read-only: no override is
+ * dropped and the store is never mutated by rendering.
+ */
+export function tokenValueMap(system: DesignSystem | null, dark = false): Map<string, string> {
+  const values = new Map<string, string>();
+  for (const t of parseTokens(system?.css ?? "") as Token[]) values.set(t.name, t.value);
+  for (const group of system?.groups ?? []) {
+    for (const t of group.tokens) values.set(t.name, t.value);
+  }
+  if (dark) {
+    for (const t of system?.themes?.dark ?? []) values.set(t.name, t.value);
+  }
+  return values;
+}
+
 /** Turkish-locale match — the old viewer used plain toLowerCase, the
    preview side already had toLocaleLowerCase("tr"); the port carries it. */
 const trLower = (s: string) => s.toLocaleLowerCase("tr");
@@ -59,7 +83,7 @@ const trLower = (s: string) => s.toLocaleLowerCase("tr");
  * are view-local (nothing here persists — the old viewer kept them in module
  * state too); systems data itself lives in systems/store.ts.
  */
-export function useTokensView(system: DesignSystem | null, pushToast: PushToast) {
+export function useTokensView(system: DesignSystem | null, pushToast: PushToast, dark = false) {
   const [filter, setFilter] = useState("");
   const [showMissing, setShowMissing] = useState(true);
   const [schemaMode, setSchemaMode] = useState(false);
@@ -78,8 +102,13 @@ export function useTokensView(system: DesignSystem | null, pushToast: PushToast)
   }, [slug]);
 
   const css = system?.css ?? "";
+  // `tokens` stays CSS-derived for coverage/lint (their documented source),
+  // but the displayed/selectable values come from the shared source of truth
+  // so SchemaView, the copy flow and Preview all agree.
   const tokens = useMemo(() => (css ? (parseTokens(css) as Token[]) : []), [css]);
-  const valueMap = useMemo(() => new Map(tokens.map((t) => [t.name, t.value])), [tokens]);
+  // `dark` is part of the key: the map overlays themes.dark when it is on, so a
+  // stale [system]-only memo would serve light values across a dark toggle.
+  const valueMap = useMemo(() => tokenValueMap(system, dark), [system, dark]);
 
   // Coverage is always computed live: stored snapshots go stale when the
   // schema grows and then silently break "Show missing" + missing rows.

@@ -58,6 +58,15 @@ describe('readViewUrl', () => {
     expect(readViewUrl('?tab=bogus').tab).toBeNull();
   });
 
+  it('maps the legacy ?tab=system deep link onto the tokens tab', () => {
+    expect(readViewUrl('?tab=system').tab).toBe('tokens');
+    expect(readViewUrl('?tab=system&sys=carbon').sys).toBe('carbon');
+  });
+
+  it('still prefers a canonical tab over the mode alias beside ?tab=system', () => {
+    expect(readViewUrl('?tab=system&mode=compare').tab).toBe('tokens');
+  });
+
   it('restores the active system, raw for the caller to validate', () => {
     expect(readViewUrl('').sys).toBeNull();
     expect(readViewUrl('?sys=carbon').sys).toBe('carbon');
@@ -152,6 +161,13 @@ describe('writeViewUrl', () => {
       view: 'diff',
       component: 'button',
     });
+  });
+
+  it('canonicalizes a legacy ?tab=system deep link away on write', () => {
+    const location = installWindowStub('?tab=system&sys=a');
+    writeViewUrl({ tab: 'tokens', sys: 'a' });
+    expect(location.search).toBe('?sys=a');
+    expect(readViewUrl(location.search).tab).toBeNull();
   });
 
   it('leaves unrelated params untouched', () => {

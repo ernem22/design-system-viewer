@@ -16,9 +16,19 @@
 # Exit 0 only with HTTP 200 and a printed asset hash.
 set -uo pipefail
 
-P="${1:?usage: serve.sh <worktree-path> <port>}"
-PORT="${2:?usage: serve.sh <worktree-path> <port>}"
+P="${1:?usage: serve.sh <worktree-path> <port> | serve.sh --stop <port>}"
+PORT="${2:?usage: serve.sh <worktree-path> <port> | serve.sh --stop <port>}"
 LOG="${LOCALAPPDATA}/Temp/preview_${PORT}.log"
+
+# A preview is started by the coordinator, OUTSIDE Orca's worktree lifecycle, so
+# reap.sh does not kill it: a reaped Tester leaves a live vite process behind. That
+# cost 800MB of RAM tonight (three orphaned previews, 176MB free, 37 node processes).
+# Every Tester reap must be followed by `serve.sh --stop <port>`.
+if [ "$P" = "--stop" ]; then
+  powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort ${PORT} -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | Sort-Object -Unique | ForEach-Object { Stop-Process -Id \$_ -Force -ErrorAction SilentlyContinue }" >/dev/null 2>&1
+  echo "STOPPED preview on port $PORT (if any)"
+  exit 0
+fi
 
 [ -d "$P/app/dist" ] || { echo "serve.sh: no build at $P/app/dist — run npm --prefix app run build first" >&2; exit 1; }
 

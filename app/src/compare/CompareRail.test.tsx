@@ -131,12 +131,20 @@ describe("CompareRail component search", () => {
     expect(el.querySelector(".cmp-rail-empty")?.textContent).toContain("No components match");
   });
 
-  it("restores the full picker when the query is cleared", async () => {
+  it("collapses the Screens group by default, like the legacy rail", async () => {
+    const el = await renderRail();
+    expect(optionLabels(el)).toContain("Button");
+    expect(optionLabels(el)).not.toContain("Login screen");
+    const labels = [...el.querySelectorAll(".app-rail-group-label")].map((l) => l.textContent ?? "");
+    expect(labels.some((l) => l.includes("Screens"))).toBe(true);
+  });
+
+  it("reveals every group while filtering, then restores the default collapse", async () => {
     const el = await renderRail();
     await type(el, "screen");
     expect(optionLabels(el)).toEqual(["Login screen"]);
     await type(el, "");
     expect(optionLabels(el)).toContain("Button");
-    expect(optionLabels(el)).toContain("Login screen");
+    expect(optionLabels(el)).not.toContain("Login screen");
   });
 });

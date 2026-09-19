@@ -68,7 +68,11 @@ function addFontLink(fam: string, scope: FontScope): void {
 }
 
 function loadFontFamilies(families: string[], scope: FontScope): void {
-  const wanted = new Map(families.map((f) => [familyHref(f), f]));
+  // family -> href, so a kept title-case retry can cancel the request that
+  // spawned it. A retry is tagged with the corrected name, not the one the
+  // caller asked for, so keying by href alone would leave the original family
+  // in `wanted` and re-add its failing URL as a second <link>.
+  const wanted = new Map<string, string>(families.map((f): [string, string] => [f, familyHref(f)]));
 
   // legacy single combined link from before — always drop it
   document.getElementById(FONT_LINK_ID)?.remove();
@@ -80,13 +84,15 @@ function loadFontFamilies(families: string[], scope: FontScope): void {
   for (const link of existing) {
     const fam = (link as HTMLLinkElement).dataset.fam;
     const href = link.getAttribute("href");
-    // keep exact-href matches AND pending title-case retries of wanted families
-    const keep =
-      (href !== null && wanted.has(href)) || (fam && [...wanted.values()].some((f) => titleCase(f) === fam));
-    if (!keep) link.remove();
-    else if (href !== null) wanted.delete(href);
+    // keep exact matches AND pending title-case retries of wanted families;
+    // a retry owns the family its corrected data-fam names
+    const match = [...wanted].find(
+      ([f, h]) => h === href || (fam !== undefined && titleCase(f) === fam),
+    );
+    if (match === undefined) link.remove();
+    else wanted.delete(match[0]);
   }
-  for (const [, fam] of wanted) addFontLink(fam, scope);
+  for (const fam of wanted.keys()) addFontLink(fam, scope);
 }
 
 /** Loads Google Fonts for the families named by `css` in one consumer

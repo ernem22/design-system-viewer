@@ -1,0 +1,185 @@
+name: Pipeline gate (verdict)
+
+# The merge gate, computed by GitHub instead of by the coordinator.
+#
+# The coordinator used to merge when three signals (CI green, Reviewer PASS, Tester
+# PASS) had been read by hand, and the one thing a human-in-the-loop check cannot do
+# reliably is confirm that a verdict was produced against the *current* head - the
+# pipeline already made that mistake once (a Tester verified a build from the wrong
+# branch). So the verdicts become machine-readable and the gate becomes a commit status:
+#
+#   * a Reviewer or Tester posts its verdict as a PR comment in a fenced block:
+#
+#         ```dsv-verdict
+#         status: pass
+#         role: reviewer
+#         commit: 422f8cb
+#         scope_ok: yes
+#         ```
+#
+#   * this workflow parses every comment and review, keeps the latest verdict per role
+#     **whose commit matches the PR head**, and posts `pipeline/verdict` on that head:
+#     success only when reviewer=pass with scope_ok=yes AND tester=pass on the SAME head.
+#     A verdict without a commit, or from an older head, can never approve anything.
+#   * branch protection requires that status, so GitHub itself refuses the merge.
+#   * a PR that changes nothing under `app/src/` is not applicable and passes
+#     automatically - documentation and tooling PRs have no reviewer/tester to wait for.
+#
+# It also answers the maintainer's comments, deterministically, with no model involved:
+# `/hold` freezes a PR, `/rework` sends it back for a fix, `/resume` clears both.
+
+on:
+  issue_comment:
+    types: [created, edited]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: PR number to re-evaluate
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+  statuses: write
+
+concurrency:
+  group: pipeline-gate-${{ github.event.issue.number || github.event.pull_request.number || inputs.pr }}
+  cancel-in-progress: false
+
+jobs:
+  verdict:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+
+            // ---- which PR are we looking at? ------------------------------------
+            let prNumber = null;
+            if (context.eventName === 'issue_comment') {
+              if (!context.payload.issue.pull_request) {
+                core.info('comment is not on a pull request - nothing to gate');
+                return;
+              }
+              prNumber = context.payload.issue.number;
+            } else if (context.eventName === 'pull_request') {
+              prNumber = context.payload.pull_request.number;
+            } else if (context.eventName === 'workflow_dispatch') {
+              prNumber = Number(context.payload.inputs.pr);
+            }
+            if (!prNumber) {
+              core.info('no pull request in this event - nothing to gate');
+              return;
+            }
+
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            const head = pr.head.sha;
+            const shortHead = head.slice(0, 7);
+            const target = `https://github.com/${owner}/${repo}/pull/${prNumber}`;
+
+            const setStatus = async (state, description) => {
+              await github.rest.repos.createCommitStatus({
+                owner, repo, sha: head, state, context: 'pipeline/verdict',
+                description: description.slice(0, 140), target_url: target,
+              });
+              core.info(`pipeline/verdict -> ${state} :: ${description}`);
+            };
+
+            // ---- maintainer commands, parsed literally (no model in the loop) ---
+            if (context.eventName === 'issue_comment' && context.payload.action === 'created') {
+              const body = (context.payload.comment.body || '').trim();
+              const who = context.payload.comment.author_association;
+              const trusted = ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(who);
+              const cmd = /^\/(hold|rework|resume)\b/i.exec(body);
+              if (cmd) {
+                if (!trusted) {
+                  core.info(`/${cmd[1]} ignored: ${who} is not a maintainer`);
+                } else {
+                  const verb = cmd[1].toLowerCase();
+                  const add = verb === 'hold' ? 'hold' : verb === 'rework' ? 'rework' : null;
+                  for (const label of ['hold', 'rework']) {
+                    if (label === add) {
+                      await github.rest.issues.addLabels({ owner, repo, issue_number: prNumber, labels: [label] }).catch(() => {});
+                    } else if (verb !== 'rework' || label === 'hold') {
+                      await github.rest.issues.removeLabel({ owner, repo, issue_number: prNumber, name: label }).catch(() => {});
+                    }
+                  }
+                  await github.rest.issues.createComment({
+                    owner, repo, issue_number: prNumber,
+                    body: verb === 'hold'
+                      ? 'Pipeline: **held** (`hold`). The gate stays red until `/resume`.'
+                      : verb === 'rework'
+                        ? 'Pipeline: **rework requested** (`rework`). The next Fixer dispatch picks up this comment thread verbatim.'
+                        : 'Pipeline: **resumed**. The gate re-evaluates on the next verdict.',
+                  });
+                }
+              }
+            }
+
+            // ---- is this PR in scope at all? ------------------------------------
+            const files = await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: prNumber, per_page: 100 });
+            const touchesApp = files.some((f) => f.filename.startsWith('app/src/'));
+            const labels = pr.labels.map((l) => l.name);
+            if (labels.includes('hold')) {
+              await setStatus('failure', `held by a maintainer (/resume to release) - head ${shortHead}`);
+              return;
+            }
+            if (!touchesApp) {
+              await setStatus('success', `no app/src change - gate not applicable - head ${shortHead}`);
+              return;
+            }
+
+            // ---- parse the verdicts ---------------------------------------------
+            const parse = (body) => {
+              const m = /```dsv-verdict\s*\n([\s\S]*?)```/.exec(body || '');
+              if (!m) return null;
+              const out = {};
+              for (const line of m[1].split('\n')) {
+                const kv = /^\s*([a-z_]+):\s*(.+?)\s*$/.exec(line);
+                if (kv) out[kv[1]] = kv[2];
+              }
+              return out.role ? out : null;
+            };
+
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: prNumber, per_page: 100 });
+            const reviews = await github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: prNumber, per_page: 100 });
+            const candidates = [
+              ...comments.map((c) => ({ body: c.body, at: c.created_at })),
+              ...reviews.map((r) => ({ body: r.body, at: r.submitted_at || r.created_at })),
+            ];
+
+            const latest = {};
+            for (const c of candidates) {
+              const v = parse(c.body);
+              if (!v) continue;
+              // A verdict is only about the head it names: no commit, or a different
+              // commit, is not evidence about this build.
+              if (!v.commit || !head.startsWith(v.commit)) {
+                core.info(`ignoring ${v.role} verdict for commit ${v.commit || '(none)'} (head ${shortHead})`);
+                continue;
+              }
+              if (!latest[v.role] || latest[v.role].at < c.at) latest[v.role] = { ...v, at: c.at };
+            }
+
+            const reviewer = latest.reviewer;
+            const tester = latest.tester;
+            if (!reviewer || !tester) {
+              const missing = [!reviewer && 'reviewer', !tester && 'tester'].filter(Boolean).join(' + ');
+              await setStatus('pending', `waiting on ${missing} verdict for head ${shortHead}`);
+              return;
+            }
+
+            const ok = reviewer.status === 'pass' && tester.status === 'pass' && reviewer.scope_ok === 'yes';
+            const why = `reviewer=${reviewer.status}${reviewer.scope_ok ? ` scope_ok=${reviewer.scope_ok}` : ''} tester=${tester.status} head=${shortHead}`;
+            if (ok) {
+              await setStatus('success', why);
+            } else {
+              const reason = reviewer.status !== 'pass' ? 'reviewer failed'
+                : tester.status !== 'pass' ? 'tester failed'
+                : 'reviewer scope_ok is not yes';
+              await setStatus('failure', `${reason} - ${why}`);
+            }

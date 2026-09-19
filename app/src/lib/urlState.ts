@@ -20,15 +20,25 @@
 // with no interception, and copyLinkToView (location.href) captures
 // querystring + hash together with no changes.
 //
-// Read aliases (never written): mode=compare (legacy shell/compare entry) and
-// v=/c= (legacy compare-iframe names) fall back for a missing tab=/cv=/cc=,
-// so links shared from the old viewer still restore.
+// Read aliases (never written): mode=compare (legacy shell/compare entry),
+// tab=system (legacy name for this app's tokens tab) and v=/c= (legacy
+// compare-iframe names) fall back for a missing tab=/cv=/cc=, so links
+// shared from the old viewer still restore.
 
 export const VIEW_TABS = ["tokens", "preview", "compare"] as const;
 export type UrlTab = (typeof VIEW_TABS)[number];
 
+const LEGACY_TABS: Record<string, UrlTab> = {
+  system: "tokens",
+};
+
 function isUrlTab(value: string | null): value is UrlTab {
   return value !== null && (VIEW_TABS as readonly string[]).includes(value);
+}
+
+function readTab(raw: string | null): UrlTab | null {
+  if (raw === null) return null;
+  return isUrlTab(raw) ? raw : (LEGACY_TABS[raw] ?? null);
 }
 
 export interface ViewUrlState {
@@ -52,12 +62,8 @@ export function readViewUrl(search?: string): ViewUrlState {
   } catch {
     params = new URLSearchParams();
   }
-  const rawTab = params.get("tab");
-  const tab: UrlTab | null = isUrlTab(rawTab)
-    ? rawTab
-    : params.get("mode") === "compare"
-      ? "compare"
-      : null;
+  const tab: UrlTab | null =
+    readTab(params.get("tab")) ?? (params.get("mode") === "compare" ? "compare" : null);
   const sys = params.get("sys");
   const cmp = (params.get("cmp") ?? "")
     .split(",")

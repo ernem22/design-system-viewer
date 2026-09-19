@@ -43,8 +43,18 @@ const ENTRY_IDS = COMPONENT_ENTRIES.map((e) => e.id);
 const APP_TITLE = "Design System Viewer";
 
 function App() {
-  const { systems, loading, active, activeSlug, setActiveSlug, addSystem, mergeCss, patchToken, removeSystem } =
-    useSystems();
+  const {
+    systems,
+    loading,
+    error: loadError,
+    active,
+    activeSlug,
+    setActiveSlug,
+    addSystem,
+    mergeCss,
+    patchToken,
+    removeSystem,
+  } = useSystems();
   const [toasts, pushToast] = useToasts();
   // Panel collapse lives here so the toggles can sit in the topbar —
   // no floating edge handle next to the main scrollbar. Same storage
@@ -95,7 +105,7 @@ function App() {
   // Tokens tab view model — one hook instance feeds its main content, its
   // left-rail group nav and its right-rail inspector (lifted to App, passed
   // down as props; no context).
-  const tokensView = useTokensView(active, pushToast);
+  const tokensView = useTokensView(active, pushToast, darkOn);
 
   // Compare tab view model — same lifted-to-App.tsx shape as tokensView,
   // fed its own tab's rail/content/props (see Scope note in issue #1).
@@ -143,11 +153,11 @@ function App() {
   const importFile = useCallback(
     (file: File | null) => {
       if (!file) {
-        pushToast("Only .css files", "err");
+        pushToast("Only .css files", "warn");
         return;
       }
       readCssFile(file).then(importCss, (e: unknown) =>
-        pushToast(e instanceof Error ? e.message : String(e), "err"),
+        pushToast(e instanceof Error ? e.message : String(e), "warn"),
       );
     },
     [importCss, pushToast],
@@ -282,15 +292,23 @@ function App() {
     {
       id: "preview",
       label: "Preview",
-      content: (
+      content: active ? (
         <>
-          <PreviewNotes system={active} />
+          <PreviewNotes system={active} error={loadError} />
           {shownEntries?.size === 0 && <div className="dsv-err">No sections match “{query.trim()}”.</div>}
           {COMPONENT_ENTRIES.map((entry) => (
             <GallerySection key={entry.id} {...entry} hidden={shownEntries ? !shownEntries.has(entry.id) : false} />
           ))}
-          <PreviewScopeDialog system={active} onPatch={handlePatch} />
+          <PreviewScopeDialog system={active} onPatch={handlePatch} dark={darkOn} />
         </>
+      ) : (
+        <PreviewNotes
+          system={null}
+          loading={loading}
+          error={loadError}
+          onPaste={() => openAdd()}
+          onUpload={() => fileInputRef.current?.click()}
+        />
       ),
       rail: (
         <Rail
@@ -302,7 +320,7 @@ function App() {
       ),
       propsPanel: (
         <Props open={propsOpen}>
-          <PreviewProps system={active} onPatch={handlePatch} />
+          <PreviewProps system={active} onPatch={handlePatch} dark={darkOn} />
         </Props>
       ),
     },

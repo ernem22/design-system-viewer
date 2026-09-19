@@ -51,15 +51,25 @@ role: tester
 task: <task id from your preamble>
 commit: n/a
 tests: n/a
-build: <asset hash served on :<port>>
+build: <asset hash served on :PORT>
 observed: <...>
 before: <...>
 
-Report `status: pass` only if every step you could produce held. Then send
-worker_done once, from this terminal, with the task id, dispatch id and terminal
-handle from your preamble and --outcome succeeded:
+THEN POST A VERDICT BLOCK AS A PR COMMENT — the merge gate is computed by GitHub from
+comments, not from the coordinator reading your message:
 
-    orca orchestration send --run <run id> --from <your terminal handle> \
-      --type worker_done --subject "tester issue <n>" \
-      --body "<the acceptance block above + your observed/before lines>" \
-      --task-id <task id> --dispatch-id <dispatch id> --outcome=succeeded --json
+    gh pr comment <n> --body "$(printf '```dsv-verdict\nstatus: pass\nrole: tester\ncommit: %s\nbuild: %s\n```\n' "$(git rev-parse --short HEAD)" "<the asset hash you served>")"
+
+`commit:` must be the head whose build you verified (your STEP 0 answer). A verdict whose
+commit is not the PR's current head does not count — that field exists because a Tester
+once verified a build from the wrong branch, and the coordinator merged on the strength
+of it.
+
+Report `status: pass` only if every step you could produce held. Then send
+worker_done once, from this terminal. **Do not retype the command: your dispatch
+preamble prints it verbatim, including the `--dispatch-capability dcap_...` token
+that is unique to your dispatch.** A hand-written command is rejected with
+`dispatch_capability_invalid: The Dispatch capability is missing`, and your verdict
+then reaches the coordinator only as a rejection echo — no settlement, no gate.
+Check the command carries `--task-id`, `--dispatch-id` and `--outcome=succeeded`
+(equals sign; the space form is rejected).

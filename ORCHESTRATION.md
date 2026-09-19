@@ -208,15 +208,32 @@ background process with a completion notice, that notice *is* the push channel,
 and the coordinator's loop becomes: act on the settlement (ack → release → reap →
 spawn the next phase), then start a fresh watcher.
 
-    terminal(background=true, notify=true):
-      bash tools/orchestration/watch.sh <run-id> [max-seconds]
+    bash tools/orchestration/watch.sh <run-id> [max-seconds]
       exit 0 = settlement waiting (report on stdout)
       exit 3 = heartbeats only for <max-seconds>
       exit 4 = another waiter already holds this run
 
-One watcher per run — Orca permits a single waiter, so a second exits instead of
-queueing behind the first. The settlement it reports must be acked: an unacked one
-is redelivered and looks like new work.
+**Exit-based notification has a hole, and the supervisor closes it.** A watcher that
+exits in order to notify leaves the channel empty until the coordinator arms the next
+one, and a settlement landing in that gap is read by nobody. That is not hypothetical:
+it is exactly how "the thing that closes finished items is broken" felt, with the
+mechanism working perfectly and simply nobody listening. `watchd.sh` runs `watch.sh`
+in a loop inside ONE process that never exits, and prints a line starting with `WAKE`
+whenever something needs the coordinator — so the notification is *pattern*-based, not
+exit-based, and there is never a gap:
+
+    terminal(background=true, notify=["WAKE"]):
+      bash tools/orchestration/watchd.sh <run-id> [window-seconds]
+      WAKE settlement  = a worker_done / escalation / question arrived
+      WAKE drained     = a delivery was waiting at arming time (acked, and printed to the log)
+      WAKE queue-error = the queue could not be read
+      stop it with: touch ${LOCALAPPDATA}/Temp/watchd.stop
+
+`watch.sh` stays the primitive — its exit codes are how `watchd.sh` classifies a
+window — and `watchd.sh` is how it is armed in practice. One watcher per run: Orca
+permits a single waiter, so a second exits instead of queueing behind the first. The
+settlement it reports must be acked: an unacked one is redelivered and looks like new
+work.
 
 ## Mechanism beats prose
 
@@ -278,6 +295,12 @@ Repo-specific traps, verified 2026-09-18. Each Coder/Fixer Task spec must
 carry the ones relevant to its change, because a worker that discovers them
 by trial produces a silent false pass.
 
+- **The shell layout contract lives in `app/CLAUDE.md` (`## Shell layout`).** One
+  frame, one scroller: the shell owns the topbar/rail/props/content regions, a tab
+  supplies rail *content* rather than its own rail frame, exactly one region scrolls
+  (`.app-main`), and `overflow: hidden` is banned on layout containers because it still
+  scrolls programmatically. A change that adds a rail frame or a second scroll
+  container is out of contract, and every spec touching `shell/` must say so.
 - **Commands are `--prefix app`.** Root `npm test` runs
   `src/core`/`src/server` only and root `npm run build` builds `preview/` —
   **neither touches `app/` at all**. The real commands are
@@ -400,6 +423,51 @@ worktree must be clean after its `worker_done` (the dispatch's own
 and the dispatch failed whatever its verdict said. A discovered failure is a
 finding, not a fix — it goes into the report, and a separate Fixer dispatch
 fixes it.
+
+## UI Audit
+
+**A read-only role that hunts interface defects with evidence.** It exists because
+the pipeline's other roles only ever look at what a PR touched: a Coder proves its
+own change, a Reviewer judges the diff, a Tester verifies the issue's behaviour. None
+of them looks at the interface as a whole, so whole-interface rot — a literal colour
+where a variable belongs, an unreachable focus ring, a panel with no empty state —
+survives every gate. The UI audit is that missing pass.
+
+Contract, identical in shape to the Tester's:
+
+  - **It writes nothing.** No test, no fix, no issue, no comment, no commit. Its
+    permission block is the Reviewer's (`edit`/`write` denied, `orca`/`gh`/`curl`/git
+    reads allowed) because it must be able to drive the browser and report.
+  - **It drives the running app**, served by the coordinator on its own port, through
+    Orca's browser automation: `orca tab create --url`, `orca snapshot` (accessibility
+    tree with `@e1` refs), `orca eval --expression` for computed styles and arithmetic,
+    `orca click`/`keypress`/`fill` for the interactive paths.
+  - **Evidence is text.** A screenshot is not citable; every finding carries the
+    selector or DOM path, the observed value, the expected value, the exact repro and
+    a one-line fix. Contrast ratios are computed and printed with the two numbers
+    divided, never eyeballed.
+  - **Seven axes:** token discipline (values that bypass the 432 custom properties),
+    contrast in both light and dark, keyboard and focus behaviour, legacy parity
+    (behaviours the legacy viewer has and the port lacks, cited by file:line), state
+    completeness (empty/loading/error per panel), layout robustness (overflow,
+    clipping, truncation without an affordance), and dead or dishonest UI (controls
+    that do nothing, labels that lie, duplicates).
+  - **Plus the shell contract axis**, because the layout standard in `app/CLAUDE.md` is
+    only real if something measures it: one scroller (`.app-main`) and no other
+    element programmatically scrollable; the chrome's position measured before and
+    after a rail click (a rail click once moved the whole layout by the topbar height);
+    and no `overflow: hidden` on a layout container.
+  - **A user-journey sweep comes first**, because a bug a user can feel outranks a nit a
+    reader can find: drive the app's own journeys end to end — load a system, fetch a
+    stylesheet by URL, edit a token value and Reset, compare two systems, export, copy a
+    link, switch every tab and toggle every panel — and report each deviation from the
+    expected or legacy behaviour with its measurement. Static reading is the fallback,
+    not the method: a finding no journey can produce is a hypothesis and must be
+    labelled as one, not written as a defect.
+  - **It reports findings, the coordinator decides.** A finding is not a fix and not
+    an issue: the coordinator triages the list into issues, Coders or Fixers. Capped
+    at the ten worst per axis, because a list nobody can act on is worse than a short
+    one they can.
 
 ## Model Assignment & Fallback
 
@@ -630,6 +698,44 @@ systems that already own them:
 
 A stage advances only on a structured `PASS`/`succeeded` signal or a green CI
 check; never on Hermes's own inference from partial output.
+
+**A claim is verified before it is fixed.** Every issue carries its provenance —
+`reported:user` (the user saw it), `measured:live` (a worker observed it on a running
+build), `scan:agent` (a code scan inferred it). An issue that has never been observed
+live (`scan:agent` without `measured:live`) is **not a Coder task yet**: it goes to a
+**claim verification** dispatch first — a read-only worker with the app served, whose
+only job is to reproduce the claim and report the observed value, or `unreproducible`.
+Verified → `measured:live`, and a Coder. Unreproducible → the issue is closed with the
+record of the attempt.
+
+Three rules make this cheap, and each one cost a real failure to learn:
+
+  - **The dispatch text quotes the issue body.** It is never written from a summary: a
+    summary once produced a task for a different issue than its card.
+  - **Every fix PR contains something RED on the parent commit** — a failing test, or a
+    live measurement that disagrees. A claim nobody can make red was never a defect.
+  - **A worker that cannot verify says so.** `## Not verified` with the reason is a
+    first-class result; a plausible-sounding gap filled by invention is the one outcome
+    the gates cannot catch.
+
+**Creating a task is the one step with no downstream check, so it carries its own.**
+Before an issue is opened:
+
+  - run `tools/orchestration/dupcheck.sh "<distinctive term>"` — a model asked "is this a
+    duplicate?" answers from memory and is wrong, while the search is mechanical. (It
+    paid for itself on its first run: the shell refactor's area already had three issues,
+    #18, #16 and the closed #15.)
+  - fill the evidence fields of `.github/ISSUE_TEMPLATE/agent-finding.md`: provenance,
+    the reproduction, the **observed value**, the `file:line`, and how a fix would be RED
+    on the parent. The observed value is the field that decides — a description of a
+    defect is not evidence of one.
+  - an issue that cannot fill them is opened with `repro:missing` and does not reach a
+    Coder. It goes to a verification dispatch, or it is closed with the record of the
+    attempt. Neither is a failure: "cannot verify" is a result.
+
+**A confidence score is not a gate.** Asking a model whether it is more than 70% sure
+returns "yes" from the same confident state that produced the wrong claim; the gate has
+to be external and falsifiable — a reproduction someone else can re-run.
 
 ## Issue-Label State Machine (parallel-safe)
 
@@ -1335,6 +1441,56 @@ Cleanup is three distinct steps, not one:
       all still on the remote from earlier cycles. Drain them the same way —
       merged PR → delete; no PR → leave it and ask.
 
+## The merge gate is GitHub's, not the coordinator's
+
+Reading three signals by hand (CI green, Reviewer PASS, Tester PASS) has one failure the
+coordinator cannot check reliably: whether each verdict was produced against the *current*
+head. It got that wrong once — a Tester verified a build provisioned from the wrong
+branch and the PASS looked perfectly valid.
+
+So the gate is a **commit status computed by GitHub** (`.github/workflows/pipeline-gate.yml`):
+
+  - every Reviewer and Tester posts its verdict as a PR comment in a fenced block:
+
+        ```dsv-verdict
+        status: pass
+        role: reviewer
+        commit: 422f8cb
+        scope_ok: yes
+        ```
+
+  - the workflow parses comments and reviews, keeps the latest verdict per role **whose
+    `commit:` matches the PR head**, and posts `pipeline/verdict` on that head: success
+    only when reviewer=pass with `scope_ok: yes` AND tester=pass on the same head;
+    failure otherwise; pending while a verdict is missing. A verdict without a commit, or
+    from an older head, can never approve anything.
+  - a PR that changes nothing under `app/src/` is **not applicable** and passes
+    automatically, so documentation and tooling PRs do not wait for reviewers they do
+    not need.
+  - **branch protection requires `pipeline/verdict` alongside `app`**, with
+    `enforce_admins: true`, so the coordinator cannot merge a PR the machine has not
+    approved even by accident. That is the point: the coordinator's judgement is no
+    longer load-bearing at the gate.
+
+**The maintainer's channel is comments, parsed literally.** `/hold` freezes a PR (the
+status goes red and stays red), `/rework` sends it back for a fix, `/resume` clears both
+— accepted only from `OWNER`/`MEMBER`/`COLLABORATOR`, and each answered with a comment so
+the thread records what happened. Free-text comments are still read by the coordinator
+(`tools/orchestration/reviews.sh`), which routes them to a Fixer; a comment is not a
+verdict and cannot approve, which is deliberate — only the machine-readable block moves
+the gate.
+
+**Closing is a pass, not a memory.** `tools/orchestration/close.sh` loops over every open
+PR, **attempts the merge blindly** and lets GitHub refuse the ones the gate has not
+approved — which is exactly what a required status check buys: the coordinator no longer
+has to hold each PR's CI/verdict state in its head. For each PR it prints what is missing
+(`no verdict block yet — who owes: reviewer + tester`, `waiting on tester verdict for head
+<sha>`, `BLOCKED by the gate — …`), and on a merge it closes the issues the PR body claims
+(`Closes #<n>` only fires on the repo's default branch, and this pipeline merges into a
+feature branch). Run it every cycle: a green, reviewed PR sitting open while the
+coordinator is busy elsewhere is what "we have trouble closing finished things" looks
+like, and the fix is to make the closing mechanical rather than remembered.
+
 ## Failure Ledger
 
 Incidents already paid for. Each is a rule above; this table is the index so
@@ -1364,7 +1520,13 @@ the rules do not have to carry their narrative.
 | `inkling:free` reviewed perfectly but, told to write a file, mangled the Windows path to `/workspaces/...` | Probe per role; read-only reasoning and file-editing tool use are different capabilities |
 | Three ids containing `free` were unusable — one needs a subscription, one had no channel, one had no tool-use endpoint | Probe reachability before planning around a model |
 | `element.click()` from `eval` reported success and did not switch a Radix tab | Use `orca click --element @ref`; programmatic clicks miss `mousedown` activation |
+| A user-reported layout shift ("the whole layout jumps up ~50px when I click a rail item") turned out to be `overflow: hidden` on the shell plus an anchor without `preventDefault`: hidden still scrolls programmatically, and native fragment navigation walks every scrollable ancestor | A one-line patch fixes the symptom; the class of bug needs a standard. The shell contract now lives in `app/CLAUDE.md` (one frame, one scroller, `overflow: clip` instead of `hidden`, in-app scroll targets the content scroller), is enforced by `shell/shellContract.test.ts`, and is measured every audit by the shell axis. When a bug is a layout *invariant* violation, write the invariant down and make something check it |
+| Every open issue was treated as a fact, and two claims turned out to be wrong: the coordinator's dispatch text for #27 described a different issue than its card, and a Reviewer's "`.app-toast-warn` is absent" was half wrong (the class was applied; only the CSS rule was missing) | A claim is verified before it is fixed. Provenance labels (`reported:user` / `measured:live` / `scan:agent`), a claim-verification dispatch for anything never observed on a running build, a reproduce-first STEP 0 in the Coder and Fixer templates, and the hard rule that every fix PR contains something RED on the parent commit — a claim nobody can make red was never a defect |
 | A bare `role=tab` query matched 9 elements, 6 of them gallery demos | Scope selectors to `.app-tabs` / the app's own container, in Orca and Playwright alike |
+| A Coder was handed dispatch text that described a different issue than its card — I wrote "an override on an undefined token is lost" for #27, whose real subject is "value-edits became permanent; Reset only clears swaps" | The coordinator's dispatch text is derived from the issue body — `gh issue view <n>` first, quoted — never from a summary or a filename. The worker caught it and asked; a less careful worker would have built the wrong feature and passed every gate |
+| Three Reviewers finished their analysis and could not report: `orca orchestration send` was denied by the reviewer permission allowlist I had just written (`gh`/`git`/`ls` allowed, `orca` missing) | Any read-only permission block must allow `orca *`. Reporting is the worker's only exit; a blocked report leaves a live-looking dispatch and an idle phase, and the verdict has to be recovered from the terminal by hand |
+| Two Coders sent correct reports that Orca rejected: `dispatch_capability_invalid`. They had retyped the send command from a template | The command comes from the dispatch preamble, verbatim, because it carries a per-dispatch capability token no template can contain. Quote the rejection string in every template so the failure is recognisable |
+| Three reaped Testers left live preview servers behind — 176MB free RAM, 37 node processes, and a `fork: Resource temporarily unavailable` that killed a spawn | A preview is started outside Orca's worktree lifecycle, so `reap.sh` does not kill it. Every Tester reap is followed by `serve.sh --stop <port>` |
 | A full `orca snapshot` of the app was 251 KB | Assert with targeted `eval`; use `snapshot` only to obtain a ref, filtered |
 | Tester dispatched to run `tsc`/`npm test` — a worker spent on a deterministic check it could misreport | Division of Labour; CI owns machine-decidable checks |
 | Root `npm test` green while testing zero `app/` code | All commands `--prefix app`, stated in every spec |

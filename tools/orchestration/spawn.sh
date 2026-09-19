@@ -24,6 +24,14 @@ done
 [ -z "$ROLE" ] && { echo "usage: spawn.sh <role> [base-branch] [--plan]" >&2; exit 1; }
 [ -z "$BASE" ] && BASE="origin/refactor/full-react-migration"
 
+# A base ref that does not exist makes `orca worktree create` return an error object
+# that this script parses into an empty PATH — a silent no-op that looks exactly like a
+# successful spawn. It cost a Tester dispatch (a Coder had named its own branch
+# `coder/88-gallery-wcag-tokens` and the guessed `ernem22/coder-88` did not exist), so
+# the base is verified before anything is created.
+git rev-parse --verify --quiet "$BASE^{commit}" >/dev/null \
+  || { echo "spawn.sh: base ref '$BASE' does not exist — git fetch, or read the PR's headRefName" >&2; exit 3; }
+
 S="${LOCALAPPDATA}/orca-orchestration/design-system-viewer"
 REPO_ID="294b7f02-d29f-464f-a65c-f6929e0b8ae2"
 CMD="opencode"
@@ -48,7 +56,7 @@ P=$(printf '%s' "$RAW" | node -e \
 #     to say so in its report.
 if [ "$PLAN" = "--plan" ]; then
   # A Reviewer is read-only by contract; enforce it here instead of trusting prose.
-  printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "opencode-go/deepseek-v4.1-flash",\n  "permission": {\n    "external_directory": "deny",\n    "edit": "deny",\n    "write": "deny",\n    "*": "allow",\n    "bash": { "*": "deny", "gh *": "allow", "git log *": "allow", "git show *": "allow", "git diff *": "allow", "ls *": "allow", "cat *": "allow", "grep *": "allow", "rg *": "allow", "head *": "allow", "tail *": "allow", "wc *": "allow" }\n  }\n}\n' > "$P/opencode.json"
+  printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "opencode-go/deepseek-v4.1-flash",\n  "permission": {\n    "external_directory": "deny",\n    "edit": "deny",\n    "write": "deny",\n    "*": "allow",\n    "bash": { "*": "deny", "orca *": "allow", "gh *": "allow", "curl *": "allow", "git log *": "allow", "git show *": "allow", "git diff *": "allow", "ls *": "allow", "cat *": "allow", "grep *": "allow", "rg *": "allow", "head *": "allow", "tail *": "allow", "wc *": "allow" }\n  }\n}\n' > "$P/opencode.json"
 else
   printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "opencode-go/deepseek-v4.1-flash",\n  "permission": {\n    "external_directory": "deny",\n    "*": "allow",\n    "bash": { "*": "allow", "rm -rf *": "deny", "git push --force*": "deny", "git reset --hard*": "deny", "git clean *": "deny" }\n  }\n}\n' > "$P/opencode.json"
 fi

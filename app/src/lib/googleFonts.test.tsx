@@ -179,3 +179,79 @@ describe("scoped Google Fonts loading", () => {
     observer.disconnect();
   });
 });
+
+// Issue #26: a family whose request 400s gets one retry under title case, but
+// the retry is tagged with the *corrected* name (`Inter`), not the requested
+// one (`inter`). The next diff keyed the wanted set by href, so the retry
+// matched the family and stayed, while the mis-cased request stayed in the set
+// too and its failing URL was appended as a second <link>.
+const CSS_INTER_LOWER = `--font-sans: inter;`;
+
+function failLoad(link: HTMLLinkElement): void {
+  link.onerror?.(new Event("error"));
+}
+
+describe("Google Fonts title-case retry dedup (#26)", () => {
+  it("re-requesting the mis-cased family after a retry keeps a single link", () => {
+    loadGoogleFonts(CSS_INTER_LOWER, "active");
+    expect(fams("active")).toEqual(["inter"]);
+
+    failLoad(links("active")[0]);
+    expect(fams("active")).toEqual(["Inter"]);
+    expect(links("active")[0].getAttribute("href")).toContain("family=Inter");
+
+    loadGoogleFonts(CSS_INTER_LOWER, "active");
+    expect(fams("active")).toEqual(["Inter"]);
+    expect(links("active")).toHaveLength(1);
+  });
+
+  it("a casing change between requests does not add a second link", () => {
+    loadGoogleFonts(CSS_INTER, "active");
+    const first = links("active")[0];
+    expect(fams("active")).toEqual(["Inter"]);
+
+    loadGoogleFonts(CSS_INTER_LOWER, "active");
+    expect(fams("active")).toEqual(["Inter"]);
+    expect(links("active")).toHaveLength(1);
+    expect(links("active")[0]).toBe(first);
+  });
+
+  it("a retry in one scope does not satisfy the other scope's request", () => {
+    loadGoogleFonts(CSS_INTER_LOWER, "active");
+    failLoad(links("active")[0]);
+    expect(fams("active")).toEqual(["Inter"]);
+
+    loadGoogleFonts(CSS_INTER, "compare");
+
+    expect(fams("active")).toEqual(["Inter"]);
+    expect(fams("compare")).toEqual(["Inter"]);
+    expect(links("active")).toHaveLength(1);
+    expect(links("compare")).toHaveLength(1);
+  });
+
+  it("a retry's duplicate check stays within its own scope", () => {
+    loadGoogleFonts(CSS_INTER_LOWER, "active");
+    failLoad(links("active")[0]);
+
+    loadGoogleFonts(CSS_INTER_LOWER, "compare");
+    failLoad(links("compare")[0]);
+
+    expect(fams("active")).toEqual(["Inter"]);
+    expect(fams("compare")).toEqual(["Inter"]);
+    expect(links("active")).toHaveLength(1);
+    expect(links("compare")).toHaveLength(1);
+  });
+
+  it("removes only the changed scope's link when both hold the same family", () => {
+    loadGoogleFonts(CSS_INTER, "active");
+    loadGoogleFonts(CSS_INTER, "compare");
+    const compareLink = links("compare")[0];
+
+    loadGoogleFonts(CSS_ROBOTO, "active");
+
+    expect(fams("active")).toEqual(["Roboto"]);
+    expect(fams("compare")).toEqual(["Inter"]);
+    expect(links("compare")).toHaveLength(1);
+    expect(links("compare")[0]).toBe(compareLink);
+  });
+});

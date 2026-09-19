@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 
-export type ToastTone = "ok" | "err";
+export type ToastTone = "ok" | "warn" | "err";
 
 export interface Toast {
   id: number;

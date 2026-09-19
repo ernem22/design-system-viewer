@@ -34,7 +34,7 @@ reason: <one short line, only if fail>
 fix_required: <one short actionable instruction, only if fail>
 scope_ok: yes | no
 
-OBSERVABLE ACCEPTANCE — your worker_done body must start with exactly:
+OBSERVABLE ACCEPTANCE — worker_done body starts with exactly:
 
 status: pass | fail
 role: reviewer
@@ -42,10 +42,19 @@ task: <task id from your preamble>
 commit: none
 tests: n/a
 
-Send worker_done once, from this terminal, with the task id, dispatch id and
-terminal handle from your preamble and --outcome succeeded:
+THEN POST THE SAME BLOCK AS A PR COMMENT — the merge gate is computed by GitHub from
+comments, not from the coordinator reading your message:
 
-    orca orchestration send --run <run id> --from <your terminal handle> \
-      --type worker_done --subject "review pr <n>" \
-      --body "<the acceptance block above + your report>" \
-      --task-id <task id> --dispatch-id <dispatch id> --outcome=succeeded --json
+    gh pr comment <n> --body "$(printf '```dsv-verdict\nstatus: pass\nrole: reviewer\ncommit: %s\nscope_ok: yes\n```\n' "$(git rev-parse --short HEAD)")"
+
+`commit:` must be the head you actually reviewed. A verdict whose commit is not the PR's
+current head does not count — a verdict about a different build is not evidence about
+this one, and that field is the whole reason the gate is machine-computed.
+
+Send worker_done once, from this terminal. **Do not retype the command: your
+dispatch preamble prints it verbatim, including the `--dispatch-capability dcap_...`
+token that is unique to your dispatch.** A hand-written command is rejected with
+`dispatch_capability_invalid: The Dispatch capability is missing`, and your verdict
+then reaches the coordinator only as a rejection echo — no settlement, no gate.
+Check the command carries `--task-id`, `--dispatch-id` and `--outcome=succeeded`
+(equals sign; the space form is rejected).
