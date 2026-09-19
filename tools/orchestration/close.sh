@@ -26,6 +26,14 @@ for pr in $(gh pr list --repo "$REPO" --state open --json number --jq '.[].numbe
   gate=$(gh api "repos/$REPO/commits/$head/status" \
            --jq '[.statuses[]|select(.context=="pipeline/verdict")]|.[0]|"\(.state // "none"): \(.description // "")"' 2>/dev/null)
 
+  # A wave run against a stale base wastes a whole build: the PR's own commits may not
+  # compile against the API main has since moved to (this happened twice — a test written
+  # against a newer `useTokensView` signature landed on a branch that still had the old
+  # one). Report it here, before anyone dispatches a Tester.
+  behind=$(git rev-list --count "$head".."origin/$BASE" 2>/dev/null || echo 0)
+  note=""
+  [ "${behind:-0}" -gt 0 ] && note=" [BEHIND $BASE by $behind commits — rebase before the next wave]"
+
   case "$gate" in
     success*)
       if [ "$DRY" = "--dry-run" ]; then
@@ -35,9 +43,16 @@ for pr in $(gh pr list --repo "$REPO" --state open --json number --jq '.[].numbe
           sha=$(gh pr view "$pr" --repo "$REPO" --json mergeCommit --jq '.mergeCommit.oid[0:7]')
           echo "#$pr: MERGED $sha  (ci: $ci)"
           merged=$((merged+1))
-          # Close the issues the body claims, because `Closes #n` only fires on the
-          # repo's DEFAULT branch and this pipeline merges into $BASE.
-          for n in $(gh pr view "$pr" --repo "$REPO" --json body --jq .body | grep -oE 'Closes #[0-9]+' | grep -oE '[0-9]+'); do
+          # Close the issues the PR claims. `Closes #n` only fires on the repo's DEFAULT
+          # branch and this pipeline merges into $BASE, so it is done here — and the
+          # claim is read from BOTH the body (`Closes #n`, `Fixes #n`) and the title,
+          # because these PRs carry the issue in the title as `(#n)` and a body-only
+          # match silently leaves the issue open.
+          claimed=$( { gh pr view "$pr" --repo "$REPO" --json body,title --jq '.body + "\n" + .title' \
+                       | grep -oE '(Closes|Fixes|Resolves) #[0-9]+' | grep -oE '[0-9]+'
+                     gh pr view "$pr" --repo "$REPO" --json title --jq .title \
+                       | grep -oE '\(#[0-9]+\)' | grep -oE '[0-9]+'; } | sort -u )
+          for n in $claimed; do
             gh issue close "$n" --repo "$REPO" \
               --comment "Closed by the merge of #$pr ($sha): the gate passed reviewer+tester on the same head." >/dev/null 2>&1 \
               && echo "     issue #$n closed"
@@ -48,13 +63,13 @@ for pr in $(gh pr list --repo "$REPO" --state open --json number --jq '.[].numbe
       fi
       ;;
     none*)
-      echo "#$pr: waiting — no verdict block yet (ci: $ci). Who owes: reviewer + tester."
+      echo "#$pr: waiting — no verdict block yet (ci: $ci). Who owes: reviewer + tester.$note"
       ;;
     pending*)
-      echo "#$pr: waiting — ${gate#*: } (ci: $ci)"
+      echo "#$pr: waiting — ${gate#*: } (ci: $ci)$note"
       ;;
     failure*)
-      echo "#$pr: BLOCKED by the gate — ${gate#*: }"
+      echo "#$pr: BLOCKED by the gate — ${gate#*: }$note"
       ;;
     *)
       echo "#$pr: unknown gate state '${gate:-none}' (ci: $ci)"
