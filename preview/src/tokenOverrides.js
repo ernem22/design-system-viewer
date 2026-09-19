@@ -55,6 +55,10 @@ export function useTokenOverridesProvider() {
   const [valueEdits, setValueEdits] = useState({});
   // { demoId: { tokenName: sourceTokenName } } — per-component swap, scoped.
   const [swaps, setSwaps] = useState({});
+  // Figma-style right panel selection: { id, title, tokens } of the Demo /
+  // Screen whose tokens the docked properties panel currently shows. Null =
+  // nothing selected (panel shows the global-edits empty state).
+  const [selected, setSelected] = useState(null);
   const elRef = useRef(null);
 
   useEffect(() => {
@@ -90,6 +94,9 @@ export function useTokenOverridesProvider() {
   return {
     valueEdits,
     swaps,
+    selected,
+    selectScope: (scope) => setSelected(scope),
+    clearSelection: () => setSelected(null),
     globalValue,
     valueInDemo,
     setValueEdit: (name, value) => setValueEdits((o) => ({ ...o, [name]: value })),

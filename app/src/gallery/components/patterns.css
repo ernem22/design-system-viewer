@@ -1,0 +1,70 @@
+/* Product patterns section — ported from preview/src/styles/components.css. */
+.dsv-well { background: var(--color-surface-sunken); box-shadow: var(--shadow-inner); border-radius: var(--radius-md); padding: var(--space-4); }
+
+.dsv-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-0-5); max-width: 320px; }
+
+.dsv-cal-day { aspect-ratio: 1; display: inline-flex; align-items: center; justify-content: center; font-size: var(--font-size-sm); color: var(--color-text); background: var(--color-surface); border-radius: var(--radius-md); cursor: pointer; border: var(--border-width-thin) solid transparent; }
+
+.dsv-cal-day:hover { background: var(--color-hover-overlay); }
+
+.dsv-cal-day:active { background: var(--color-active-overlay); }
+
+.dsv-cal-day.is-today { border-color: var(--color-accent); }
+
+.dsv-cal-day.is-range { background: var(--color-accent-subtle); border-radius: var(--radius-none); }
+
+.dsv-cal-day.is-selected { background: var(--color-selected); border-color: var(--color-accent-border); font-weight: var(--font-weight-semibold); }
+
+.dsv-cal-head { font-size: var(--font-size-xs); color: var(--color-text-muted); text-align: center; padding: var(--space-1) 0; }
+
+.dsv-stepper { display: inline-flex; align-items: center; border: var(--input-border-width) solid var(--color-border); border-radius: var(--input-radius); overflow: hidden; background: var(--color-surface); }
+
+.dsv-stepper button { width: var(--input-height-md); height: var(--input-height-md); background: none; border: none; font-size: var(--font-size-lg); cursor: pointer; color: var(--color-input-text); }
+
+.dsv-stepper button:hover { background: var(--color-hover-overlay); }
+
+.dsv-stepper button:active { background: var(--color-active-overlay); }
+
+.dsv-stepper input { width: var(--space-16); text-align: center; border: none; background: transparent; font: inherit; color: var(--color-text); }
+
+.dsv-rating { display: inline-flex; gap: var(--space-0-5); }
+
+.dsv-rating button { background: none; border: none; cursor: pointer; color: var(--color-border-strong); padding: var(--space-0-5); border-radius: var(--radius-sm); transition: transform var(--motion-hover), color var(--motion-hover); }
+
+.dsv-rating button:hover { transform: scale(1.15); color: var(--color-warning); }
+
+.dsv-rating button.is-on { color: var(--color-warning); }
+
+.dsv-rating button.is-on svg { fill: currentColor; }
+
+.dsv-tree { list-style: none; margin: 0; padding: 0; font-size: var(--font-size-sm); }
+
+.dsv-tree ul { list-style: none; margin: 0; padding-left: var(--space-5); border-left: var(--border-width-thin) solid var(--color-border-subtle); margin-left: var(--space-2); }
+
+.dsv-tree-row { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2); border-radius: var(--radius-md); cursor: pointer; }
+
+.dsv-tree-row:hover { background: var(--color-hover-overlay); }
+
+.dsv-tree-row:active { background: var(--color-active-overlay); }
+
+.dsv-tree-row.is-selected { background: var(--color-selected); }
+
+.dsv-dropzone { border: var(--border-width-thick) dashed var(--color-border-strong); border-radius: var(--radius-lg); padding: var(--space-8); text-align: center; color: var(--color-text-muted); background: var(--color-surface); cursor: pointer; transition: border-color var(--motion-hover), background var(--motion-hover), color var(--motion-hover), transform var(--motion-hover); }
+
+.dsv-dropzone:hover { border-color: var(--color-accent-border); color: var(--color-text); }
+
+.dsv-dropzone.is-over { border-color: var(--color-accent); background: var(--color-accent-subtle); color: var(--color-accent-text); }
+
+.dsv-dropzone.is-done { border-style: solid; border-color: var(--color-success-border); }
+
+.dsv-chart-bar { background: var(--color-accent-muted); border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
+
+.dsv-chart-bar--hot { background: var(--color-accent); }
+
+.dsv-kbd-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
+
+.dsv-kbd-table td { padding: var(--space-2) var(--space-3); border-bottom: var(--border-width-thin) solid var(--color-border-subtle); }
+
+.dsv-tree-row > svg:first-child { transition: transform var(--duration-fast) var(--ease-out); }
+
+.dsv-tree-row.is-open > svg:first-child { transform: rotate(90deg); }

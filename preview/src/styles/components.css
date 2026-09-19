@@ -72,67 +72,273 @@ body {
 /* icons inherit the system's stroke width */
 .dsv-ico { stroke-width: var(--icon-stroke-width); }
 
-/* ─────────────────────────────────────────────── app shell */
-.dsv-app { display: grid; grid-template-columns: 210px 1fr; min-height: 100dvh; }
-.dsv-rail {
-  position: sticky; top: 0; align-self: start; height: 100dvh; overflow-y: auto;
-  border-right: var(--border-width-thin) solid var(--color-divider);
-  background: var(--color-surface);
-  padding: 0 var(--space-3) var(--space-5);
+/* ─────────────────────────────────────────────── app shell
+   Figma-style 3 tiers: thin topbar + single minimal left sidebar (parent
+   groups, collapsible child links) + docked right properties panel.
+   Topbar spans all columns; rail and props scroll under it. */
+.dsv-app {
+  display: grid;
+  grid-template-areas: "topbar topbar topbar" "rail main props";
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: 44px minmax(0, 1fr);
+  min-height: 100dvh;
 }
-/* rail toolbar: title + system picker + dark toggle stay pinned while nav scrolls */
-.dsv-rail-head {
-  position: sticky; top: 0; z-index: 2;
+.dsv-app[data-rail="closed"] .dsv-rail { border-right-color: transparent; }
+.dsv-app[data-rail="closed"] .dsv-rail-clip { width: 0; }
+.dsv-app[data-rail="closed"] .dsv-rail-inner { opacity: 0; }
+.dsv-topbar {
+  grid-area: topbar;
+  position: sticky; top: 0; z-index: 30;
+  height: 44px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px;
+  padding: 0 12px;
   background: var(--color-surface);
-  margin: 0 calc(-1 * var(--space-3)); padding: var(--space-5) var(--space-3) var(--space-3);
   border-bottom: var(--border-width-thin) solid var(--color-divider);
 }
-.dsv-rail h1 {
-  font-size: 15px; font-weight: 700; letter-spacing: -0.01em;
-  margin: 0 0 var(--space-3); padding: 0 var(--space-2);
-  color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.dsv-topbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; justify-self: start; }
+.dsv-topbar-center { display: flex; align-items: center; gap: 12px; min-width: 0; justify-self: center; }
+.dsv-topbar-right { display: flex; align-items: center; gap: 10px; flex: none; justify-self: end; }
+.dsv-topbar-iconbtn {
+  appearance: none; flex: none; display: grid; place-items: center;
+  width: 28px; height: 28px; border-radius: var(--radius-md);
+  background: none; border: none; color: var(--color-text-muted); cursor: pointer;
 }
-.dsv-rail::-webkit-scrollbar { width: 8px; }
-.dsv-rail::-webkit-scrollbar-thumb { background: var(--color-border-strong); border-radius: var(--radius-full); border: 2px solid var(--color-surface); }
+.dsv-topbar-iconbtn:hover { background: var(--color-hover-overlay); color: var(--color-text); }
+.dsv-topbar-iconbtn[aria-pressed="true"] { background: var(--color-accent-subtle); color: var(--color-accent-text); }
+/* the bar's action — same accent-tint language as the edits pill and
+   selected states */
+.dsv-topbar-add {
+  appearance: none; flex: none; display: inline-flex; align-items: center; gap: 6px;
+  height: 30px; padding: 0 12px 0 9px; cursor: pointer; white-space: nowrap;
+  background: var(--color-accent-subtle); color: var(--color-accent-text);
+  border: var(--border-width-thin) solid var(--color-accent-border);
+  border-radius: var(--radius-md);
+  font: inherit; font-size: 12.5px; font-weight: 700;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.dsv-topbar-add:hover { background: var(--color-accent-muted); }
+.dsv-topbar-add:active { transform: scale(0.97); }
+.dsv-brand {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  font-size: 13px; font-weight: 700; letter-spacing: -0.01em; color: var(--color-text);
+  white-space: nowrap;
+}
+.dsv-brand-mark { flex: none; }
+.dsv-brand-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsv-topbar-sysbtn {
+  appearance: none; display: inline-flex; align-items: center; gap: 6px;
+  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--color-text-secondary);
+  background: transparent; border: var(--border-width-thin) solid transparent;
+  border-radius: var(--radius-md); height: 30px; padding: 0 6px 0 8px;
+  max-width: 170px; cursor: pointer; flex: none; min-width: 0;
+}
+.dsv-topbar-sysbtn:hover { border-color: var(--color-border); color: var(--color-text); }
+.dsv-topbar-sysbtn[data-state="open"] { border-color: var(--color-accent-border); color: var(--color-text); }
+.dsv-topbar-sysbtn:focus-visible { outline: var(--focus-ring-width) solid var(--color-focus-ring); outline-offset: 1px; }
+.dsv-topbar-sysname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsv-topbar-syschev { flex: none; display: inline-flex; color: var(--color-text-muted); }
+.dsv-sysmenu { min-width: 220px; }
+.dsv-sysmenu-pct {
+  margin-left: auto; padding-left: var(--space-3);
+  font-family: var(--font-mono); font-size: 11px; color: var(--color-text-muted); flex: none;
+}
+/* view switcher — remote-controls the outer shell's Tokens/Preview/Compare tabs */
+.dsv-topbar-tabs {
+  flex: none; display: flex; align-items: center; gap: 2px;
+  background: var(--color-surface-sunken);
+  border: var(--border-width-thin) solid var(--color-border-subtle);
+  border-radius: var(--radius-full); padding: 2px;
+}
+.dsv-topbar-tabs button {
+  appearance: none; border: none; background: none; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 600; color: var(--color-text-muted);
+  padding: 3px 12px; border-radius: var(--radius-full); white-space: nowrap;
+}
+.dsv-topbar-tabs button:hover { color: var(--color-text); }
+.dsv-topbar-tabs button.on { background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-xs); }
+.dsv-topbar-cov {
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+  color: var(--color-text-muted); background: var(--color-surface-sunken);
+  border: var(--border-width-thin) solid var(--color-border-subtle);
+  border-radius: var(--radius-full); padding: 1px 7px; flex: none;
+}
+.dsv-topbar-pill {
+  appearance: none; flex: none; display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 10px; font: inherit; font-size: 12px; font-weight: 600;
+  background: var(--color-accent-subtle); color: var(--color-accent-text);
+  border: var(--border-width-thin) solid var(--color-accent-border);
+  border-radius: var(--radius-full); cursor: pointer; white-space: nowrap;
+}
+.dsv-topbar-pill:hover { background: var(--color-accent-muted); }
+.dsv-topbar-dark {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 600; color: var(--color-text-secondary);
+  cursor: pointer; user-select: none; white-space: nowrap;
+}
+.dsv-topbar-dark input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.dsv-topbar-dark:has(input:focus-visible) { outline: var(--focus-ring-width) solid var(--color-focus-ring); outline-offset: 2px; border-radius: var(--radius-sm); }
+.dsv-topbar-dark .dsv-sw { width: 30px; height: 18px; }
+.dsv-topbar-dark .dsv-sw-th { width: 14px; height: 14px; }
+.dsv-topbar-dark input:checked + .dsv-sw { background: var(--color-accent); }
+.dsv-topbar-dark input:checked + .dsv-sw .dsv-sw-th { transform: translateX(12px); }
+/* compact search in the tools group */
+.dsv-topbar-search {
+  position: relative; display: flex; align-items: center;
+  width: 200px; flex: none;
+}
+.dsv-topbar-search > svg { position: absolute; left: 10px; color: var(--color-text-muted); pointer-events: none; }
+.dsv-topbar-search input {
+  font: inherit; font-size: var(--font-size-sm); color: var(--color-text);
+  background: var(--color-surface-sunken); border: var(--border-width-thin) solid transparent;
+  border-radius: var(--radius-md); height: 30px;
+  padding: 0 30px 0 32px; width: 100%; min-width: 0;
+  transition: background var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
+}
+.dsv-topbar-search input:hover { border-color: var(--color-border); }
+.dsv-topbar-search input:focus { outline: 0; background: var(--color-surface); border-color: var(--color-accent-border); }
+.dsv-topbar-search input::placeholder { color: var(--color-text-disabled); }
+.dsv-topbar-search input::-webkit-search-cancel-button { display: none; }
+.dsv-topbar-search button {
+  position: absolute; right: 3px; width: 24px; height: 24px; padding: 0;
+  display: grid; place-items: center; font-size: 15px; line-height: 1;
+  background: none; border: none; border-radius: var(--radius-sm);
+  color: var(--color-text-muted); cursor: pointer;
+}
+.dsv-topbar-search button:hover { color: var(--color-text); background: var(--color-hover-overlay); }
+.dsv-rail {
+  grid-area: rail;
+  position: sticky; top: 44px; align-self: start; height: calc(100dvh - 44px);
+  border-right: var(--border-width-thin) solid var(--color-divider);
+  background: var(--color-surface);
+  transition: border-color 200ms var(--ease-out);
+}
+/* width animates on the clip layer (grid columns can't transition); the
+   inner keeps a fixed width so links never reflow mid-collapse */
+.dsv-rail-clip {
+  width: 208px; height: 100%; overflow: hidden;
+  transition: width 260ms var(--ease-emphasized);
+}
+.dsv-rail-inner {
+  position: relative; /* containing block for .dsv-rail-indicator: its `top`
+    is measured in this scroller's content-space (delta + scrollTop), so it
+    must be positioned relative to the inner — otherwise the pill anchors to
+    .dsv-rail (sticky = positioned), never scrolls with the links, and sits
+    off by the inner's offset inside the rail */
+  width: 208px; height: 100%; overflow-y: auto;
+  padding: var(--space-2) var(--space-2-5) var(--space-5);
+  transition: opacity 180ms var(--ease-out);
+}
+/* collapse handle straddling the rail's right edge. When the rail is
+   closed the panel has zero width, so the handle docks fully inside the
+   viewport (left:2px) instead of hanging half off-screen. */
+.dsv-rail-handle {
+  position: absolute; right: -14px; top: 60px; z-index: 2;
+  width: 28px; height: 28px; border-radius: var(--radius-full);
+  display: grid; place-items: center;
+  background: var(--color-surface); color: var(--color-text-muted);
+  border: var(--border-width-thin) solid var(--color-border-strong);
+  box-shadow: var(--shadow-sm); cursor: pointer;
+  transition: left 260ms var(--ease-emphasized), right 260ms var(--ease-emphasized);
+}
+.dsv-rail-handle:hover { color: var(--color-text); border-color: var(--color-accent-border); }
+.dsv-app[data-rail="closed"] .dsv-rail-handle { right: auto; left: 2px; }
+.dsv-rail-inner::-webkit-scrollbar { width: 8px; }
+.dsv-rail-inner::-webkit-scrollbar-thumb { background: var(--color-border-strong); border-radius: var(--radius-full); border: 2px solid var(--color-surface); }
 .dsv-rail .group-label {
-  display: flex; align-items: center; justify-content: space-between; gap: var(--space-2);
-  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  appearance: none; width: 100%; background: none; border: none; cursor: pointer;
+  display: flex; align-items: center; gap: var(--space-1-5);
+  font: inherit; font-size: 11px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.08em; color: var(--color-text-muted);
-  margin: var(--space-5) var(--space-2) var(--space-1-5);
+  margin: var(--space-4) 0 var(--space-1); padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-fast) var(--ease-out), background var(--duration-fast) var(--ease-out);
 }
+.dsv-rail .group-label:hover { color: var(--color-text); background: var(--color-hover-overlay); }
 .dsv-rail .group-label:first-child { margin-top: var(--space-1); }
+.dsv-rail .group-label span:not(.n) { flex: 1; text-align: left; }
+.dsv-rail .group-chevron {
+  flex: none; color: var(--color-text-muted); transition: transform var(--duration-normal) var(--ease-out);
+}
+.dsv-rail .group-label[aria-expanded="false"] .group-chevron { transform: rotate(-90deg); }
 .dsv-rail .group-label .n {
   font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; letter-spacing: 0;
   color: var(--color-text-muted); background: var(--color-surface-sunken);
   border: var(--border-width-thin) solid var(--color-border-subtle);
   border-radius: var(--radius-full); padding: 1px 7px;
 }
+.dsv-rail-group-items {
+  display: grid; grid-template-rows: 1fr; transition: grid-template-rows var(--duration-normal) var(--ease-out);
+}
+.dsv-rail-group-items.is-collapsed { grid-template-rows: 0fr; }
+.dsv-rail-group-items > div { overflow: hidden; min-height: 0; display: flex; flex-direction: column; }
 .dsv-rail a {
-  position: relative; display: flex; align-items: center;
-  padding: var(--space-1-5) var(--space-2-5);
+  position: relative; z-index: 1; display: flex; align-items: center;
+  padding: 5px var(--space-2-5);
   border-radius: var(--radius-md); color: var(--color-text-secondary);
-  text-decoration: none; font-size: 13.5px; font-weight: 500;
-  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+  text-decoration: none; font-size: 13px; font-weight: 500;
+  transition: color var(--duration-fast) var(--ease-out);
 }
-.dsv-rail a:hover { background: var(--color-hover-overlay); color: var(--color-text); }
-.dsv-main { padding: var(--space-8) var(--desktop-page-padding); max-width: 1000px; min-width: 0; width: 100%; margin: 0 auto; }
-.dsv-rail a.active {
-  background: var(--color-accent-subtle); color: var(--color-accent-text);
-  font-weight: var(--font-weight-semibold);
+.dsv-rail a:hover { color: var(--color-text); }
+.dsv-main { grid-area: main; padding: var(--space-8) var(--desktop-page-padding); max-width: 1000px; min-width: 0; width: 100%; margin: 0 auto; }
+.dsv-rail a.active { color: var(--color-accent-text); font-weight: var(--font-weight-semibold); }
+/* Sliding highlight behind the active link — one element that glides between
+   positions (Linear/Framer-style rail) instead of each link toggling its own
+   flat background, so switching sections reads as motion, not a jump-cut. */
+.dsv-rail-indicator {
+  position: absolute; left: var(--space-2-5); right: var(--space-2-5); z-index: 0;
+  background: var(--color-accent-subtle); border-radius: var(--radius-md);
   box-shadow: inset 2.5px 0 0 var(--color-accent);
+  transition: top var(--duration-normal) var(--ease-emphasized), height var(--duration-normal) var(--ease-emphasized);
 }
-/* real switch instead of a bare checkbox row */
-.dsv-dark-toggle {
-  display: flex; align-items: center; gap: var(--space-2-5);
-  min-height: 38px; margin: var(--space-2) var(--space-2) 0; padding: var(--space-1) var(--space-2-5);
-  font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--color-text-secondary);
-  border: var(--border-width-thin) solid var(--color-border-subtle);
-  border-radius: var(--radius-md); cursor: pointer; user-select: none;
-  transition: border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+/* ─────────────────────────────────────────────── docked properties panel
+   (3rd tier): persistent right column, same content as the mobile overlay
+   drawer. The round handle on its left edge is the close affordance. */
+.dsv-props {
+  grid-area: props;
+  position: sticky; top: 44px; align-self: start;
+  height: calc(100dvh - 44px);
+  background: var(--color-surface);
+  border-left: var(--border-width-thin) solid var(--color-divider);
+  transition: border-color 200ms var(--ease-out);
 }
-.dsv-dark-toggle:hover { color: var(--color-text); border-color: var(--color-border-strong); }
-.dsv-dark-toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
-.dsv-dark-toggle:has(input:focus-visible) { outline: var(--focus-ring-width) solid var(--color-focus-ring); outline-offset: var(--focus-ring-offset); }
+/* same clip-width treatment as the rail so open/close glides instead of
+   blinking; the inner keeps a fixed width so rows never reflow mid-flight */
+.dsv-props-clip {
+  width: 300px; height: 100%; overflow: hidden;
+  transition: width 260ms var(--ease-emphasized);
+}
+.dsv-app[data-props="closed"] .dsv-props { border-left-color: transparent; }
+.dsv-app[data-props="closed"] .dsv-props-clip { width: 0; }
+.dsv-app[data-props="closed"] .dsv-props-inner { opacity: 0; }
+.dsv-props-inner {
+  width: 300px; height: 100%; overflow-y: auto; display: flex; flex-direction: column;
+  transition: opacity 180ms var(--ease-out);
+}
+.dsv-props-inner .dsv-drawer-body { padding-bottom: var(--space-6); }
+/* close handle straddling the panel's left edge; docks fully inside the
+   viewport (right:2px) when the panel is closed */
+.dsv-props-handle {
+  position: absolute; left: -14px; top: 60px; z-index: 2;
+  width: 28px; height: 28px; border-radius: var(--radius-full);
+  display: grid; place-items: center;
+  background: var(--color-surface); color: var(--color-text-muted);
+  border: var(--border-width-thin) solid var(--color-border-strong);
+  box-shadow: var(--shadow-sm); cursor: pointer;
+  transition: left 260ms var(--ease-emphasized), right 260ms var(--ease-emphasized);
+}
+.dsv-props-handle:hover { color: var(--color-text); border-color: var(--color-accent-border); }
+.dsv-app[data-props="closed"] .dsv-props-handle { left: auto; right: 2px; }
+.dsv-props-empty {
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
+  text-align: center; color: var(--color-text-muted);
+  padding: var(--space-8) var(--space-2); font-size: var(--font-size-sm);
+}
+.dsv-props-empty p { margin: 0; }
+.dsv-props-empty b { color: var(--color-text); font-weight: var(--font-weight-semibold); }
+/* selected trigger reads as pressed */
+.dsv-token-drawer-trigger.is-active {
+  background: var(--color-accent-subtle); color: var(--color-accent-text); border-color: var(--color-accent-border);
+}
+/* switch base shared by the topbar dark toggle */
 .dsv-sw {
   position: relative; flex: none; width: 34px; height: 20px; border-radius: var(--radius-full);
   background: var(--color-border-strong);
@@ -143,8 +349,8 @@ body {
   background: var(--color-surface); box-shadow: var(--shadow-sm);
   transition: transform var(--duration-fast) var(--ease-out);
 }
-.dsv-dark-toggle input:checked + .dsv-sw { background: var(--color-accent); }
-.dsv-dark-toggle input:checked + .dsv-sw .dsv-sw-th { transform: translateX(14px); }
+.dsv-topbar-dark input:checked + .dsv-sw { background: var(--color-accent); }
+.dsv-topbar-dark input:checked + .dsv-sw .dsv-sw-th { transform: translateX(12px); }
 /* rail section search */
 .dsv-rail-filter { position: relative; display: flex; align-items: center; margin: var(--space-2) var(--space-2) 0; }
 .dsv-rail-filter > svg { position: absolute; left: var(--space-2-5); color: var(--color-text-muted); pointer-events: none; }
@@ -170,17 +376,29 @@ body {
 .dsv-rail-filter button:hover { color: var(--color-text); background: var(--color-hover-overlay); }
 
 @media (max-width: 760px) {
-  .dsv-app { grid-template-columns: 1fr; }
-  /* rail becomes a compact top bar: controls pinned, each group's label
-     sticks while its links scroll by as small chips */
+  .dsv-app { grid-template-areas: "topbar" "rail" "main"; grid-template-columns: 1fr; grid-template-rows: 44px auto 1fr; }
+  .dsv-app[data-rail="closed"] { grid-template-columns: 1fr; }
+  .dsv-topbar { gap: 8px; }
+  .dsv-topbar-dark-label { display: none; }
+  .dsv-topbar-tabs button { padding: 3px 8px; }
+  .dsv-topbar-search { flex: 1; min-width: 48px; width: auto; }
+  .dsv-props { display: none; }
+  /* rail is the only section nav on small screens, so it stays visible */
+  .dsv-rail-handle { display: none; }
+  .dsv-rail-clip { width: auto; height: auto; overflow: visible; }
+  /* rail becomes a compact bar under the topbar: each group's label sticks
+     while its links scroll by as small chips */
   .dsv-rail {
-    position: sticky; top: 0; z-index: var(--z-sticky); height: auto; max-height: 40dvh;
-    display: block; overflow-y: auto; overflow-x: hidden;
+    position: sticky; top: 44px; z-index: var(--z-sticky); height: auto; max-height: 40dvh;
+    display: block; width: auto; overflow-y: auto; overflow-x: hidden;
     padding: 0 var(--space-3) var(--space-3);
     border-right: none; border-bottom: var(--border-width-thin) solid var(--color-divider);
   }
-  .dsv-rail-head { padding: var(--space-3); }
-  .dsv-rail-head h1 { margin-bottom: var(--space-2); }
+  .dsv-rail-inner { width: auto; height: auto; overflow: visible; padding: 0; }
+  .dsv-rail-handle { display: none; }
+  .dsv-app[data-rail="closed"] .dsv-rail { border-bottom: var(--border-width-thin) solid var(--color-divider); }
+  .dsv-app[data-rail="closed"] .dsv-rail-clip { width: auto; }
+  .dsv-app[data-rail="closed"] .dsv-rail-inner { opacity: 1; }
   .dsv-rail-group { display: block; }
   .dsv-rail-group .group-label {
     position: sticky; top: 0; z-index: 1; background: var(--color-surface);
@@ -192,6 +410,10 @@ body {
     font-size: var(--font-size-xs); border: var(--border-width-thin) solid transparent;
   }
   .dsv-rail-group a.active { border-color: var(--color-accent-border); }
+  /* the sliding pill assumes a vertical stack of full-width links — mobile's
+     horizontal chip-wrap breaks that math, so fall back to the border above */
+  .dsv-rail-indicator { display: none; }
+  .dsv-rail-group-items.is-collapsed { grid-template-rows: 1fr; } /* chips already fit the compact bar; keep them reachable without a tap */
   .dsv-main { padding: var(--space-6) var(--mobile-page-padding); }
   .dsv-section { margin-bottom: var(--mobile-section-spacing); }
   .dsv-row { gap: var(--mobile-content-gap); }
@@ -201,6 +423,21 @@ body {
   .dsv-steps { flex-wrap: nowrap; }
   .dsv-steps--center { justify-content: flex-start; }
   .dsv-step .bar { width: var(--space-4); }
+}
+
+@media (max-width: 1050px) {
+  .dsv-brand-name { display: none; }
+  .dsv-topbar-sysbtn { max-width: 120px; }
+  .dsv-topbar-add-label { display: none; }
+  .dsv-topbar-add { padding: 0 8px; }
+}
+
+@media (max-width: 560px) {
+  .dsv-topbar { gap: 8px; padding: 0 8px; }
+  .dsv-topbar-left { gap: 6px; }
+  .dsv-topbar-right { gap: 6px; }
+  .dsv-topbar-cov { display: none; }
+  .dsv-topbar-sysbtn { max-width: 96px; }
 }
 
 @media (max-width: 420px) {
@@ -343,14 +580,8 @@ body {
 .dsv-token-picker-group { margin-left: auto; font-size: 10.5px; flex: none; }
 .dsv-token-picker-empty, .dsv-token-picker-more { padding: var(--space-2); font-size: var(--font-size-xs); text-align: center; }
 
-.dsv-override-pill {
-  appearance: none; display: flex; align-items: center; gap: var(--space-2);
-  width: 100%; margin: var(--space-2) var(--space-2) 0; padding: var(--space-1-5) var(--space-2-5);
-  background: var(--color-accent-subtle); color: var(--color-accent-text);
-  border: var(--border-width-thin) solid var(--color-accent-border); border-radius: var(--radius-md);
-  font: inherit; font-size: var(--font-size-xs); font-weight: var(--font-weight-medium); cursor: pointer;
-}
-.dsv-override-pill-reset { margin-left: auto; text-decoration: underline; }
+.dsv-override-pill-reset { text-decoration: underline; }
+.dsv-topbar-pill .dsv-override-pill-reset { margin-left: 0; }
 .dsv-col { display: flex; flex-direction: column; gap: var(--space-3); max-width: min(340px, 100%); width: 100%; }
 .dsv-font-note {
   background: var(--color-warning-subtle); color: var(--color-warning-text);

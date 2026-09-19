@@ -1,0 +1,40 @@
+import js from '@eslint/js'
+import globals from 'globals'
+import reactHooks from 'eslint-plugin-react-hooks'
+import reactRefresh from 'eslint-plugin-react-refresh'
+import tseslint from 'typescript-eslint'
+import { defineConfig, globalIgnores } from 'eslint/config'
+
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      js.configs.recommended,
+      tseslint.configs.recommended,
+      reactHooks.configs['recommended-latest'],
+      reactRefresh.configs.vite,
+    ],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: globals.browser,
+    },
+    rules: {
+      // Stub functions keep named-but-unused params (e.g. src/lib/*) —
+      // underscore prefix marks them as intentionally unused.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+    },
+  },
+  {
+    // Gallery files co-export section data + demo components by design
+    // (section lists live next to the demos they describe). Compare's
+    // registry.tsx does the same for its own local comparable renderers.
+    files: ['src/gallery/**/*.{ts,tsx}', 'src/compare/registry.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+])

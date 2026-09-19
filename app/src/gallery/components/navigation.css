@@ -1,0 +1,40 @@
+/* Navigation section — menubar, navigation menu, tabs, toolbar.
+   (.dsv-menu* used by Menubar's dropdowns lives in gallery.css, shared with
+   Overlays' DropdownMenu/ContextMenu.) Ported from
+   preview/src/styles/components.css. */
+
+.dsv-nav { display: flex; gap: var(--nav-gap); background: var(--color-surface); padding: var(--nav-padding-x); border-radius: var(--radius-md); border: var(--border-width-thin) solid var(--color-border-subtle); position: relative; min-height: var(--nav-height); align-items: center; }
+.dsv-nav-trigger, .dsv-nav-link {
+  appearance: none; background: none; border: none; font: inherit; font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium); color: var(--color-text-secondary);
+  padding: var(--space-2) var(--space-3); border-radius: var(--nav-item-radius); cursor: pointer;
+  min-height: var(--nav-item-height); display: inline-flex; align-items: center;
+}
+.dsv-nav-link { text-decoration: none; }
+.dsv-nav-trigger:hover, .dsv-nav-link:hover { background: var(--color-hover-overlay); color: var(--color-text); }
+.dsv-nav-trigger[data-state="open"] { background: var(--color-accent-subtle); color: var(--color-accent-text); }
+.dsv-nav-list { display: flex; gap: var(--space-1); list-style: none; margin: 0; padding: 0; }
+.dsv-nav-viewport-wrap { position: absolute; top: 100%; left: 0; display: flex; justify-content: center; }
+.dsv-nav-viewport {
+  margin-top: var(--space-2); background: var(--color-surface-raised);
+  border: var(--border-width-thin) solid var(--color-border-subtle);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-xl); padding: var(--space-4);
+  width: 320px; max-width: calc(100vw - var(--space-8));
+}
+.dsv-nav-content { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-2); }
+
+.dsv-tabs-root { width: var(--space-96); max-width: 100%; }
+.dsv-tabs-list { display: flex; gap: var(--space-1); border-bottom: var(--border-width-thin) solid var(--color-divider); }
+.dsv-tabs-trigger {
+  appearance: none; background: none; border: none; font: inherit;
+  font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted); padding: var(--space-2) var(--space-3);
+  cursor: pointer; border-bottom: var(--border-width-thick) solid transparent;
+  margin-bottom: calc(-1 * var(--border-width-thin));
+}
+.dsv-tabs-trigger:hover { color: var(--color-text); }
+.dsv-tabs-trigger[data-state="active"] { color: var(--color-accent-text); border-bottom-color: var(--color-accent); }
+.dsv-tabs-content { padding-top: var(--space-4); font-size: var(--font-size-sm); color: var(--color-text-secondary); }
+
+.dsv-toolbar { display: flex; align-items: center; gap: var(--space-1); background: var(--color-surface); padding: var(--space-1); border: var(--border-width-thin) solid var(--color-border-subtle); border-radius: var(--radius-md); }
+.dsv-toolbar-sep { width: var(--border-width-thin); align-self: stretch; background: var(--color-divider); margin: var(--space-1) var(--space-1); }
