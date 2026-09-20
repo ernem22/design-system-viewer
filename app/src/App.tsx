@@ -70,8 +70,9 @@ function App() {
   const [sectionSyncArmed, setSectionSyncArmed] = useState(false);
   const [query, setQuery] = useState("");
   // Dark variant is per-view, not persisted (legacy parity); it only exists
-  // for systems that ship a `themes.dark` block.
-  const [dark, setDark] = useState(false);
+  // for systems that ship a `themes.dark` block. A deep-linked ?dark=1 seeds
+  // it, so a copied link restores the variant it was showing.
+  const [dark, setDark] = useState(() => readViewUrl().dark);
   const hasDark = !!active?.themes?.dark?.length;
   const darkOn = dark && hasDark;
 
@@ -221,8 +222,9 @@ function App() {
       view: tab === "compare" && mode === "diff" ? mode : null,
       component:
         tab === "compare" && componentId !== DEFAULT_COMPONENT_ID ? componentId : null,
+      dark: darkOn,
     });
-  }, [loading, tab, activeSlug, picked, mode, componentId]);
+  }, [loading, tab, activeSlug, picked, mode, componentId, darkOn]);
 
   // Hash half restore: client-rendered sections miss the browser's native
   // initial jump, so redo it once layout settles (double rAF, like legacy's
