@@ -109,6 +109,7 @@ describe('writeViewUrl', () => {
       cmp: [],
       view: null,
       component: null,
+      dark: false,
     });
   });
 
@@ -136,6 +137,7 @@ describe('writeViewUrl', () => {
       cmp: ['a', 'b'],
       view: 'diff',
       component: 'button',
+      dark: false,
     });
   });
 
@@ -160,6 +162,7 @@ describe('writeViewUrl', () => {
       cmp: [],
       view: 'diff',
       component: 'button',
+      dark: false,
     });
   });
 
@@ -175,6 +178,26 @@ describe('writeViewUrl', () => {
     writeViewUrl({ sys: 'carbon' });
     expect(location.search).toContain('foo=bar');
     expect(readViewUrl(location.search).sys).toBe('carbon');
+  });
+});
+
+describe('dark flag (#110)', () => {
+  it('reads dark=false from the bare root', () => {
+    expect(readViewUrl('').dark).toBe(false);
+  });
+
+  it('round-trips dark through the live URL (write then read)', () => {
+    const location = installWindowStub();
+    writeViewUrl({ sys: 'aurora', dark: true });
+    expect(location.search).toContain('dark=1');
+    expect(readViewUrl(location.search).dark).toBe(true);
+  });
+
+  it('drops the dark flag on write when dark is off', () => {
+    const location = installWindowStub('?sys=a&dark=1');
+    writeViewUrl({ sys: 'a', dark: false });
+    expect(location.search).not.toContain('dark');
+    expect(readViewUrl(location.search).dark).toBe(false);
   });
 });
 
