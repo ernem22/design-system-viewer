@@ -77,7 +77,16 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
   transition: background var(--motion-hover), border-color var(--motion-hover), transform var(--motion-press);
 }
 .dsv-btn:active:not(:disabled) { transform: scale(var(--motion-scale-active)); }
-.dsv-btn:disabled, .dsv-btn[data-disabled] { opacity: 0.5; cursor: not-allowed; }
+/* Disabled is a token state, not a faded live control: opacity fades the
+   accent fill and its on-accent text together, so both drop under AA in the
+   dark variant. Swap the pair for the disabled-surface tokens instead. */
+.dsv-btn:disabled, .dsv-btn[data-disabled] {
+  opacity: 1;
+  cursor: not-allowed;
+  background: var(--color-surface-disabled);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-disabled);
+}
 .dsv-btn--sm { height: var(--button-height-sm); font-size: var(--font-size-xs); padding: 0 var(--button-padding-x-sm); }
 .dsv-btn--lg { height: var(--button-height-lg); font-size: var(--font-size-base); padding: 0 var(--button-padding-x-lg); }
 .dsv-btn--xl { height: var(--button-height-xl); font-size: var(--font-size-base); padding: 0 var(--button-padding-x-xl); }
@@ -313,7 +322,7 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
 
 .dsv-banner .close { margin-left: auto; background: none; border: none; color: inherit; opacity: 0.8; cursor: pointer; padding: var(--space-1); }
 
-.dsv-banner--on-dark { background: var(--color-surface-inverse); color: var(--color-text-on-accent); }
+.dsv-banner--on-dark { background: var(--color-surface-inverse); color: var(--color-text-inverse); }
 
 .dsv-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
 

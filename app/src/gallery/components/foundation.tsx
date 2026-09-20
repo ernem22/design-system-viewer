@@ -358,7 +358,7 @@ export default function FoundationBody() {
           <div
             style={{
               background: "var(--color-surface-inverse)",
-              color: "var(--color-text-on-accent)",
+              color: "var(--color-text-inverse)",
               borderRadius: "var(--radius-lg)",
               padding: "var(--space-4)",
               minWidth: 200,
@@ -368,7 +368,7 @@ export default function FoundationBody() {
               Inverse panel
             </div>
             <div style={{ fontSize: "var(--font-size-xs)", opacity: 0.8 }}>
-              surface-inverse · text-on-accent
+              surface-inverse · text-inverse
             </div>
           </div>
           <div
@@ -550,11 +550,11 @@ export default function FoundationBody() {
           </div>
           <div className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>
             section rhythm — mobile{" "}
-            <span style={{ padding: "var(--mobile-section-spacing) 0", background: "var(--color-accent-subtle)" }}>
+            <span style={{ padding: "var(--mobile-section-spacing) 0", background: "var(--color-accent-subtle)", color: "var(--color-accent-text)" }}>
               pad
             </span>{" "}
             · desktop{" "}
-            <span style={{ padding: "var(--desktop-section-spacing) 0", background: "var(--color-accent-muted)" }}>
+            <span style={{ padding: "var(--desktop-section-spacing) 0", background: "var(--color-accent-muted)", color: "var(--color-accent-text)" }}>
               pad
             </span>
           </div>
