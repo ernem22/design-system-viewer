@@ -6,9 +6,14 @@
 
 .dsv-banner--on-dark .dsv-btn--on-dark-solid { background: var(--color-surface); color: var(--color-text); }
 
-.dsv-btn--on-dark-ghost { color: var(--color-on-accent); border: var(--border-width-thin) solid color-mix(in srgb, var(--color-on-accent) 50%, transparent); }
+/* The banner is --color-surface-inverse, so its ghost button needs the
+   inverse text token, not --color-on-accent (which tracks the accent fill,
+   not this surface) and not the plain ghost rule's --color-text-secondary.
+   Scoped to outrank gallery.css's `.dsv-btn--ghost` (same one-class weight,
+   but that sheet loads later). */
+.dsv-banner--on-dark .dsv-btn--on-dark-ghost { color: var(--color-text-inverse); border: var(--border-width-thin) solid color-mix(in srgb, var(--color-text-inverse) 50%, transparent); }
 
-.dsv-btn--on-dark-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--color-on-accent) 12%, transparent); color: var(--color-on-accent); }
+.dsv-banner--on-dark .dsv-btn--on-dark-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--color-text-inverse) 12%, transparent); color: var(--color-text-inverse); }
 
 .dsv-kanban { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-4); }
 

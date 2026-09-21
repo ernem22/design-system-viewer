@@ -2,7 +2,9 @@
    input adornment/state variants. Ported from preview/src/styles/components.css. */
 
 .dsv-control-label { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm); }
-.dsv-control-label--disabled { opacity: var(--opacity-disabled); }
+/* Dim with the muted text token, not opacity: `opacity` fades the label and
+   its surface toward each other and lands under AA in the dark variant. */
+.dsv-control-label--disabled { color: var(--color-text-muted); }
 
 .dsv-input-wrap { position: relative; display: flex; align-items: center; }
 .dsv-input-wrap .dsv-input { flex: 1; }
@@ -27,9 +29,14 @@
   background: var(--color-surface-disabled);
   border: var(--border-width-thin) solid var(--color-border-disabled);
   border-radius: var(--radius-md); padding: var(--space-4);
-  color: var(--color-icon-disabled); min-width: var(--space-56);
+  color: var(--color-text-secondary); min-width: var(--space-56);
 }
-.dsv-disabled-box--dim { opacity: var(--opacity-disabled); }
+/* Disabled emphasis comes from the token surface, not an opacity veil — the
+   veil dims text and surface together and drops under 4.5:1 in dark. */
+.dsv-disabled-box--dim {
+  background: var(--color-surface-sunken);
+  color: var(--color-text-secondary);
+}
 .dsv-disabled-box-note { font-size: var(--font-size-xs); margin-top: var(--space-1); }
 
 .dsv-check {
