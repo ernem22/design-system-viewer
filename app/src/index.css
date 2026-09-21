@@ -1,5 +1,9 @@
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  /* The viewer ships the design system's own stack. The full fallback chain
+     lives on --font-sans in tokens.css (a system layer may overwrite it), so
+     a system with no font tokens still renders in something sensible instead
+     of collapsing to the platform font. */
+  font-family: var(--font-sans);
   line-height: 1.5;
   font-weight: 400;
   font-synthesis: none;
@@ -10,6 +14,18 @@
 
 * {
   box-sizing: border-box;
+}
+
+/* Native controls do not inherit font-family: the UA stylesheet forces the
+   platform font (Arial on Windows), which is why the chrome and every form
+   control rendered in Arial. Inherit the token stack instead; a component
+   that wants mono/display still opts in with its own font-family. */
+button,
+input,
+select,
+textarea,
+optgroup {
+  font-family: inherit;
 }
 
 html,
