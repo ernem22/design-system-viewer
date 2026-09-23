@@ -259,6 +259,37 @@ and the topbar order all driven live.
    `SystemSwitcher.tsx` imports the latter first — a single-class override lost, so the
    rule is written as `.tok-dialog.app-import-dialog`.
 
+5. **The composition was still chrome-first** (user, after the layout pass): the modal's
+   job is *adding a system*, yet title, step list, description, source-choice, "where to
+   land" and the footer were taking most of it. The rule the user stated: **the most
+   visible, most reachable part of a screen is that screen's reason to exist.** So the
+   wizard is gone and the work owns the surface:
+
+   - **Near-fullscreen modal** (`min(1280px, 96vw)` × `min(92vh, 900px)`) that still
+     reads as a modal (overlay, Esc, focus trap, centred).
+   - **One line of chrome on top**: title, a one-line reassurance, the ways in as compact
+     triggers (`Upload .css`, `Fetch URL`, `JSON export`, `Template`, `Copy template`),
+     the source line, close. A trigger opens **only its own row** (URL row or JSON row),
+     and `Template`/`Copy template` write/read the same buffer.
+   - **The work fills everything between**: two live panes over the same CSS text —
+     `Fill the schema` (54 groups, one row per name, sticky group heads, extras with
+     rename suggestions) and `The CSS text` (raw editor + the coverage/lint readout).
+     No step gates either one; both are visible and editable at the same time.
+   - **One line of chrome at the bottom**: name field, error if any, Cancel, Save, and the
+     "Open in" preference as a small menu attached to Save instead of a footer row of its
+     own (the stored key is still honoured, `#32`'s migration intact).
+
+   Measured live: dialog **1188×701** in a 1238×762 viewport, chrome **116px** total
+   (top bar 57 + bottom bar 59) against a work area of **584px = 83% of the dialog**;
+   both panes present (`Schema fill` 635×643, `CSS text` 552×643 before the row fix),
+   zero step elements, 54 group sections live on open.
+
+   One bug the first attempt shipped and the measurement caught: the dialog's grid
+   declared four rows while the optional source rows made the child count vary, so the
+   footer landed in the `1fr` track and its buttons were **clipped 29px below the dialog
+   edge**. The optional rows now live *inside* the header, and the grid is exactly
+   `auto / minmax(0,1fr) / auto`.
+
 Known environment flake (not code): the default vitest run spawns one worker per test
 file (30 on this host, ~9.6 s startup each) and `src/tokens/SchemaView.test.tsx`'s
 clipboard test can hit its 5 s timeout under that load — it passes alone and in the

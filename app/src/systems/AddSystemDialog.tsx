@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import * as ToggleGroup from "@radix-ui/react-toggle-group";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { REFERENCE, templateCss } from "../../../src/core/schema.js";
 import type { AppTab } from "../shell/Shell.tsx";
 import type { PushToast } from "../lib/toasts.ts";
-import { Icon, type IconName } from "../lib/icons.tsx";
+import { Icon } from "../lib/icons.tsx";
 import { CssPreview } from "../tokens/CssPreview.tsx";
 import { countTokens } from "../tokens/tokenUtils.ts";
 import { fetchCss, readCssFile } from "../lib/cssImport.ts";
@@ -14,7 +14,6 @@ import {
   readSystemJson,
   stripPrefix,
 } from "../lib/systemImport.ts";
-import { tokenValueMap } from "../lib/tokenCss.ts";
 import { AFTER_SAVE_TABS, readAfterSave, writeAfterSave } from "./afterSave.ts";
 import { SchemaFill } from "./SchemaFill.tsx";
 // Dialog primitives (.tok-dialog*) + shared add-dialog language live with
@@ -24,26 +23,9 @@ import "../tokens/TokenToolbar.css";
 import "./AddSystemDialog.css";
 
 const FULL_TEMPLATE_COUNT = (REFERENCE as { tokens: string[] }[]).reduce((n, g) => n + g.tokens.length, 0);
-const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
-/** Steps, in order. The current one is exposed as `data-step` for tests. */
-const STEPS = ["Source", "Review", "Save"] as const;
-
-/** The import sources, as a picker rather than one flat row: each one is a
-    way *in*, and the chosen one decides which panel step 1 shows. */
-const SOURCES: { id: Source; label: string; hint: string; icon: IconName }[] = [
-  { id: "paste", label: "Paste CSS", hint: "a block of --token: value; lines", icon: "edit" },
-  { id: "upload", label: "Upload .css", hint: "a file, or drop one on the page", icon: "file" },
-  { id: "url", label: "Fetch URL", hint: "a hosted stylesheet", icon: "link" },
-  { id: "json", label: "JSON export", hint: "a system from the Tokens tab", icon: "copy" },
-];
-
-type Step = 1 | 2 | 3;
-type View = "form" | "paste";
-type Source = "paste" | "upload" | "url" | "json";
-
-/** What the current text came from — shown as a durable line under the
-    picker, because a toast is gone before the user has read it. */
+/** What the current text came from. One line in the top bar, because a toast
+    is gone before it has been read. */
 interface SourceStatus {
   kind: string;
   detail: string;
@@ -56,15 +38,17 @@ function formatBytes(n: number): string {
 }
 
 /**
- * Add System dialog (controlled — the header button, the empty-state cards
- * and a page-level file drop all open the same instance).
+ * Add System dialog (controlled — the topbar `+`, the empty-state cards and a
+ * page-level file drop all open the same instance).
  *
- * It is an *import* flow, not a paste box (#116 / #124): Source → Review →
- * Save. Every source (paste, `.css` file, URL, our own JSON export, the
- * clipboard) lands in the same CSS text; the review step shows that text
- * against the schema, grouped by its own 54 headings with one row per name, so
- * a single token can be filled without pasting 432 lines; and only the Save
- * step writes. Back never loses the text, Cancel at any step writes nothing.
+ * The dialog exists to *add a system*, so the work owns the surface: two live
+ * panes over the same CSS text — the schema fill (54 groups, one row per name,
+ * fill a single token without pasting 432 lines) and the raw text — filling
+ * everything between a one-line top bar and a one-line bottom bar.
+ *
+ * The ways in (upload, URL, JSON export, template, clipboard) are compact
+ * triggers in that top bar, each opening only the row it needs. There is no
+ * wizard: nothing is behind a step, and nothing is written until Save.
  */
 export function AddSystemDialog({
   open,
@@ -82,39 +66,34 @@ export function AddSystemDialog({
   onToast: PushToast;
   onSaved: (tab: AppTab) => void;
 }) {
-  const [step, setStep] = useState<Step>(1);
-  const [view, setView] = useState<View>("form");
-  const [source, setSource] = useState<Source>("paste");
-  const [showText, setShowText] = useState(true);
-  const [status, setStatus] = useState<SourceStatus | null>(null);
   const [name, setName] = useState("");
   const [css, setCss] = useState("");
-  const [url, setUrl] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [jsonDraft, setJsonDraft] = useState("");
-  const [hint, setHint] = useState<string | null>(null);
+  const [status, setStatus] = useState<SourceStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [url, setUrl] = useState("");
+  const [urlOpen, setUrlOpen] = useState(false);
+  const [jsonOpen, setJsonOpen] = useState(false);
+  const [jsonDraft, setJsonDraft] = useState("");
+  const [busy, setBusy] = useState(false);
   const [afterSave, setAfterSave] = useState<AppTab>(readAfterSave);
   const [strippedPrefixes, setStrippedPrefixes] = useState<string[]>([]);
   const cssFileRef = useRef<HTMLInputElement>(null);
   const jsonFileRef = useRef<HTMLInputElement>(null);
+  const urlRef = useRef<HTMLInputElement>(null);
 
-  // Fresh form per open (a drop pre-fills it). Re-read the "Open in"
+  // Fresh buffer per open (a dropped file pre-fills it). Re-read the "Open in"
   // preference too, so a legacy key migrated after this dialog mounted is
-  // reflected in the visible choice.
+  // reflected in the menu.
   useEffect(() => {
     if (!open) return;
-    setStep(1);
-    setView("form");
-    setSource(initialCss ? "upload" : "paste");
-    setShowText(true);
-    setStatus(initialCss ? { kind: "Dropped file", detail: "page drop", bytes: initialCss.length } : null);
     setName("");
     setCss(initialCss ?? "");
-    setUrl("");
-    setJsonDraft("");
-    setHint(null);
+    setStatus(initialCss ? { kind: "Dropped file", detail: "page drop", bytes: initialCss.length } : null);
     setError(null);
+    setUrl("");
+    setUrlOpen(false);
+    setJsonOpen(false);
+    setJsonDraft("");
     setStrippedPrefixes([]);
     setAfterSave(readAfterSave());
   }, [open, initialCss]);
@@ -123,25 +102,17 @@ export function AddSystemDialog({
     () => detectPrefixes(css).filter((p) => !strippedPrefixes.includes(p)),
     [css, strippedPrefixes],
   );
-  const colourStrip = useMemo(
-    () =>
-      [...tokenValueMap(css).entries()]
-        .filter(([token, value]) => token.startsWith("--color-") && HEX.test(value.trim()))
-        .slice(0, 24),
-    [css],
-  );
+  const tokenCount = countTokens(css);
 
-  /** One entry point for every source: the text, where it came from, and the
-      text block opened so the user can see what actually arrived. */
+  /** One entry point for every source: the text, and where it came from. */
   const load = (text: string, from: SourceStatus, importedName?: string) => {
     setCss(text);
     setStatus(from);
-    setShowText(true);
     if (importedName) setName((current) => (current.trim() ? current : importedName));
   };
 
-  /** Every source funnels through here: a JSON export is read into its `css`
-      and `name`, anything else is kept as the CSS text it claims to be. */
+  /** A JSON export is read into its `css` + `name`; anything else is kept as
+      the CSS text it claims to be. */
   const applyText = (text: string) => {
     setError(null);
     if (detectImportFormat(text) === "system-json") {
@@ -152,7 +123,6 @@ export function AddSystemDialog({
           { kind: "JSON export", detail: imported.name, bytes: imported.css.length },
           imported.name,
         );
-        setHint(`Read a JSON export — "${imported.name}" (${countTokens(imported.css)} tokens)`);
         return;
       } catch (e) {
         setCss(text);
@@ -160,10 +130,8 @@ export function AddSystemDialog({
         return;
       }
     }
-    const format = detectImportFormat(text);
     setCss(text);
-    setStatus({ kind: "Pasted text", detail: format === "css" ? "CSS" : "unrecognised", bytes: text.length });
-    setHint(format === "css" ? null : "No `--token: value;` line in that text yet");
+    setStatus({ kind: "Pasted text", detail: detectImportFormat(text) === "css" ? "CSS" : "unrecognised", bytes: text.length });
   };
 
   const importJson = (text: string) => {
@@ -175,7 +143,8 @@ export function AddSystemDialog({
         { kind: "JSON export", detail: imported.name, bytes: imported.css.length },
         imported.name,
       );
-      setHint(`Read a JSON export — "${imported.name}" (${countTokens(imported.css)} tokens)`);
+      setJsonOpen(false);
+      setJsonDraft("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -206,6 +175,7 @@ export function AddSystemDialog({
     try {
       const text = await fetchCss(target);
       load(text, { kind: "Fetched URL", detail: target, bytes: text.length });
+      setUrlOpen(false);
       onToast("CSS fetched", "ok");
     } catch (e) {
       const msg = `Fetch failed: ${e instanceof Error ? e.message : String(e)}`;
@@ -216,24 +186,9 @@ export function AddSystemDialog({
     }
   };
 
-  const next = () => {
-    if (step === 1) {
-      if (!countTokens(css)) {
-        setError("CSS block is empty — paste at least one `--token: value;` line.");
-        return;
-      }
-      setStep(2);
-      return;
-    }
-    if (step === 2) setStep(3);
-  };
-
-  const back = () => setStep((s) => (s > 1 ? ((s - 1) as Step) : s));
-
   const save = () => {
-    if (step !== 3) return;
-    if (!countTokens(css)) {
-      setError("CSS block is empty — paste at least one `--token: value;` line.");
+    if (!tokenCount) {
+      setError("Nothing to save — the system has no `--token: value;` line yet.");
       return;
     }
     try {
@@ -256,7 +211,7 @@ export function AddSystemDialog({
       return;
     }
     clip.writeText(templateCss()).then(
-      () => setHint(`Copied the ${FULL_TEMPLATE_COUNT}-name template to the clipboard ✓`),
+      () => onToast(`Copied the ${FULL_TEMPLATE_COUNT}-name template`, "ok"),
       () => onToast("Copy failed", "err"),
     );
   };
@@ -266,358 +221,235 @@ export function AddSystemDialog({
       <Dialog.Portal>
         <Dialog.Overlay className="tok-dialog-overlay" />
         <Dialog.Content
-          className="tok-dialog tok-dialog-wide app-import-dialog"
-          data-step={step}
+          className="tok-dialog app-import-dialog"
           onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              if (step === 3) save();
-              else next();
-            }
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
           }}
         >
+          {/* One line of chrome: what this is, the ways in, and where the text
+              came from. Everything else on screen is the work. The optional
+              source rows live inside this header so the dialog's grid stays
+              three rows (head / work / foot) no matter what is open. */}
           <header className="app-import-head">
-            <Dialog.Title className="tok-dialog-title">Add System</Dialog.Title>
-            <ol className="app-import-steps" aria-label="Import steps">
-              {STEPS.map((label, i) => {
-                const n = (i + 1) as Step;
-                return (
-                  <li
-                    key={label}
-                    className={`app-import-step${n === step ? " is-current" : ""}${n < step ? " is-done" : ""}`}
-                    aria-current={n === step ? "step" : undefined}
-                  >
-                    <button
-                      type="button"
-                      className="app-import-stepbtn"
-                      disabled={n > step}
-                      onClick={() => setStep(n)}
-                    >
-                      <span className="app-import-stepnum" aria-hidden="true">
-                        {n < step ? <Icon name="check" size={11} /> : n}
-                      </span>
-                      <span className="app-import-steplabel">{label}</span>
-                    </button>
-                    {n < STEPS.length && <span className="app-import-stepline" aria-hidden="true" />}
-                  </li>
-                );
-              })}
-            </ol>
-            <Dialog.Description className="tok-dialog-desc">
-              {step === 1 && (
-                <>
-                  Paste <code>--token: value;</code> lines, drop a stylesheet, fetch one by URL, or paste a
-                  system exported from the Tokens tab. Nothing is written until you save.
-                </>
-              )}
-              {step === 2 && (
-                <>
-                  Check what will be written. The schema is grouped by its own headings — fill a single token,
-                  or switch to the paste view and edit the whole block.
-                </>
-              )}
-              {step === 3 && (
-                <>
-                  Name it and choose where to land. It stays in this browser and becomes selectable in the
-                  switcher.
-                </>
-              )}
+            <div className="app-import-bar">
+            <Dialog.Title className="app-import-title">Add System</Dialog.Title>
+            <Dialog.Description className="app-import-sub">
+              Nothing is written until you save.
             </Dialog.Description>
-          </header>
-
-          <div className="app-import-body">
-          {step === 1 && (
-            <>
-              <div className="app-import-sources" role="tablist" aria-label="Import source">
-                {SOURCES.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={source === s.id}
-                    className={`app-import-source${source === s.id ? " is-active" : ""}`}
-                    onClick={() => setSource(s.id)}
-                  >
-                    <span className="app-import-source-icon">
-                      <Icon name={s.icon} size={16} />
-                    </span>
-                    <span className="app-import-source-text">
-                      <span className="app-import-source-label">{s.label}</span>
-                      <span className="app-import-source-hint">{s.hint}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="app-import-panel">
-                {source === "paste" && (
-                  <p className="tok-dialog-meta">
-                    Type or paste <code>--token: value;</code> lines below — that text is the system.
-                  </p>
-                )}
-                {source === "upload" && (
-                  <div className="tok-dialog-row">
-                    <button type="button" className="tok-btn" onClick={() => cssFileRef.current?.click()}>
-                      Choose a .css file
-                    </button>
-                    <span className="tok-dialog-meta">or drop a .css anywhere on the page</span>
-                    <input
-                      ref={cssFileRef}
-                      type="file"
-                      accept=".css,text/css"
-                      hidden
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        e.target.value = "";
-                        void onCssFile(file);
-                      }}
-                    />
-                  </div>
-                )}
-                {source === "url" && (
-                  <div className="tok-dialog-row">
-                    <input
-                      className="tok-input tok-source-url"
-                      type="url"
-                      value={url}
-                      placeholder="https://…/tokens.css"
-                      aria-label="Stylesheet URL"
-                      onChange={(e) => setUrl(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          void fetchUrl();
-                        }
-                      }}
-                    />
-                    <button type="button" className="tok-btn" disabled={busy} onClick={() => void fetchUrl()}>
-                      {busy ? "…" : "Fetch"}
-                    </button>
-                  </div>
-                )}
-                {source === "json" && (
-                  <>
-                    <div className="tok-dialog-row">
-                      <button type="button" className="tok-btn" onClick={() => jsonFileRef.current?.click()}>
-                        Choose a .json file
-                      </button>
-                      <span className="tok-dialog-meta">export one from the Tokens tab</span>
-                      <input
-                        ref={jsonFileRef}
-                        type="file"
-                        accept=".json,application/json"
-                        hidden
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          e.target.value = "";
-                          if (file) importJson(await file.text());
-                        }}
-                      />
-                    </div>
-                    <textarea
-                      className="tok-textarea"
-                      rows={5}
-                      value={jsonDraft}
-                      spellCheck={false}
-                      aria-label="System JSON"
-                      placeholder='{"name":"Aurora","css":"--color-bg: #0a0a0f;"}'
-                      onChange={(e) => setJsonDraft(e.target.value)}
-                    />
-                    <div className="tok-dialog-row">
-                      <button type="button" className="tok-btn" onClick={() => importJson(jsonDraft)}>
-                        Import this JSON
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-
+            <div className="app-import-tools">
+              <button type="button" className="tok-btn" onClick={() => cssFileRef.current?.click()}>
+                <Icon name="file" size={14} /> Upload .css
+              </button>
+              <button
+                type="button"
+                className="tok-btn"
+                aria-expanded={urlOpen}
+                onClick={() => {
+                  setUrlOpen((v) => !v);
+                  setJsonOpen(false);
+                  requestAnimationFrame(() => urlRef.current?.focus());
+                }}
+              >
+                <Icon name="link" size={14} /> Fetch URL
+              </button>
+              <button
+                type="button"
+                className="tok-btn"
+                aria-expanded={jsonOpen}
+                onClick={() => {
+                  setJsonOpen((v) => !v);
+                  setUrlOpen(false);
+                }}
+              >
+                <Icon name="copy" size={14} /> JSON export
+              </button>
+              <button
+                type="button"
+                className="tok-btn"
+                onClick={() => {
+                  setCss(templateCss());
+                  setError(null);
+                }}
+                title={`Insert the ${FULL_TEMPLATE_COUNT} schema names, values empty`}
+              >
+                Template
+              </button>
+              <button type="button" className="tok-btn" onClick={copyTemplate} title="Copy the empty schema to the clipboard">
+                Copy template
+              </button>
+              <input
+                ref={cssFileRef}
+                type="file"
+                accept=".css,text/css"
+                hidden
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  void onCssFile(file);
+                }}
+              />
+            </div>
+            {status && (
               <p className="app-import-status" role="status">
-                {status ? (
-                  <>
-                    <b>{status.kind}</b> · {status.detail} · {formatBytes(status.bytes)} ·{" "}
-                    {countTokens(css)} tokens
-                  </>
-                ) : (
-                  "Nothing loaded yet — pick a source above."
-                )}
+                <b>{status.kind}</b> {status.detail} · {formatBytes(status.bytes)} · {tokenCount} tokens
               </p>
+            )}
+            <Dialog.Close className="app-import-close" aria-label="Close">
+              <Icon name="x" size={15} />
+            </Dialog.Close>
+            </div>
 
-              <div className="app-import-text">
-                <button
-                  type="button"
-                  className="app-import-texthead"
-                  aria-expanded={showText}
-                  onClick={() => setShowText((v) => !v)}
-                >
-                  <Icon name={showText ? "chevronDown" : "chevronRight"} size={13} />
-                  The CSS text
-                </button>
-                {showText && (
-                  <textarea
-                    className="tok-textarea"
-                    value={css}
-                    rows={10}
-                    spellCheck={false}
-                    aria-label="CSS or a JSON export"
-                    placeholder={"--color-accent: #6366f1;\n\n…or paste the JSON the Tokens tab exports"}
-                    onChange={(e) => applyText(e.target.value)}
-                  />
-                )}
-              </div>
+          {urlOpen && (
+            <div className="app-import-inline">
+              <input
+                ref={urlRef}
+                className="tok-input"
+                type="url"
+                value={url}
+                placeholder="https://…/tokens.css"
+                aria-label="Stylesheet URL"
+                onChange={(e) => setUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void fetchUrl();
+                  }
+                }}
+              />
+              <button type="button" className="tok-btn tok-btn-primary" disabled={busy} onClick={() => void fetchUrl()}>
+                {busy ? "…" : "Fetch"}
+              </button>
+            </div>
+          )}
 
-              <div className="tok-dialog-row">
+          {jsonOpen && (
+            <div className="app-import-inline app-import-inline-json">
+              <textarea
+                className="tok-textarea"
+                rows={4}
+                value={jsonDraft}
+                spellCheck={false}
+                aria-label="System JSON"
+                placeholder='{"name":"Aurora","css":"--color-bg: #0a0a0f;"}'
+                onChange={(e) => setJsonDraft(e.target.value)}
+              />
+              <button type="button" className="tok-btn" onClick={() => jsonFileRef.current?.click()}>
+                Choose a .json file
+              </button>
+              <button type="button" className="tok-btn tok-btn-primary" onClick={() => importJson(jsonDraft)}>
+                Import this JSON
+              </button>
+              <input
+                ref={jsonFileRef}
+                type="file"
+                accept=".json,application/json"
+                hidden
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) importJson(await file.text());
+                }}
+              />
+            </div>
+          )}
+
+          {prefixes.length > 0 && (
+            <div className="app-import-chips">
+              <span className="app-import-sub">Vendor prefix{prefixes.length > 1 ? "es" : ""}:</span>
+              {prefixes.map((p) => (
                 <button
+                  key={p}
                   type="button"
                   className="tok-btn"
+                  title={`Strip --${p}- from every token name`}
                   onClick={() => {
-                    setCss(templateCss());
-                    setHint("Template inserted — empty lines are ignored; fill the values you have.");
-                    setError(null);
+                    setCss((current) => stripPrefix(current, p));
+                    setStrippedPrefixes((list) => [...list, p]);
                   }}
                 >
-                  Fill full template ({FULL_TEMPLATE_COUNT})
+                  strip --{p}-
                 </button>
-                <button type="button" className="tok-btn" onClick={copyTemplate}>
-                  Copy template
-                </button>
-              </div>
-              {prefixes.length > 0 && (
-                <div className="tok-dialog-row app-import-prefixes">
-                  <span className="tok-dialog-meta">Vendor prefix{prefixes.length > 1 ? "es" : ""}:</span>
-                  {prefixes.map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      className="tok-btn"
-                      title={`Strip --${p}- from every token name`}
-                      onClick={() => {
-                        setCss((current) => stripPrefix(current, p));
-                        setStrippedPrefixes((list) => [...list, p]);
-                        setHint(`Stripped --${p}- from the token names`);
-                      }}
-                    >
-                      strip --{p}-
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
+              ))}
+            </div>
           )}
 
-          {step === 2 && (
-            <>
-              <div className="tok-dialog-row">
-                <ToggleGroup.Root
-                  type="single"
-                  className="tok-seg"
-                  value={view}
-                  aria-label="Review view"
-                  onValueChange={(v) => {
-                    if (v) setView(v as View);
-                  }}
-                >
-                  <ToggleGroup.Item value="form" className="tok-seg-item">
-                    Fill form
-                  </ToggleGroup.Item>
-                  <ToggleGroup.Item value="paste" className="tok-seg-item">
-                    Paste
-                  </ToggleGroup.Item>
-                </ToggleGroup.Root>
-                {colourStrip.length > 0 && (
-                  <span className="app-import-swatches" aria-label="Colour tokens in this import">
-                    {colourStrip.map(([token, value]) => (
-                      <span
-                        key={token}
-                        className="app-import-swatch"
-                        style={{ background: value.trim() }}
-                        title={`${token}: ${value.trim()}`}
-                      />
-                    ))}
-                  </span>
-                )}
+          </header>
+
+          {/* The work: the same CSS text, seen as the schema and as text. */}
+          <div className="app-import-work">
+            <section className="app-import-pane" aria-label="Schema fill">
+              <div className="app-import-panehead">
+                <span className="app-import-panetitle">Fill the schema</span>
+                <span className="app-import-sub">{FULL_TEMPLATE_COUNT} names in 54 groups</span>
               </div>
-              {view === "form" ? (
+              <div className="app-import-panebody">
                 <SchemaFill css={css} onChange={setCss} />
-              ) : (
-                <>
-                  <textarea
-                    className="tok-textarea"
-                    value={css}
-                    rows={12}
-                    spellCheck={false}
-                    aria-label="Imported CSS"
-                    onChange={(e) => {
-                      setCss(e.target.value);
-                      setError(null);
-                    }}
-                  />
-                  <CssPreview css={css} />
-                </>
-              )}
-            </>
-          )}
-
-          {step === 3 && (
-            <>
-              <label className="tok-field">
-                <span>Name</span>
-                <input
-                  className="tok-input"
-                  value={name}
-                  autoComplete="off"
-                  placeholder="Untitled"
-                  onChange={(e) => setName(e.target.value)}
+              </div>
+            </section>
+            <section className="app-import-pane" aria-label="CSS text">
+              <div className="app-import-panehead">
+                <span className="app-import-panetitle">The CSS text</span>
+                <span className="app-import-sub">
+                  {tokenCount} tokens · {formatBytes(css.length)}
+                </span>
+              </div>
+              <div className="app-import-panebody">
+                <textarea
+                  className="tok-textarea app-import-textarea"
+                  value={css}
+                  spellCheck={false}
+                  aria-label="CSS text"
+                  placeholder={"--color-bg: #0a0a0f;\n--color-text: #f0f0f3;\n\n…or paste the JSON the Tokens tab exports"}
+                  onChange={(e) => applyText(e.target.value)}
                 />
-              </label>
-              <CssPreview css={css} />
-            </>
-          )}
-
-            {hint && <p className="tok-dialog-meta app-import-hint">{hint}</p>}
+                <CssPreview css={css} />
+              </div>
+            </section>
           </div>
 
+          {/* One line of chrome: identity, the error if any, and the write. */}
           <footer className="app-import-foot">
+            <input
+              className="tok-input app-import-name"
+              value={name}
+              autoComplete="off"
+              placeholder="System name (Untitled)"
+              aria-label="System name"
+              onChange={(e) => setName(e.target.value)}
+            />
             {error && (
-              <p className="tok-dialog-error app-import-error" role="alert">
+              <p className="app-import-error" role="alert">
                 {error}
               </p>
             )}
-            <div className="tok-dialog-actions">
-            <span className="tok-segment">
-              Open in
-              <ToggleGroup.Root
-                type="single"
-                className="tok-seg"
-                value={afterSave}
-                aria-label="Tab to open after saving"
-                onValueChange={(v) => {
-                  if (!v) return;
-                  setAfterSave(v as AppTab);
-                  writeAfterSave(v as AppTab);
-                }}
-              >
-                {AFTER_SAVE_TABS.map(([id, label]) => (
-                  <ToggleGroup.Item key={id} value={id} className="tok-seg-item">
-                    {label}
-                  </ToggleGroup.Item>
-                ))}
-              </ToggleGroup.Root>
-            </span>
-            {step > 1 && (
-              <button type="button" className="tok-btn" onClick={back}>
-                Back
-              </button>
-            )}
-            <Dialog.Close className="tok-btn">Cancel</Dialog.Close>
-            {step < 3 ? (
-              <button type="button" className="tok-btn tok-btn-primary" onClick={next}>
-                Continue
-              </button>
-            ) : (
+            <div className="app-import-write">
+              <Dialog.Close className="tok-btn">Cancel</Dialog.Close>
               <button type="button" className="tok-btn tok-btn-primary" onClick={save}>
                 Save system
               </button>
-            )}
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger className="tok-btn app-import-openin" title="Tab to open after saving">
+                  {AFTER_SAVE_TABS.find(([id]) => id === afterSave)?.[1] ?? "Preview"}
+                  <Icon name="chevronDown" size={12} />
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content className="tok-menu" sideOffset={6} align="end">
+                    {AFTER_SAVE_TABS.map(([id, label]) => (
+                      <DropdownMenu.Item
+                        key={id}
+                        className="tok-menu-item"
+                        onSelect={() => {
+                          setAfterSave(id);
+                          writeAfterSave(id);
+                        }}
+                      >
+                        Open in {label}
+                        {id === afterSave && <Icon name="check" size={13} />}
+                      </DropdownMenu.Item>
+                    ))}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
             </div>
           </footer>
         </Dialog.Content>
