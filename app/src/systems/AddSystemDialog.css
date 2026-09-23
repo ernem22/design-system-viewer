@@ -12,3 +12,63 @@
   height: 30px;
   flex: none;
 }
+
+/* Import stepper (#124). Three steps in one dialog: this is the dialog's own
+   header, so it adds no scroll container and no layout frame. */
+.app-import-steps {
+  display: flex;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+
+.app-import-step {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.app-import-step.is-done {
+  color: var(--color-text-secondary);
+}
+
+.app-import-step.is-current {
+  color: var(--color-text);
+  font-weight: var(--font-weight-medium);
+}
+
+.app-import-stepbtn {
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.app-import-stepbtn:disabled {
+  cursor: default;
+}
+
+.app-import-stepbtn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.app-import-prefixes {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.app-import-swatches {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.app-import-swatch {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}

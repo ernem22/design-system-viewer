@@ -339,6 +339,16 @@ by trial produces a silent false pass.
   an install). Every Coder/Tester/Fixer spec that builds, tests or serves the
   app must start with `npm --prefix app ci` — without it `vite build` and
   `vitest` fail in ways a worker misreads as a broken change.
+- **`NODE_ENV=production` is set in this shell, and npm then omits
+  devDependencies — an install that exits 0 can still leave no toolchain.**
+  Measured 2026-09-23 in a worker worktree: `npm --prefix app ci` printed
+  `added 78 packages, audited 79 packages` and `app/node_modules/.bin` did not
+  exist, so `npm --prefix app test` answered `'vitest' is not recognized` while
+  the install had "succeeded". CI (`.github/workflows/pr-check.yml`) sets no
+  NODE_ENV, so the job never shows this and a worker cannot infer it from a
+  green PR. `app/.npmrc` now pins `include=dev` so the documented command is
+  correct; a worktree that predates that file must use
+  `npm --prefix app ci --include=dev`.
 - **The established pattern for testing a hook/component** is
   `app/src/lib/toasts.test.ts`: a `.ts` file, `createElement` instead of JSX,
   a hand-built `happy-dom` `Window`, and `react-dom/client` imported lazily so

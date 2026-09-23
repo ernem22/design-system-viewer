@@ -190,6 +190,27 @@ small, well-scoped issue per task), so it lands as an umbrella plus slices:
 5. **Write modes & collision** — new / merge / clone, slug collision resolution,
    provenance field.
 
+Slices 1–4 are one card (**#124**) on purpose: they all edit `AddSystemDialog.tsx`, and
+two branches editing one file is a guaranteed conflict. Slice 5 is **#125**, held until
+PR #92 merges because it must touch `App.tsx`.
+
+## 6a. As built — #124 on `feature/116-import-stepper`
+
+Built: `app/src/systems/AddSystemDialog.tsx` (3-step stepper), `app/src/systems/SchemaFill.tsx`
+(+ `.css`), `app/src/lib/systemImport.ts`, `app/src/lib/tokenCss.ts`, with 43 new tests
+(`systemImport.test.ts`, `tokenCss.test.ts`, `SchemaFill.test.tsx`,
+`AddSystemDialog.import.test.tsx`).
+
+Where the build deviates from the text above, deliberately:
+
+| Written | Built | Why |
+| --- | --- | --- |
+| "collapsed by default, auto-open when a group has content or misses" | collapsed by default; groups open only when a filter (search / missing-only / group) is active, plus Expand all | an empty import has all 432 names missing, so "auto-open on misses" opens all 54 groups — the exact wall the surface exists to remove |
+| "kind-aware input (colour swatch, number+unit for sizes)" | colour swatch + hex detection on `--color-*` rows only | the size groups mix units and `calc()`; a numeric widget would lie about what is valid |
+| "any single row savable on its own" | a row edit writes into the shared CSS text; the write happens at Save | the dialog's contract is that nothing is written before Save; per-row persistence belongs to the Add-tokens flow (#125 territory) |
+| "clipboard paste with CSS/JSON auto-detection" | auto-detection on any paste/drop into the textarea; no separate "paste from clipboard" button | the textarea is already the paste target; a second button would duplicate the browser's own paste |
+| prefix chips in the Source step | same, but the step is reachable again via the stepper (Back) | the chips act on the CSS text, which lives in step 1 |
+
 ## 7. Constraints inherited from the repo
 
 - Shell contract (`app/CLAUDE.md`): one scroll container per screen, `overflow: clip`
