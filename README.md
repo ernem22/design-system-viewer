@@ -49,6 +49,9 @@ shareable link.
 
 ## Limits
 
-Only a `dark` theme variant is parsed (light is the default; the Preview
-tab shows a dark toggle when a system ships one). Schema isn't editable
-from the UI. Nothing about a system is required.
+**Dark mode is retired** (user decision, 2026-09-23): it is not a feature of this
+product and will be removed, not extended — no worker adds, fixes or restores dark
+handling, and a dark-mode finding is not a defect. The `dark` variant is still parsed
+today (`themes.dark`, the Preview dark toggle) and the cleanup is deferred; the
+inventory of sites it will touch is in `docs/design/add-system-import.md`. Schema
+isn't editable from the UI. Nothing about a system is required.
