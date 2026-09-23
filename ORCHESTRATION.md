@@ -349,6 +349,14 @@ by trial produces a silent false pass.
   green PR. `app/.npmrc` now pins `include=dev` so the documented command is
   correct; a worktree that predates that file must use
   `npm --prefix app ci --include=dev`.
+- **Vitest spawns one worker per test file, and on this host that alone can time a DOM
+  test out.** Measured 2026-09-23: the default `npm --prefix app test` run reports
+  `30 workers spawned · ~9.63s startup each`, and `src/tokens/SchemaView.test.tsx`'s
+  clipboard test fails with `Test timed out in 5000ms`; the same file passes alone
+  (`2 passed`), and the whole suite passes as
+  `npm --prefix app test -- --maxWorkers=2` (30 files / 214 tests). A 5 s timeout in a
+  DOM test is this machine, not the change — re-run with fewer workers before reporting
+  it as a defect.
 - **The established pattern for testing a hook/component** is
   `app/src/lib/toasts.test.ts`: a `.ts` file, `createElement` instead of JSX,
   a hand-built `happy-dom` `Window`, and `react-dom/client` imported lazily so

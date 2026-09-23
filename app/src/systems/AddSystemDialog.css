@@ -72,3 +72,114 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
 }
+
+/* Source picker (step 1). Four ways in, one panel each: the old flat row of
+   "Upload .css | URL | Fetch" gave no clue which control did what, so each
+   source is now a card with its own hint, and the panel under it is the only
+   thing that changes when you switch. */
+.app-import-sources {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-1);
+}
+
+.app-import-source {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.app-import-source:hover {
+  background: var(--color-hover-overlay);
+}
+
+.app-import-source.is-active {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-subtle);
+  color: var(--color-text);
+}
+
+.app-import-source:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.app-import-source-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.app-import-source.is-active .app-import-source-icon {
+  color: var(--color-accent-text);
+}
+
+.app-import-source-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.app-import-source-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.app-import-source-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.app-import-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+}
+
+.app-import-status {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.app-import-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.app-import-texthead {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  align-self: flex-start;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.app-import-texthead:hover {
+  color: var(--color-text);
+}
+
+.app-import-texthead:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}

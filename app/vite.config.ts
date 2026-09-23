@@ -52,9 +52,58 @@ function systemsIndex(): Plugin {
   }
 }
 
+/** Dev-server twin of the legacy server's `/api/fetch-css`
+    (`src/server/server.js:97`). The app's URL import tries this route first
+    (`app/src/lib/cssImport.ts`), and without it the dev server answers the
+    path with the SPA's index.html — which the client reads as "no proxy" and
+    falls back to a direct fetch, where every host that sends no ACAO header
+    fails. Same contract as the legacy route: 400 invalid url, 502 upstream
+    status / oversized body, 200 text/plain for the stylesheet. */
+function fetchCssProxy(): Plugin {
+  return {
+    name: 'dsv-fetch-css-proxy',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const path = req.url?.split('?')[0] ?? ''
+        if (path !== '/api/fetch-css' || req.method !== 'GET') return next()
+        const target = new URL(req.url ?? '', 'http://localhost').searchParams.get('url') ?? ''
+        const json = (status: number, body: unknown) => {
+          res.statusCode = status
+          res.setHeader('content-type', 'application/json; charset=utf-8')
+          res.end(JSON.stringify(body))
+        }
+        let parsed: URL
+        try {
+          parsed = new URL(target)
+        } catch {
+          return json(400, { error: 'invalid url' })
+        }
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
+          return json(400, { error: 'only http/https urls are supported' })
+        void (async () => {
+          try {
+            const upstream = await fetch(parsed, {
+              redirect: 'follow',
+              headers: { 'user-agent': 'design-system-viewer', accept: 'text/css,text/plain,*/*' },
+              signal: AbortSignal.timeout(15_000),
+            })
+            if (!upstream.ok) return json(502, { error: `upstream ${upstream.status} ${upstream.statusText}` })
+            const text = await upstream.text()
+            if (text.length > 2_000_000) return json(502, { error: 'stylesheet too large (max 2 MB)' })
+            res.setHeader('content-type', 'text/plain; charset=utf-8')
+            res.end(text)
+          } catch (err) {
+            json(502, { error: err instanceof Error ? err.message : 'fetch failed' })
+          }
+        })()
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   // Relative base: the build works from any sub-path (GitHub Pages) as-is.
   base: './',
-  plugins: [react(), systemsIndex()],
+  plugins: [react(), systemsIndex(), fetchCssProxy()],
 })

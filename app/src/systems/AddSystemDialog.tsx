@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import { REFERENCE, templateCss } from "../../../src/core/schema.js";
 import type { AppTab } from "../shell/Shell.tsx";
 import type { PushToast } from "../lib/toasts.ts";
+import { Icon, type IconName } from "../lib/icons.tsx";
 import { CssPreview } from "../tokens/CssPreview.tsx";
 import { countTokens } from "../tokens/tokenUtils.ts";
-import { CssSourceBar } from "../tokens/CssSourceBar.tsx";
+import { fetchCss, readCssFile } from "../lib/cssImport.ts";
 import {
   detectImportFormat,
   detectPrefixes,
@@ -28,8 +29,31 @@ const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 /** Steps, in order. The current one is exposed as `data-step` for tests. */
 const STEPS = ["Source", "Review", "Save"] as const;
 
+/** The import sources, as a picker rather than one flat row: each one is a
+    way *in*, and the chosen one decides which panel step 1 shows. */
+const SOURCES: { id: Source; label: string; hint: string; icon: IconName }[] = [
+  { id: "paste", label: "Paste CSS", hint: "a block of --token: value; lines", icon: "edit" },
+  { id: "upload", label: "Upload .css", hint: "a file, or drop one on the page", icon: "file" },
+  { id: "url", label: "Fetch URL", hint: "a hosted stylesheet", icon: "link" },
+  { id: "json", label: "JSON export", hint: "a system from the Tokens tab", icon: "copy" },
+];
+
 type Step = 1 | 2 | 3;
 type View = "form" | "paste";
+type Source = "paste" | "upload" | "url" | "json";
+
+/** What the current text came from — shown as a durable line under the
+    picker, because a toast is gone before the user has read it. */
+interface SourceStatus {
+  kind: string;
+  detail: string;
+  bytes: number;
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  return `${(n / 1024).toFixed(1)} KB`;
+}
 
 /**
  * Add System dialog (controlled — the header button, the empty-state cards
@@ -60,12 +84,20 @@ export function AddSystemDialog({
 }) {
   const [step, setStep] = useState<Step>(1);
   const [view, setView] = useState<View>("form");
+  const [source, setSource] = useState<Source>("paste");
+  const [showText, setShowText] = useState(true);
+  const [status, setStatus] = useState<SourceStatus | null>(null);
   const [name, setName] = useState("");
   const [css, setCss] = useState("");
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [jsonDraft, setJsonDraft] = useState("");
   const [hint, setHint] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [afterSave, setAfterSave] = useState<AppTab>(readAfterSave);
   const [strippedPrefixes, setStrippedPrefixes] = useState<string[]>([]);
+  const cssFileRef = useRef<HTMLInputElement>(null);
+  const jsonFileRef = useRef<HTMLInputElement>(null);
 
   // Fresh form per open (a drop pre-fills it). Re-read the "Open in"
   // preference too, so a legacy key migrated after this dialog mounted is
@@ -74,8 +106,13 @@ export function AddSystemDialog({
     if (!open) return;
     setStep(1);
     setView("form");
+    setSource(initialCss ? "upload" : "paste");
+    setShowText(true);
+    setStatus(initialCss ? { kind: "Dropped file", detail: "page drop", bytes: initialCss.length } : null);
     setName("");
     setCss(initialCss ?? "");
+    setUrl("");
+    setJsonDraft("");
     setHint(null);
     setError(null);
     setStrippedPrefixes([]);
@@ -94,6 +131,15 @@ export function AddSystemDialog({
     [css],
   );
 
+  /** One entry point for every source: the text, where it came from, and the
+      text block opened so the user can see what actually arrived. */
+  const load = (text: string, from: SourceStatus, importedName?: string) => {
+    setCss(text);
+    setStatus(from);
+    setShowText(true);
+    if (importedName) setName((current) => (current.trim() ? current : importedName));
+  };
+
   /** Every source funnels through here: a JSON export is read into its `css`
       and `name`, anything else is kept as the CSS text it claims to be. */
   const applyText = (text: string) => {
@@ -101,8 +147,11 @@ export function AddSystemDialog({
     if (detectImportFormat(text) === "system-json") {
       try {
         const imported = readSystemJson(text);
-        setCss(imported.css);
-        setName((current) => (current.trim() ? current : imported.name));
+        load(
+          imported.css,
+          { kind: "JSON export", detail: imported.name, bytes: imported.css.length },
+          imported.name,
+        );
         setHint(`Read a JSON export — "${imported.name}" (${countTokens(imported.css)} tokens)`);
         return;
       } catch (e) {
@@ -111,8 +160,60 @@ export function AddSystemDialog({
         return;
       }
     }
+    const format = detectImportFormat(text);
     setCss(text);
-    setHint(detectImportFormat(text) === "css" ? null : "No `--token: value;` line in that text yet");
+    setStatus({ kind: "Pasted text", detail: format === "css" ? "CSS" : "unrecognised", bytes: text.length });
+    setHint(format === "css" ? null : "No `--token: value;` line in that text yet");
+  };
+
+  const importJson = (text: string) => {
+    setError(null);
+    try {
+      const imported = readSystemJson(text);
+      load(
+        imported.css,
+        { kind: "JSON export", detail: imported.name, bytes: imported.css.length },
+        imported.name,
+      );
+      setHint(`Read a JSON export — "${imported.name}" (${countTokens(imported.css)} tokens)`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const onCssFile = async (file: File | undefined) => {
+    if (!file) return;
+    setError(null);
+    try {
+      const text = await readCssFile(file);
+      load(text, { kind: "Uploaded file", detail: file.name, bytes: file.size });
+      onToast(`Loaded ${file.name}`, "ok");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      onToast(msg, "err");
+    }
+  };
+
+  const fetchUrl = async () => {
+    const target = url.trim();
+    if (!target) {
+      setError("Enter a stylesheet URL");
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    try {
+      const text = await fetchCss(target);
+      load(text, { kind: "Fetched URL", detail: target, bytes: text.length });
+      onToast("CSS fetched", "ok");
+    } catch (e) {
+      const msg = `Fetch failed: ${e instanceof Error ? e.message : String(e)}`;
+      setError(msg);
+      onToast(msg, "err");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const next = () => {
@@ -219,19 +320,144 @@ export function AddSystemDialog({
 
           {step === 1 && (
             <>
-              <CssSourceBar onToast={onToast} onLoad={applyText} />
-              <label className="tok-field">
-                <span>CSS or a JSON export</span>
-                <textarea
-                  className="tok-textarea"
-                  value={css}
-                  rows={10}
-                  spellCheck={false}
-                  aria-label="CSS or a JSON export"
-                  placeholder={"--color-accent: #6366f1;\n\n…or paste the JSON the Tokens tab exports"}
-                  onChange={(e) => applyText(e.target.value)}
-                />
-              </label>
+              <div className="app-import-sources" role="tablist" aria-label="Import source">
+                {SOURCES.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={source === s.id}
+                    className={`app-import-source${source === s.id ? " is-active" : ""}`}
+                    onClick={() => setSource(s.id)}
+                  >
+                    <span className="app-import-source-icon">
+                      <Icon name={s.icon} size={16} />
+                    </span>
+                    <span className="app-import-source-text">
+                      <span className="app-import-source-label">{s.label}</span>
+                      <span className="app-import-source-hint">{s.hint}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="app-import-panel">
+                {source === "paste" && (
+                  <p className="tok-dialog-meta">
+                    Type or paste <code>--token: value;</code> lines below — that text is the system.
+                  </p>
+                )}
+                {source === "upload" && (
+                  <div className="tok-dialog-row">
+                    <button type="button" className="tok-btn" onClick={() => cssFileRef.current?.click()}>
+                      Choose a .css file
+                    </button>
+                    <span className="tok-dialog-meta">or drop a .css anywhere on the page</span>
+                    <input
+                      ref={cssFileRef}
+                      type="file"
+                      accept=".css,text/css"
+                      hidden
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = "";
+                        void onCssFile(file);
+                      }}
+                    />
+                  </div>
+                )}
+                {source === "url" && (
+                  <div className="tok-dialog-row">
+                    <input
+                      className="tok-input tok-source-url"
+                      type="url"
+                      value={url}
+                      placeholder="https://…/tokens.css"
+                      aria-label="Stylesheet URL"
+                      onChange={(e) => setUrl(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void fetchUrl();
+                        }
+                      }}
+                    />
+                    <button type="button" className="tok-btn" disabled={busy} onClick={() => void fetchUrl()}>
+                      {busy ? "…" : "Fetch"}
+                    </button>
+                  </div>
+                )}
+                {source === "json" && (
+                  <>
+                    <div className="tok-dialog-row">
+                      <button type="button" className="tok-btn" onClick={() => jsonFileRef.current?.click()}>
+                        Choose a .json file
+                      </button>
+                      <span className="tok-dialog-meta">export one from the Tokens tab</span>
+                      <input
+                        ref={jsonFileRef}
+                        type="file"
+                        accept=".json,application/json"
+                        hidden
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = "";
+                          if (file) importJson(await file.text());
+                        }}
+                      />
+                    </div>
+                    <textarea
+                      className="tok-textarea"
+                      rows={5}
+                      value={jsonDraft}
+                      spellCheck={false}
+                      aria-label="System JSON"
+                      placeholder='{"name":"Aurora","css":"--color-bg: #0a0a0f;"}'
+                      onChange={(e) => setJsonDraft(e.target.value)}
+                    />
+                    <div className="tok-dialog-row">
+                      <button type="button" className="tok-btn" onClick={() => importJson(jsonDraft)}>
+                        Import this JSON
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <p className="app-import-status" role="status">
+                {status ? (
+                  <>
+                    <b>{status.kind}</b> · {status.detail} · {formatBytes(status.bytes)} ·{" "}
+                    {countTokens(css)} tokens
+                  </>
+                ) : (
+                  "Nothing loaded yet — pick a source above."
+                )}
+              </p>
+
+              <div className="app-import-text">
+                <button
+                  type="button"
+                  className="app-import-texthead"
+                  aria-expanded={showText}
+                  onClick={() => setShowText((v) => !v)}
+                >
+                  <Icon name={showText ? "chevronDown" : "chevronRight"} size={13} />
+                  The CSS text
+                </button>
+                {showText && (
+                  <textarea
+                    className="tok-textarea"
+                    value={css}
+                    rows={10}
+                    spellCheck={false}
+                    aria-label="CSS or a JSON export"
+                    placeholder={"--color-accent: #6366f1;\n\n…or paste the JSON the Tokens tab exports"}
+                    onChange={(e) => applyText(e.target.value)}
+                  />
+                )}
+              </div>
+
               <div className="tok-dialog-row">
                 <button
                   type="button"
@@ -340,7 +566,7 @@ export function AddSystemDialog({
             </>
           )}
 
-          {hint && <p className="tok-dialog-meta">{hint}</p>}
+          {hint && <p className="tok-dialog-meta app-import-hint">{hint}</p>}
           {error && (
             <p className="tok-dialog-error" role="alert">
               {error}

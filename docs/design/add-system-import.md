@@ -211,6 +211,38 @@ Where the build deviates from the text above, deliberately:
 | "clipboard paste with CSS/JSON auto-detection" | auto-detection on any paste/drop into the textarea; no separate "paste from clipboard" button | the textarea is already the paste target; a second button would duplicate the browser's own paste |
 | prefix chips in the Source step | same, but the step is reachable again via the stepper (Back) | the chips act on the CSS text, which lives in step 1 |
 
+## 6b. Follow-up after the user's review (same branch)
+
+The user rejected the first cut on three points, all of them fair:
+
+1. **"the layout is almost identical on first open"** — step 1 was still the old flat row
+   (upload button, URL field, Fetch) above one textarea, so the stepper was invisible in
+   practice. Step 1 is now a **source picker**: four cards (`Paste CSS · Upload .css ·
+   Fetch URL · JSON export`), each with its own hint, a panel that changes with the
+   selection, a **durable source status line** (`Uploaded file · dsv-probe.css · 81 B · 3
+   tokens`), and the CSS text in a collapsible block instead of always-on.
+2. **"fetch and upload probably don't work; their presence has no purpose"** — measured:
+   upload works (a `.css` set on the input lands in the text, toast + status), and fetch
+   worked **only for hosts that send ACAO**, because the app's dev server had no
+   `/api/fetch-css` route: the request fell through to the SPA's index.html, which
+   `cssImport.ts` correctly reads as "no proxy", and the direct fetch then died on CORS.
+   `app/vite.config.ts` now serves the legacy route (`src/server/server.js:97`), so a
+   no-CORS host works: `https://www.w3.org/StyleSheets/base.css` (200 text/css, **no**
+   ACAO header) now lands in the dialog — 1.3 KB fetched where the browser alone fails.
+3. **"the Add system button placement is terrible"** — the labelled `+ Add system` button
+   next to the switcher is gone; `App.tsx` renders an icon-only `+` (`IconActionButton`,
+   label "Add a design system") between `Copy link to this view` and the properties-panel
+   toggle, verified in the DOM order.
+
+Verified after the follow-up: `npm --prefix app test -- --maxWorkers=2` → 30 files / 214
+tests pass; `lint` clean; `build` green; the source picker, the proxy fetch, the upload
+and the topbar order all driven live.
+
+Known environment flake (not code): the default vitest run spawns one worker per test
+file (30 on this host, ~9.6 s startup each) and `src/tokens/SchemaView.test.tsx`'s
+clipboard test can hit its 5 s timeout under that load — it passes alone and in the
+`--maxWorkers=2` run. Recorded in `ORCHESTRATION.md` → `app/` Facts.
+
 ## 7. Constraints inherited from the repo
 
 - Shell contract (`app/CLAUDE.md`): one scroll container per screen, `overflow: clip`

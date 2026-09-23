@@ -83,7 +83,43 @@ describe("AddSystemDialog import flow", () => {
     await renderDialog();
     await act(async () => setValue(textarea()!, JSON_EXPORT));
     expect(textarea()!.value).toBe("--color-bg: #0a0a0f;\n--color-text: #f0f0f3;");
-    expect(document.querySelector(".tok-dialog-meta")?.textContent).toContain("Aurora");
+    expect(document.querySelector(".app-import-hint")?.textContent).toContain("Aurora");
+    expect(document.querySelector(".app-import-status")?.textContent).toContain("JSON export");
+  });
+
+  it("offers four sources and only shows the panel of the chosen one", async () => {
+    await renderDialog();
+    const labels = [...document.querySelectorAll(".app-import-source-label")].map((e) => e.textContent);
+    expect(labels).toEqual(["Paste CSS", "Upload .css", "Fetch URL", "JSON export"]);
+    expect(document.querySelector(".app-import-source.is-active .app-import-source-label")?.textContent).toBe(
+      "Paste CSS",
+    );
+    const upload = [...document.querySelectorAll<HTMLButtonElement>(".app-import-source")].find((b) =>
+      b.textContent?.startsWith("Upload"),
+    )!;
+    await click(upload);
+    expect(document.querySelector(".app-import-source.is-active .app-import-source-label")?.textContent).toBe(
+      "Upload .css",
+    );
+    expect(button("Choose a .css file")).toBeDefined();
+    expect(document.querySelector(".tok-source-url")).toBeNull();
+  });
+
+  it("imports JSON through the JSON panel and records where it came from", async () => {
+    await renderDialog();
+    const jsonTab = [...document.querySelectorAll<HTMLButtonElement>(".app-import-source")].find((b) =>
+      b.textContent?.startsWith("JSON"),
+    )!;
+    await click(jsonTab);
+    await act(async () => setValue(document.querySelector<HTMLTextAreaElement>('textarea[aria-label="System JSON"]')!, JSON_EXPORT));
+    await click(button("Import this JSON"));
+    expect(document.querySelector(".app-import-status")?.textContent).toContain("Aurora");
+    expect(textarea()!.value).toBe("--color-bg: #0a0a0f;\n--color-text: #f0f0f3;");
+  });
+
+  it("keeps the source status empty until something is loaded", async () => {
+    await renderDialog();
+    expect(document.querySelector(".app-import-status")?.textContent).toContain("Nothing loaded yet");
   });
 
   it("shows the grouped schema on the Review step", async () => {
