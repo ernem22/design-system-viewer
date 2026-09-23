@@ -266,7 +266,7 @@ export function AddSystemDialog({
       <Dialog.Portal>
         <Dialog.Overlay className="tok-dialog-overlay" />
         <Dialog.Content
-          className="tok-dialog tok-dialog-wide"
+          className="tok-dialog tok-dialog-wide app-import-dialog"
           data-step={step}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -275,49 +275,56 @@ export function AddSystemDialog({
             }
           }}
         >
-          <Dialog.Title className="tok-dialog-title">Add System</Dialog.Title>
-          <ol className="app-import-steps" aria-label="Import steps">
-            {STEPS.map((label, i) => {
-              const n = (i + 1) as Step;
-              return (
-                <li
-                  key={label}
-                  className={`app-import-step${n === step ? " is-current" : ""}${n < step ? " is-done" : ""}`}
-                  aria-current={n === step ? "step" : undefined}
-                >
-                  <button
-                    type="button"
-                    className="app-import-stepbtn"
-                    disabled={n > step}
-                    onClick={() => setStep(n)}
+          <header className="app-import-head">
+            <Dialog.Title className="tok-dialog-title">Add System</Dialog.Title>
+            <ol className="app-import-steps" aria-label="Import steps">
+              {STEPS.map((label, i) => {
+                const n = (i + 1) as Step;
+                return (
+                  <li
+                    key={label}
+                    className={`app-import-step${n === step ? " is-current" : ""}${n < step ? " is-done" : ""}`}
+                    aria-current={n === step ? "step" : undefined}
                   >
-                    {n}. {label}
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
-          <Dialog.Description className="tok-dialog-desc">
-            {step === 1 && (
-              <>
-                Paste <code>--token: value;</code> lines, drop a stylesheet, fetch one by URL, or paste a
-                system exported from the Tokens tab. Nothing is written until you save.
-              </>
-            )}
-            {step === 2 && (
-              <>
-                Check what will be written. The schema is grouped by its own headings — fill a single token,
-                or switch to the paste view and edit the whole block.
-              </>
-            )}
-            {step === 3 && (
-              <>
-                Name it and choose where to land. It stays in this browser and becomes selectable in the
-                switcher.
-              </>
-            )}
-          </Dialog.Description>
+                    <button
+                      type="button"
+                      className="app-import-stepbtn"
+                      disabled={n > step}
+                      onClick={() => setStep(n)}
+                    >
+                      <span className="app-import-stepnum" aria-hidden="true">
+                        {n < step ? <Icon name="check" size={11} /> : n}
+                      </span>
+                      <span className="app-import-steplabel">{label}</span>
+                    </button>
+                    {n < STEPS.length && <span className="app-import-stepline" aria-hidden="true" />}
+                  </li>
+                );
+              })}
+            </ol>
+            <Dialog.Description className="tok-dialog-desc">
+              {step === 1 && (
+                <>
+                  Paste <code>--token: value;</code> lines, drop a stylesheet, fetch one by URL, or paste a
+                  system exported from the Tokens tab. Nothing is written until you save.
+                </>
+              )}
+              {step === 2 && (
+                <>
+                  Check what will be written. The schema is grouped by its own headings — fill a single token,
+                  or switch to the paste view and edit the whole block.
+                </>
+              )}
+              {step === 3 && (
+                <>
+                  Name it and choose where to land. It stays in this browser and becomes selectable in the
+                  switcher.
+                </>
+              )}
+            </Dialog.Description>
+          </header>
 
+          <div className="app-import-body">
           {step === 1 && (
             <>
               <div className="app-import-sources" role="tablist" aria-label="Import source">
@@ -566,14 +573,16 @@ export function AddSystemDialog({
             </>
           )}
 
-          {hint && <p className="tok-dialog-meta app-import-hint">{hint}</p>}
-          {error && (
-            <p className="tok-dialog-error" role="alert">
-              {error}
-            </p>
-          )}
+            {hint && <p className="tok-dialog-meta app-import-hint">{hint}</p>}
+          </div>
 
-          <div className="tok-dialog-actions">
+          <footer className="app-import-foot">
+            {error && (
+              <p className="tok-dialog-error app-import-error" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="tok-dialog-actions">
             <span className="tok-segment">
               Open in
               <ToggleGroup.Root
@@ -609,7 +618,8 @@ export function AddSystemDialog({
                 Save system
               </button>
             )}
-          </div>
+            </div>
+          </footer>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

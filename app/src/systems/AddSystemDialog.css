@@ -13,36 +13,106 @@
   flex: none;
 }
 
-/* Import stepper (#124). Three steps in one dialog: this is the dialog's own
-   header, so it adds no scroll container and no layout frame. */
+/* ── Add System dialog: an import surface, not a form (#124) ──────────────
+   Three regions with exactly one scroller (the body). Measured before this:
+   a 560px dialog held 661px of content and the action row sat at y=641 in a
+   624px viewport, so Continue/Save were below the fold. Scoped to
+   .app-import-dialog so the shared .tok-dialog primitives (Add tokens) keep
+   their own behaviour. */
+/* Two classes on purpose: `.tok-dialog-wide` (560px) lives in
+   TokenToolbar.css, which lands AFTER this file in the bundle (SystemSwitcher
+   imports this css first), so a single-class rule would lose the cascade. */
+.tok-dialog.app-import-dialog {
+  width: min(920px, 94vw);
+  max-height: min(88vh, 860px);
+  padding: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: clip;
+}
+
+.app-import-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.app-import-head .tok-dialog-title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  letter-spacing: -0.01em;
+}
+
+.app-import-head .tok-dialog-desc {
+  margin: 0;
+  max-width: 76ch;
+}
+
+.app-import-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* The shared add-dialog helpers carry their own bottom margins; inside the
+   body the gap owns the rhythm instead. */
+.app-import-body .tok-field,
+.app-import-body .tok-dialog-row,
+.app-import-body .tok-dialog-meta {
+  margin-bottom: 0;
+}
+
+/* A name is short: at 920px a full-width input reads as a mistake. */
+.app-import-body .tok-field .tok-input {
+  max-width: 420px;
+}
+
+.app-import-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6);
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-surface);
+}
+
+.app-import-foot .tok-dialog-error {
+  margin: 0;
+}
+
+/* Progress: numbered steps with a connector, not a row of words. */
 .app-import-steps {
   display: flex;
+  align-items: center;
   gap: var(--space-2);
-  margin: 0 0 var(--space-2);
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .app-import-step {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-}
-
-.app-import-step.is-done {
-  color: var(--color-text-secondary);
-}
-
-.app-import-step.is-current {
-  color: var(--color-text);
-  font-weight: var(--font-weight-medium);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .app-import-stepbtn {
-  padding: 2px 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-1);
   border: 0;
+  border-radius: var(--radius-full);
   background: transparent;
-  color: inherit;
+  color: var(--color-text-muted);
   font: inherit;
+  font-size: var(--font-size-sm);
   cursor: pointer;
 }
 
@@ -50,9 +120,53 @@
   cursor: default;
 }
 
+.app-import-stepbtn:hover:not(:disabled) {
+  background: var(--color-hover-overlay);
+}
+
 .app-import-stepbtn:focus-visible {
   outline: var(--focus-ring-width) solid var(--color-focus-ring);
   outline-offset: var(--focus-ring-offset);
+}
+
+.app-import-stepnum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.app-import-step.is-current .app-import-stepnum {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.app-import-step.is-done .app-import-stepnum {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-text);
+}
+
+.app-import-step.is-current .app-import-steplabel {
+  color: var(--color-text);
+  font-weight: var(--font-weight-medium);
+}
+
+.app-import-step.is-done .app-import-steplabel {
+  color: var(--color-text-secondary);
+}
+
+.app-import-stepline {
+  width: var(--space-4);
+  height: 1px;
+  background: var(--color-border);
 }
 
 .app-import-prefixes {
@@ -85,11 +199,12 @@
 
 .app-import-source {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-2);
-  padding: var(--space-2);
+  min-height: 68px;
+  padding: var(--space-3);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text-secondary);
   font: inherit;
@@ -142,17 +257,29 @@
 .app-import-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-2);
+  gap: var(--space-2);
+  padding: var(--space-3);
   border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--color-surface-sunken);
 }
 
 .app-import-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
+}
+
+.app-import-status b {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
 }
 
 .app-import-text {

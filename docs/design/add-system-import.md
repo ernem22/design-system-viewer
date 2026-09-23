@@ -238,6 +238,27 @@ Verified after the follow-up: `npm --prefix app test -- --maxWorkers=2` → 30 f
 tests pass; `lint` clean; `build` green; the source picker, the proxy fetch, the upload
 and the topbar order all driven live.
 
+4. **"the UI is really bad: cramped, nothing fits, you cannot tell what is where"** —
+   measured before touching it, in a 1262×624 viewport: the dialog was **560px wide**
+   (44% of the viewport), the fourth source card **wrapped to a second row**, the
+   content was **661px inside a 562px dialog**, and because the whole dialog scrolled,
+   the action row sat at **y=641 — below the 624px fold**, so Continue/Save were
+   invisible until you scrolled. The dialog is now a three-region grid
+   (`head / body / foot`, scoped as `.tok-dialog.app-import-dialog` so the shared
+   `.tok-dialog` primitives that Add tokens uses are untouched):
+   **920px** wide, `overflow: clip` with the **body as the only scroller**, a sticky
+   header and footer, four source cards on **one row** (211×83), the name field capped at
+   420px, token rows on a grid so every name/value column lines up, group heads sticky
+   inside the body scroller, and the progress as numbered steps with a connector.
+   Measured after: width 920, `overflow: clip`, one scroller (`app-import-body`),
+   footer bottom 716 in a 762px viewport (**visible**), 4/4 cards on one row, 6 rows of
+   a group all at the same left offset, footer visible on steps 2 and 3 too.
+
+   The cascade detail that cost one round: `.tok-dialog-wide` (560px) lives in
+   `TokenToolbar.css`, which lands **after** `AddSystemDialog.css` in the bundle because
+   `SystemSwitcher.tsx` imports the latter first — a single-class override lost, so the
+   rule is written as `.tok-dialog.app-import-dialog`.
+
 Known environment flake (not code): the default vitest run spawns one worker per test
 file (30 on this host, ~9.6 s startup each) and `src/tokens/SchemaView.test.tsx`'s
 clipboard test can hit its 5 s timeout under that load — it passes alone and in the

@@ -165,10 +165,12 @@ export function SchemaFill({ css, onChange }: { css: string; onChange: (next: st
                           title={warning ?? (present ? "present" : "missing")}
                           aria-hidden="true"
                         />
-                        {isColorName(name) && HEX.test(value.trim()) && (
-                          <span className="app-fill-swatch" style={{ background: value.trim() }} />
-                        )}
-                        <code className="app-fill-name">{name}</code>
+                        <span className="app-fill-key">
+                          {isColorName(name) && HEX.test(value.trim()) && (
+                            <span className="app-fill-swatch" style={{ background: value.trim() }} />
+                          )}
+                          <code className="app-fill-name">{name}</code>
+                        </span>
                         <input
                           className="tok-input app-fill-input"
                           value={value}
@@ -214,7 +216,7 @@ export function SchemaFill({ css, onChange }: { css: string; onChange: (next: st
             {extras.length} extra — Preview only reads the {cov.expected} schema names
           </div>
           {extras.map(({ name, suggest }) => (
-            <div className="app-fill-row" key={name}>
+            <div className="app-fill-row app-fill-extra-row" key={name}>
               <code className="app-fill-name">{name}</code>
               {suggest && (
                 <button
