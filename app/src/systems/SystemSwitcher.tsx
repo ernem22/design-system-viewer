@@ -9,25 +9,19 @@ interface SystemSwitcherProps {
   active: DesignSystem | null;
   activeSlug: string;
   onSelect: (slug: string) => void;
-  onAddClick: () => void;
 }
 
 /** Header system switcher — ported from the legacy dsv-topbar-sysbtn
    (preview/src/App.jsx), using Radix Select instead of a native <select>.
-   Always shown (even with one system) so the Add-system affordance next to
-   it stays discoverable. */
+   Shown whenever there is at least one system; the Add-system affordance is
+   the `+` icon in the topbar's action cluster (App.tsx), not a labelled
+   button here — the switcher is for switching. */
 export default function SystemSwitcher({
   systems,
   active,
   activeSlug,
   onSelect,
-  onAddClick,
 }: SystemSwitcherProps) {
-  const addButton = (
-    <button type="button" className="tok-btn" title="Add a new design system" onClick={onAddClick}>
-      + Add system
-    </button>
-  );
   // Menu-row pcts, recomputed only when the system list changes — not on each
   // unrelated App re-render (a search keystroke re-renders App; legacy preview
   // memoized this as `pctMap`).
@@ -40,7 +34,7 @@ export default function SystemSwitcher({
   // `pctMap`: `active` can be replaced while `systems` keeps its reference, in
   // which case a slug-keyed map would serve the previous entry's pct or null.
   const activePct = useMemo(() => systemCoveragePercent(active), [active]);
-  if (systems.length === 0) return <span className="app-syswrap">{addButton}</span>;
+  if (systems.length === 0) return null;
   return (
     <span className="app-syswrap">
       <Select.Root value={activeSlug} onValueChange={onSelect}>
@@ -76,7 +70,6 @@ export default function SystemSwitcher({
         </Select.Content>
       </Select.Portal>
     </Select.Root>
-      {addButton}
     </span>
   );
 }

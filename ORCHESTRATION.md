@@ -289,6 +289,21 @@ Templates live in `docs/orchestration/specs/` (`coder.md`, `reviewer.md`,
 a template is a deliberate act, because a template is the contract, not a
 per-cycle artifact.
 
+## Product Decisions Workers Must Honour
+
+Standing product decisions that override anything a task spec, a finding or a
+legacy-parity argument implies. They are product facts, not preferences.
+
+- **Dark mode is retired (user decision, 2026-09-23).** Dark mode is not a feature of
+  this product: it will be removed, not extended. No worker adds, fixes, extends or
+  restores dark handling — `parseThemes` / `themes.dark`, the Preview dark toggle, any
+  `[data-theme]` branch, dark gallery styling — and a dark-mode finding is **not** a
+  defect and must not become an issue. Legacy parity is not an argument here: the
+  legacy theme toggle is not to be restored. The removal itself is deferred and is
+  nobody's current task; the inventory of the sites it will have to touch is in
+  `docs/design/add-system-import.md`. The UI audit measures contrast in light only
+  (see UI Audit).
+
 ## `app/` Facts Workers Must Be Told
 
 Repo-specific traps, verified 2026-09-18. Each Coder/Fixer Task spec must
@@ -324,6 +339,24 @@ by trial produces a silent false pass.
   an install). Every Coder/Tester/Fixer spec that builds, tests or serves the
   app must start with `npm --prefix app ci` — without it `vite build` and
   `vitest` fail in ways a worker misreads as a broken change.
+- **`NODE_ENV=production` is set in this shell, and npm then omits
+  devDependencies — an install that exits 0 can still leave no toolchain.**
+  Measured 2026-09-23 in a worker worktree: `npm --prefix app ci` printed
+  `added 78 packages, audited 79 packages` and `app/node_modules/.bin` did not
+  exist, so `npm --prefix app test` answered `'vitest' is not recognized` while
+  the install had "succeeded". CI (`.github/workflows/pr-check.yml`) sets no
+  NODE_ENV, so the job never shows this and a worker cannot infer it from a
+  green PR. `app/.npmrc` now pins `include=dev` so the documented command is
+  correct; a worktree that predates that file must use
+  `npm --prefix app ci --include=dev`.
+- **Vitest spawns one worker per test file, and on this host that alone can time a DOM
+  test out.** Measured 2026-09-23: the default `npm --prefix app test` run reports
+  `30 workers spawned · ~9.63s startup each`, and `src/tokens/SchemaView.test.tsx`'s
+  clipboard test fails with `Test timed out in 5000ms`; the same file passes alone
+  (`2 passed`), and the whole suite passes as
+  `npm --prefix app test -- --maxWorkers=2` (30 files / 214 tests). A 5 s timeout in a
+  DOM test is this machine, not the change — re-run with fewer workers before reporting
+  it as a defect.
 - **The established pattern for testing a hook/component** is
   `app/src/lib/toasts.test.ts`: a `.ts` file, `createElement` instead of JSX,
   a hand-built `happy-dom` `Window`, and `react-dom/client` imported lazily so
@@ -447,7 +480,8 @@ Contract, identical in shape to the Tester's:
     a one-line fix. Contrast ratios are computed and printed with the two numbers
     divided, never eyeballed.
   - **Seven axes:** token discipline (values that bypass the 432 custom properties),
-    contrast in both light and dark, keyboard and focus behaviour, legacy parity
+    contrast in light only (dark mode is retired — see Product Decisions Workers Must
+    Honour), keyboard and focus behaviour, legacy parity
     (behaviours the legacy viewer has and the port lacks, cited by file:line), state
     completeness (empty/loading/error per panel), layout robustness (overflow,
     clipping, truncation without an affordance), and dead or dishonest UI (controls
@@ -788,6 +822,14 @@ pushed, awaiting review), `needs-verify` (the PR is in a verification wave),
 `auto-ok` is retired as a gate: the pipeline merges on its own three signals (CI
 green + Reviewer PASS + Tester PASS). Check `gh label list` and create missing
 ones once with `gh label create <name> --color <hex>`.
+
+**`retired` blocks a dispatch.** A card carrying `retired` was retired by a product
+decision (see Product Decisions Workers Must Honour): the feature is out of the plan
+and its work is **deferred, not deleted** — the card is not a defect and not planned
+work, so no Coder may claim it and no Fixer task may reference it, even though it stays
+**open on purpose**: the record of what was retired is the point. Un-retiring is a user
+action (`gh issue edit <n> --remove-label retired`), never a coordinator judgement. A
+card that is only *partly* void is not labelled: it is re-scoped by the user first.
 
 **`needs-test` is retired.** The four issues that carried it (#41, #23, #21,
 #15) were drained and closed; the label stays in the repo as history and is
