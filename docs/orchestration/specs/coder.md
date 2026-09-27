@@ -31,8 +31,10 @@ EVIDENCE — run all of these and paste the real numbers into the PR body:
     and paste its failing assertion.
   - Anything you could not run, in a `## Not verified` section — no guessing.
 
-DELIVERY: commit with a `[coder]` prefix in the subject, push your branch, open a
-PR against `refactor/full-react-migration` titled
+DELIVERY: set your worktree identity first — `tools/orchestration/identity.sh coder`
+(sets `user.name=orca-coder`, `user.email=$BOT_EMAIL`; never `ernem22`, never a
+model name) — then commit with a `[coder]` prefix in the subject, push your branch,
+open a PR against `refactor/full-react-migration` titled
 `[coder] <fix|feat|perf>(app): <what changed> (#<n>)`, and label the issue
 `needs-review`. Do not merge, do not close the issue, do not approve anything.
 

@@ -47,7 +47,8 @@ on a focus the user stated — see Task Creator.
 7. Never write application code, never re-review a PASS, never report an
    unverifiable result as success.
 8. Every merged commit carries both identities: the `[role]` tag in the subject,
-   `erne` as author, and the worker as a `Co-authored-by:` trailer.
+   `ernem22` as author, and the worker as a `Co-authored-by:` trailer pointing at
+   the role's bot account (`BOT_EMAIL`, §Commit Attribution).
 
 ## Current Verified Architecture
 
@@ -1074,15 +1075,19 @@ worker's model or personal identity.
   spec's commit instruction; it is not left to the worker's judgment.
 - **Author**: set `git config --worktree user.name`/`user.email` in each
   worker's worktree before it commits (or instruct the worker to do so as its
-  first step) to a fixed role identity — `orca-coder
-  <orca-coder@localhost>`, `orca-fixer <orca-fixer@localhost>` — never
-  `ernem22`, never a model name.
+  first step) to a fixed role identity by running
+  `tools/orchestration/identity.sh <role>`, which reads the role's account from
+  `tools/orchestration/identity.env` — never `ernem22`, never a model name. The
+  email MUST be the role bot's `users.noreply.github.com` address so GitHub links
+  the commit to that account; `@localhost`/`@local` resolves to no account, and a
+  legacy `username@users.noreply.github.com` address resolves to whoever currently
+  owns that username.
 - **Both identities land on the merged commit.** The worker's branch commit
   carries the role tag and `orca-<role>` as author, and its body must also name
   the human: `Co-authored-by: erne <ernmctt@gmail.com>`. At merge time Hermes
   squashes with `--subject "<subject> (#<n>)"` — the tag survives in the subject
-  — and a `--body` carrying `Co-authored-by: orca-<role>
-  <orca-<role>@localhost>`, because a squash re-authors the commit to the merging
+  — and a `--body` carrying `Co-authored-by: orca-<role> <BOT_EMAIL>`, because a
+  squash re-authors the commit to the merging
   account. Without that trailer the worker's identity is gone from the base
   branch entirely. Verified failure: the four merges made before this rule
   (`6cf38f9`, `e425c79`, `df02f59`, `30c162d`) carry `[coder]` in the subject and
@@ -1096,11 +1101,19 @@ worker's model or personal identity.
   state, checked once at run start (currently `true`).
 - **Coordinator commits use the real human identity** (`ernem22`), not a
   synthetic `orca-orchestrator`. Hermes editing this file or a workflow is not
-  an anonymous worker; only dispatched worker roles get `orca-<role>`.
+  an anonymous worker; only dispatched worker roles get `orca-<role>`. The human
+  account's private address (`ernmctt@gmail.com`) is blocked on push by GitHub's
+  email-privacy protection (`GH007`); use the account's
+  `97901269+ernem22@users.noreply.github.com` address instead.
+- **The role bots must exist for attribution to resolve.** GitHub links a commit
+  to an account only when the commit's email maps to that account; the role
+  accounts and their addresses live in `tools/orchestration/identity.env`. The
+  address alone is not enough — the account must exist (and be a collaborator to
+  push or be assigned).
 - **Verify** with the same call as the integrity check:
   `git log -1 --format='%an <%ae> %s'`. A wrong author or missing role tag is a
   policy violation even when the SHA is real and CI is green. Pre-merge, fix it
-  (`git commit --amend --author="orca-<role> <orca-<role>@localhost>" --no-edit
+  (`git commit --amend --author="orca-<role> <BOT_EMAIL>" --no-edit
   && git push --force-with-lease`) rather than leaving it wrong. If already
   merged with work stacked on top, leave history alone and get it right going
   forward.
@@ -1110,6 +1123,15 @@ history** — PR #42 landed as `test(app): add useToasts hook tests` from head
 branch `ernem22/fixer-1` with no `[fixer]` tag. A `commit-msg` hook checking
 the subject against the tag list would make the rule mechanical; see Known
 Gaps.
+
+Additional violations found in the 2026-09-28 identity audit: `pipeline-coder
+<pipeline@local>` (missed by a `localhost`-keyed check) and seven commits
+authored/committed as `erne <erne@users.noreply.github.com>`, which GitHub
+resolves to a *different* account (`erne`, id 878420) than the owner (`ernem22`,
+id 97901269). The 2026-09-28 rewrite fixed the six in-scope branch tips on
+origin; the older `@localhost` identities on local-only branches and the four
+`[orchestrator]` commits already in `refactor/full-react-migration` were left
+untouched by design.
 
 ## Delivery & Approval
 

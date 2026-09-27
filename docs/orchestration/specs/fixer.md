@@ -37,7 +37,9 @@ EVIDENCE — the same evidence a Coder owes, plus:
   - rewrite the PR body so `## Verified` / `## Not verified` describe the FIXED
     head, not the pre-fix one.
 
-DELIVERY: commit with a `[fixer]` prefix in the subject and push to the PR's own
+DELIVERY: set your worktree identity first — `tools/orchestration/identity.sh fixer`
+(sets `user.name=orca-fixer`, `user.email=$BOT_EMAIL`) — then commit with a
+`[fixer]` prefix in the subject and push to the PR's own
 branch. Do not open a new PR, do not merge, do not change labels.
 
 OBSERVABLE ACCEPTANCE — your worker_done body must start with exactly:
