@@ -74,3 +74,34 @@ diffing raw commit objects with `author`/`committer` lines removed.
 - Accept the pending `ernem22-fixer` write invitation (needed for future fixer pushes;
   none of the 6 tips were fixer-authored, so it was not a blocker).
 - Optional `commit-msg` hook (role tag + reject `@localhost`) remains a Known Gap.
+
+## Addendum — remaining identities LEFT UNFIXED ON PURPOSE (do not reopen)
+
+A follow-up re-scan of the **remote** refs found two leftovers this change does not
+fix. Both are deliberate cost/benefit calls, not oversights. Do not re-open either
+without new information.
+
+### 1. PR #92 (`ernem22/coder-27`, commit `994b970`) — leave as-is
+Still authored/committed as `erne <erne@users.noreply.github.com>` (resolves to the
+unrelated account `erne`, id 878420). It is a pre-existing **open PR with its own
+accumulated review / CI / `pipeline/verdict` history**. Force-pushing it to fix a
+cosmetic identity would reset that state for no functional gain. Excluded by design.
+
+### 2. The four `[orchestrator]` `orca-coder@localhost` commits in
+`refactor/full-react-migration` — leave as-is
+They are ancestors of the protected base, so they surface on the base history and on
+every branch descended from it. This is **not** a wrong-person misattribution — they
+render as "no avatar," a neutral cosmetic gap. Fixing them would require rewriting
+the protected base branch, temporarily disabling its protection
+(`allow_force_pushes:false`, `enforce_admins:true` — the pipeline's actual merge
+gate), and cascading the rewrite to all 20 branches, disrupting all four open PRs
+(#129, #126, #93, #92). Cost wildly disproportionate to benefit. **The base and its
+branch protection must not be touched under any circumstances.**
+
+### Method note that caused the initial miss
+The in-scope list was computed from the local repo's `git log --all`, which had not
+yet fetched `origin/ernem22/tooling-guardrails`, so the `erne` commit on PR #129
+(`b4b78431`) was missed and fixed later by a follow-up tip amend
+(`b4b78431` → `1ec5dea5`, now `ernem22 <97901269+ernem22@users.noreply.github.com>`).
+Lesson: enumerate **remote** refs (`git ls-remote`, or a freshly fetched
+`refs/remotes/origin/*`), never a possibly-stale local `--all`.
