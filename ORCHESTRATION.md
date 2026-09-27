@@ -176,7 +176,7 @@ Two bounded exceptions, both O(1) and both in the per-worker call budget:
 
 | Role | Does | Does not |
 |---|---|---|
-| Task Creator | On a focus the **user** stated, inspects all of `app/` and opens **one** GitHub issue for one small, independent, well-scoped task, labelled `agent` | Propose anything when no focus was stated; open a second issue in a cycle; narrow itself to a category the user did not ask for; write a local `NEXT_TASK.md` |
+| Task Creator | On a focus the **user** stated, inspects all of `app/` — or, when the focus names the pipeline, `tools/orchestration/`, `docs/orchestration/` and `.github/workflows/` — and opens **one** GitHub issue for one small, independent, well-scoped task, labelled `agent` | Propose anything when no focus was stated; open a second issue in a cycle; narrow itself to a category the user did not ask for; cross the two boundaries (an `app/` focus never reaches tooling, a pipeline focus never reaches `app/`, and a pipeline-integrity issue is filed for the human/tooling route, never for a dispatched Coder); write a local `NEXT_TASK.md` |
 | Coder | Implements the task in its child worktree, **writes tests for the behaviour it adds** (see `app/` Facts), commits + pushes, opens the PR, flips the issue label | Rely on CI to decide whether its own change is correct; skip tests because "CI will catch it" — CI only runs tests that exist |
 | Reviewer (`--agent plan`) | Read-only diff/code review against the issue's stated intent, returns PASS/FAIL + fix list | Edit any file; implement fixes; restate what CI already reports (lint/types/build/unit results are not review findings) |
 | Tester | Drives the **running build** through Orca's built-in browser and reports the behaviour it observed, before and after the change (see Tester). A required stage for every PR that changes `app/src`, and it does gate the merge | Run `npm test`/`tsc` and report counts — CI's job; write, add or modify any file; write tests; commit; take a full `snapshot` as a matter of course |
@@ -851,18 +851,58 @@ turn the stated focus into a well-formed issue, not to generate a backlog.
 - **Scope:** `app/` only, stated literally in the spec ("app/ only, not
   src/core, not preview/"). The *directory* is the boundary; the focus the user
   gave is the subject. Do not also filter by task category unless the focus is
-  itself a category.
+  itself a category. Every spec the pipeline **dispatches** carries this scope;
+  the pipeline-integrity focus below is the one exception, and it never becomes a
+  dispatched spec.
 - **Output:** exactly one new GitHub issue per dispatch — `gh issue create
   --label agent` plus `bug`/`enhancement` — carrying the file and line
   references the model actually read and a `Verify:` line saying how the
   behaviour can be observed. An issue nobody can verify is not actionable here.
+  The pipeline-integrity focus below is the exception: it carries
+  `pipeline-integrity` and **not** `agent`, because the wake-up loop's selector
+  (`gh issue list --state open --label agent`) dispatches whatever holds that
+  label without reading the body.
 - **Dedupe:** read the open *and* closed list first
   (`gh issue list --state all --label agent --limit 200`). Do not re-propose
   anything open, closed as `wontfix`/`invalid`/`duplicate`, or already carrying
-  a merged PR.
+  a merged PR. On the pipeline-integrity route below, list
+  `--label pipeline-integrity` as well: those issues deliberately carry no
+  `agent`, so the agent filter cannot see them and a repeat proposal would stay
+  invisible until a human rejected it. That label must exist for the route to
+  work at all — create it once with `gh label create pipeline-integrity` if it
+  is missing.
 - **Cap:** one issue per cycle, and do not dispatch a Task Creator at all while
   12 or more unclaimed `agent` issues are open — the pipeline is already
-  queue-bound, so a new proposal only adds latency.
+  queue-bound, so a new proposal only adds latency. Pipeline-integrity issues
+  carry a separate label and therefore do not count toward that 12. Known and
+  currently neutral: none exist, so the cap has not yet had to decide anything
+  about this route — revisit this line if the route ever grows a queue of its
+  own.
+- **Second boundary — pipeline integrity** (added 2026-09-27). When the focus the
+  user stated names the *pipeline* rather than the app ("the guardrails", "a deny
+  pattern that missed", "tools/orchestration"), the directory boundary for that
+  dispatch is `tools/orchestration/`, `docs/orchestration/` and
+  `.github/workflows/`, and `app/` is out of scope. Nothing else changes: the
+  user-stated-focus rule, the one-issue-per-cycle cap and the dedupe rules all
+  still apply, and this mode is not a standing authorization either.
+  A pipeline-integrity issue must carry, in the issue body:
+  - the **command that slipped through**, verbatim, and what the guard was
+    supposed to do with it;
+  - a **probe** a reader can repeat against the matcher that decides, and the
+    **safe form that must keep working** (for a force-push rule, that is
+    `git push --force-with-lease origin x` — the pipeline itself uses it);
+  - **which copy of the file actually runs**: the worktree (`git -C <path>
+    rev-parse --show-toplevel`) and its branch. A tooling fix that is not merged
+    is not live, and that has already happened twice over: the 2026-09-27
+    deny-pattern fix sat uncommitted in a stale worktree while the coordinator's
+    worktree still carried the old pattern.
+  - **Who implements it:** nobody the pipeline dispatches. `docs/orchestration/specs/coder.md`
+    scopes a Coder to `app/` only, and that rule stands unchanged — a pipeline-integrity
+    issue is implemented on the human/tooling path instead: a real branch, a PR, a green
+    check and a **human** merge, the same route coordinator infrastructure takes. Label it
+    `pipeline-integrity` and not `agent` — the wake-up loop selects on that label without
+    reading the body — and say so in the body as well (`Route: human/tooling, not a
+    dispatched worker`).
 - **Not its job:** implementing anything, writing a local task file, or widening
   the focus the user gave.
 
