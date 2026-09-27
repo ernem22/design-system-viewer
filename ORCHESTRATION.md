@@ -865,10 +865,19 @@ turn the stated focus into a well-formed issue, not to generate a backlog.
 - **Dedupe:** read the open *and* closed list first
   (`gh issue list --state all --label agent --limit 200`). Do not re-propose
   anything open, closed as `wontfix`/`invalid`/`duplicate`, or already carrying
-  a merged PR.
+  a merged PR. On the pipeline-integrity route below, list
+  `--label pipeline-integrity` as well: those issues deliberately carry no
+  `agent`, so the agent filter cannot see them and a repeat proposal would stay
+  invisible until a human rejected it. That label must exist for the route to
+  work at all — create it once with `gh label create pipeline-integrity` if it
+  is missing.
 - **Cap:** one issue per cycle, and do not dispatch a Task Creator at all while
   12 or more unclaimed `agent` issues are open — the pipeline is already
-  queue-bound, so a new proposal only adds latency.
+  queue-bound, so a new proposal only adds latency. Pipeline-integrity issues
+  carry a separate label and therefore do not count toward that 12. Known and
+  currently neutral: none exist, so the cap has not yet had to decide anything
+  about this route — revisit this line if the route ever grows a queue of its
+  own.
 - **Second boundary — pipeline integrity** (added 2026-09-27). When the focus the
   user stated names the *pipeline* rather than the app ("the guardrails", "a deny
   pattern that missed", "tools/orchestration"), the directory boundary for that
