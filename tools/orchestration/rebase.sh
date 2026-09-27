@@ -35,7 +35,7 @@ fi
 WT="$WT_ROOT/rebase-$PR"
 git -C "$WT_ROOT/proteus-5" fetch -q origin
 if [ ! -d "$WT" ]; then
-  bash "$HERE/spawn.sh" "rebase-$PR" "origin/$BRANCH" >/dev/null 2>&1 || {
+  bash "$HERE/spawn.sh" "rebase-$PR" "origin/$BRANCH" --worktree-only >/dev/null 2>&1 || {
     echo "  could not create the worktree — dispatch a Fixer instead"; exit 2; }
 fi
 

@@ -176,7 +176,7 @@ Two bounded exceptions, both O(1) and both in the per-worker call budget:
 
 | Role | Does | Does not |
 |---|---|---|
-| Task Creator | On a focus the **user** stated, inspects all of `app/` — or, when the focus names the pipeline, `tools/orchestration/`, `docs/orchestration/` and `.github/workflows/` — and opens **one** GitHub issue for one small, independent, well-scoped task, labelled `agent` | Propose anything when no focus was stated; open a second issue in a cycle; narrow itself to a category the user did not ask for; cross the two boundaries (an `app/` focus never reaches tooling, a pipeline focus never reaches `app/`); write a local `NEXT_TASK.md` |
+| Task Creator | On a focus the **user** stated, inspects all of `app/` — or, when the focus names the pipeline, `tools/orchestration/`, `docs/orchestration/` and `.github/workflows/` — and opens **one** GitHub issue for one small, independent, well-scoped task, labelled `agent` | Propose anything when no focus was stated; open a second issue in a cycle; narrow itself to a category the user did not ask for; cross the two boundaries (an `app/` focus never reaches tooling, a pipeline focus never reaches `app/`, and a pipeline-integrity issue is filed for the human/tooling route, never for a dispatched Coder); write a local `NEXT_TASK.md` |
 | Coder | Implements the task in its child worktree, **writes tests for the behaviour it adds** (see `app/` Facts), commits + pushes, opens the PR, flips the issue label | Rely on CI to decide whether its own change is correct; skip tests because "CI will catch it" — CI only runs tests that exist |
 | Reviewer (`--agent plan`) | Read-only diff/code review against the issue's stated intent, returns PASS/FAIL + fix list | Edit any file; implement fixes; restate what CI already reports (lint/types/build/unit results are not review findings) |
 | Tester | Drives the **running build** through Orca's built-in browser and reports the behaviour it observed, before and after the change (see Tester). A required stage for every PR that changes `app/src`, and it does gate the merge | Run `npm test`/`tsc` and report counts — CI's job; write, add or modify any file; write tests; commit; take a full `snapshot` as a matter of course |
@@ -851,7 +851,9 @@ turn the stated focus into a well-formed issue, not to generate a backlog.
 - **Scope:** `app/` only, stated literally in the spec ("app/ only, not
   src/core, not preview/"). The *directory* is the boundary; the focus the user
   gave is the subject. Do not also filter by task category unless the focus is
-  itself a category.
+  itself a category. Every spec the pipeline **dispatches** carries this scope;
+  the pipeline-integrity focus below is the one exception, and it never becomes a
+  dispatched spec.
 - **Output:** exactly one new GitHub issue per dispatch — `gh issue create
   --label agent` plus `bug`/`enhancement` — carrying the file and line
   references the model actually read and a `Verify:` line saying how the
@@ -881,6 +883,12 @@ turn the stated focus into a well-formed issue, not to generate a backlog.
     is not live, and that has already happened twice over: the 2026-09-27
     deny-pattern fix sat uncommitted in a stale worktree while the coordinator's
     worktree still carried the old pattern.
+  - **Who implements it:** nobody the pipeline dispatches. `docs/orchestration/specs/coder.md`
+    scopes a Coder to `app/` only, and that rule stands unchanged — a pipeline-integrity
+    issue is implemented on the human/tooling path instead: a real branch, a PR, a green
+    check and a **human** merge, the same route coordinator infrastructure takes. Say so in
+    the issue body (`Route: human/tooling, not a dispatched worker`) so no coordinator
+    dispatches a Coder at it.
 - **Not its job:** implementing anything, writing a local task file, or widening
   the focus the user gave.
 
