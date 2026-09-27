@@ -53,12 +53,27 @@ P=$(printf '%s' "$RAW" | node -e \
 #     phase. That is the whole point: a prompt is a stall the coordinator has to
 #     notice, and denying predictably is cheaper than asking.
 #   * destructive git/rm patterns are denied outright; a worker that needs one has
-#     to say so in its report.
+#     to say so in its report. Note the force-push pattern is `git push --force *`
+#     (with the space), NOT `git push --force*`: the pipeline requires
+#     `--force-with-lease` to publish a rebase onto a moved base, and the wildcard
+#     form swallowed it too. The lease form refuses when the remote has moved, so it
+#     cannot destroy work the way a plain --force can — denying both cost a whole
+#     fixer round trip, with the worker correctly stopping to ask.
+#     Two gaps survived that fix, both closed on 2026-09-27:
+#       - a flag positioned AFTER the remote matched no pattern at all, so
+#         `git push origin HEAD --force` and `git push --force-if-includes origin x`
+#         were both allowed. The patterns below now cover the flag first, last and in
+#         the middle, plus the `+refspec` force form. `--force-with-lease` matches
+#         none of them: no pattern ends in `--force*` any more.
+#       - `git reset --hard*` had the same shape of gap in the other direction
+#         (`git reset origin/main --hard` was allowed), so the reset rule enumerates
+#         positions too. Verified against opencode's own matcher by the probe recorded
+#         in this change's PR description, not assumed from the patterns.
 if [ "$PLAN" = "--plan" ]; then
   # A Reviewer is read-only by contract; enforce it here instead of trusting prose.
   printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "opencode-go/deepseek-v4.1-flash",\n  "permission": {\n    "external_directory": "deny",\n    "edit": "deny",\n    "write": "deny",\n    "*": "allow",\n    "bash": { "*": "deny", "orca *": "allow", "gh *": "allow", "curl *": "allow", "git log *": "allow", "git show *": "allow", "git diff *": "allow", "ls *": "allow", "cat *": "allow", "grep *": "allow", "rg *": "allow", "head *": "allow", "tail *": "allow", "wc *": "allow" }\n  }\n}\n' > "$P/opencode.json"
 else
-  printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "opencode-go/deepseek-v4.1-flash",\n  "permission": {\n    "external_directory": "deny",\n    "*": "allow",\n    "bash": { "*": "allow", "rm -rf *": "deny", "git push --force*": "deny", "git reset --hard*": "deny", "git clean *": "deny" }\n  }\n}\n' > "$P/opencode.json"
+  printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "opencode-go/deepseek-v4.1-flash",\n  "permission": {\n    "external_directory": "deny",\n    "*": "allow",\n    "bash": { "*": "allow", "rm -rf *": "deny", "git push --force *": "deny", "git push --force-if-includes *": "deny", "git push -f *": "deny", "git push * -f": "deny", "git push * -f *": "deny", "git push * --force": "deny", "git push * --force *": "deny", "git push * +*": "deny", "git reset --hard *": "deny", "git reset * --hard": "deny", "git reset * --hard *": "deny", "git clean *": "deny" }\n  }\n}\n' > "$P/opencode.json"
 fi
 
 orca terminal create --worktree "id:$REPO_ID::$P" --title "$ROLE" --command "$CMD" --json >/dev/null
@@ -68,8 +83,17 @@ sleep 6
 # Look the handle up by the worktree PATH, not by the role name: orca suffixes a
 # taken name (`role` -> `role-2`), and a name lookup then returns the terminal of
 # the older worktree, which worker-start rejects as terminal_worktree_mismatch.
-H=$(bash "$(dirname "$0")/handle.sh" "$P" 2>/dev/null | head -1)
-[ -z "$H" ] && { echo "NO_TERMINAL_HANDLE for $ROLE (path $P) — inspect: orca terminal list" >&2; exit 2; }
+# Wait for the AGENT terminal, not the first terminal in the worktree. A worktree gets
+# a plain shell at creation and the opencode TUI registers a few seconds later; taking
+# the shell binds the dispatch to a terminal with no agent in it, so the worker never
+# runs and never reports — a silent dead dispatch with no settlement to recover.
+H=""
+for _ in $(seq 1 25); do
+  H=$(bash "$(dirname "$0")/handle.sh" "$P" --agent-only 2>/dev/null | head -1)
+  [ -n "$H" ] && break
+  sleep 3
+done
+[ -z "$H" ] && { echo "NO_TERMINAL_HANDLE for $ROLE (path $P) — the agent terminal never registered; inspect: orca terminal list" >&2; exit 2; }
 
 echo "PATH=$P"
 echo "HANDLE=$H"

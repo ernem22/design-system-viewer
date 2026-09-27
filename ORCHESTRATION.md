@@ -176,7 +176,7 @@ Two bounded exceptions, both O(1) and both in the per-worker call budget:
 
 | Role | Does | Does not |
 |---|---|---|
-| Task Creator | On a focus the **user** stated, inspects all of `app/` and opens **one** GitHub issue for one small, independent, well-scoped task, labelled `agent` | Propose anything when no focus was stated; open a second issue in a cycle; narrow itself to a category the user did not ask for; write a local `NEXT_TASK.md` |
+| Task Creator | On a focus the **user** stated, inspects all of `app/` — or, when the focus names the pipeline, `tools/orchestration/`, `docs/orchestration/` and `.github/workflows/` — and opens **one** GitHub issue for one small, independent, well-scoped task, labelled `agent` | Propose anything when no focus was stated; open a second issue in a cycle; narrow itself to a category the user did not ask for; cross the two boundaries (an `app/` focus never reaches tooling, a pipeline focus never reaches `app/`); write a local `NEXT_TASK.md` |
 | Coder | Implements the task in its child worktree, **writes tests for the behaviour it adds** (see `app/` Facts), commits + pushes, opens the PR, flips the issue label | Rely on CI to decide whether its own change is correct; skip tests because "CI will catch it" — CI only runs tests that exist |
 | Reviewer (`--agent plan`) | Read-only diff/code review against the issue's stated intent, returns PASS/FAIL + fix list | Edit any file; implement fixes; restate what CI already reports (lint/types/build/unit results are not review findings) |
 | Tester | Drives the **running build** through Orca's built-in browser and reports the behaviour it observed, before and after the change (see Tester). A required stage for every PR that changes `app/src`, and it does gate the merge | Run `npm test`/`tsc` and report counts — CI's job; write, add or modify any file; write tests; commit; take a full `snapshot` as a matter of course |
@@ -863,6 +863,24 @@ turn the stated focus into a well-formed issue, not to generate a backlog.
 - **Cap:** one issue per cycle, and do not dispatch a Task Creator at all while
   12 or more unclaimed `agent` issues are open — the pipeline is already
   queue-bound, so a new proposal only adds latency.
+- **Second boundary — pipeline integrity** (added 2026-09-27). When the focus the
+  user stated names the *pipeline* rather than the app ("the guardrails", "a deny
+  pattern that missed", "tools/orchestration"), the directory boundary for that
+  dispatch is `tools/orchestration/`, `docs/orchestration/` and
+  `.github/workflows/`, and `app/` is out of scope. Nothing else changes: the
+  user-stated-focus rule, the one-issue-per-cycle cap and the dedupe rules all
+  still apply, and this mode is not a standing authorization either.
+  A pipeline-integrity issue must carry, in the issue body:
+  - the **command that slipped through**, verbatim, and what the guard was
+    supposed to do with it;
+  - a **probe** a reader can repeat against the matcher that decides, and the
+    **safe form that must keep working** (for a force-push rule, that is
+    `git push --force-with-lease origin x` — the pipeline itself uses it);
+  - **which copy of the file actually runs**: the worktree (`git -C <path>
+    rev-parse --show-toplevel`) and its branch. A tooling fix that is not merged
+    is not live, and that has already happened twice over: the 2026-09-27
+    deny-pattern fix sat uncommitted in a stale worktree while the coordinator's
+    worktree still carried the old pattern.
 - **Not its job:** implementing anything, writing a local task file, or widening
   the focus the user gave.
 
