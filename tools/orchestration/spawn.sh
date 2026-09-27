@@ -87,11 +87,15 @@ P=$(printf '%s' "$RAW" | node -e \
 #       - `rebase.sh` calls this script for a worktree and discards the handle, so the agent
 #         wait below turned a created worktree into "could not create the worktree". That
 #         caller now passes --worktree-only.
+#     The order in the map matters: opencode resolves the LAST matching pattern, so the two
+#     lease-pair allows sit before the positional force and `+refspec` denies. A lease pair
+#     that also carries a plain `--force`, or a `+refspec`, still hits a later deny — the
+#     allow only decides when nothing below it matches.
 if [ "$PLAN" = "--plan" ]; then
   # A Reviewer is read-only by contract; enforce it here instead of trusting prose.
   printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "opencode-go/deepseek-v4.1-flash",\n  "permission": {\n    "external_directory": "deny",\n    "edit": "deny",\n    "write": "deny",\n    "*": "allow",\n    "bash": { "*": "deny", "orca *": "allow", "gh *": "allow", "curl *": "allow", "git log *": "allow", "git show *": "allow", "git diff *": "allow", "ls *": "allow", "cat *": "allow", "grep *": "allow", "rg *": "allow", "head *": "allow", "tail *": "allow", "wc *": "allow" }\n  }\n}\n' > "$P/opencode.json"
 else
-  printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "opencode-go/deepseek-v4.1-flash",\n  "permission": {\n    "external_directory": "deny",\n    "*": "allow",\n    "bash": { "*": "allow", "rm -rf *": "deny", "git push --force": "deny", "git push --force *": "deny", "git push * --force": "deny", "git push * --force *": "deny", "git push -f": "deny", "git push -f *": "deny", "git push * -f": "deny", "git push * -f *": "deny", "git push * +*": "deny", "git push --force-if-includes": "deny", "git push --force-if-includes *": "deny", "git push --force-if-includes --force-with-lease *": "allow", "git push --force-with-lease --force-if-includes *": "allow", "git reset --hard": "deny", "git reset --hard *": "deny", "git reset * --hard": "deny", "git reset * --hard *": "deny", "git clean *": "deny" }\n  }\n}\n' > "$P/opencode.json"
+  printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "opencode-go/deepseek-v4.1-flash",\n  "permission": {\n    "external_directory": "deny",\n    "*": "allow",\n    "bash": { "*": "allow", "rm -rf *": "deny", "git push --force-if-includes": "deny", "git push --force-if-includes *": "deny", "git push --force-if-includes --force-with-lease *": "allow", "git push --force-with-lease --force-if-includes *": "allow", "git push --force": "deny", "git push --force *": "deny", "git push * --force": "deny", "git push * --force *": "deny", "git push -f": "deny", "git push -f *": "deny", "git push * -f": "deny", "git push * -f *": "deny", "git push * +*": "deny", "git reset --hard": "deny", "git reset --hard *": "deny", "git reset * --hard": "deny", "git reset * --hard *": "deny", "git clean *": "deny" }\n  }\n}\n' > "$P/opencode.json"
 fi
 
 # --worktree-only stops here: the caller wants a worktree, not a worker. Skipping the terminal

@@ -858,6 +858,10 @@ turn the stated focus into a well-formed issue, not to generate a backlog.
   --label agent` plus `bug`/`enhancement` — carrying the file and line
   references the model actually read and a `Verify:` line saying how the
   behaviour can be observed. An issue nobody can verify is not actionable here.
+  The pipeline-integrity focus below is the exception: it carries
+  `pipeline-integrity` and **not** `agent`, because the wake-up loop's selector
+  (`gh issue list --state open --label agent`) dispatches whatever holds that
+  label without reading the body.
 - **Dedupe:** read the open *and* closed list first
   (`gh issue list --state all --label agent --limit 200`). Do not re-propose
   anything open, closed as `wontfix`/`invalid`/`duplicate`, or already carrying
@@ -886,9 +890,10 @@ turn the stated focus into a well-formed issue, not to generate a backlog.
   - **Who implements it:** nobody the pipeline dispatches. `docs/orchestration/specs/coder.md`
     scopes a Coder to `app/` only, and that rule stands unchanged — a pipeline-integrity
     issue is implemented on the human/tooling path instead: a real branch, a PR, a green
-    check and a **human** merge, the same route coordinator infrastructure takes. Say so in
-    the issue body (`Route: human/tooling, not a dispatched worker`) so no coordinator
-    dispatches a Coder at it.
+    check and a **human** merge, the same route coordinator infrastructure takes. Label it
+    `pipeline-integrity` and not `agent` — the wake-up loop selects on that label without
+    reading the body — and say so in the body as well (`Route: human/tooling, not a
+    dispatched worker`).
 - **Not its job:** implementing anything, writing a local task file, or widening
   the focus the user gave.
 
