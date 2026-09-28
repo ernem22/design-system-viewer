@@ -112,6 +112,28 @@ const failing = [
   { slug: "perp-new3", danger: "#dc2626", surfaceRaised: "#f5f5f5", dangerText: "#991b1b", dangerSubtle: "#fee2e2", before: 4.43 },
 ] as const;
 
+/**
+ * gemini3 (systems/gemini3.json) was the one system the parent commit's
+ * `--color-danger-text` / `--color-danger-subtle` pairing regressed: it shipped
+ * the danger *fill* value (`#d90429`) as its danger *text* token, so the pair
+ * measured 3.95:1 on the light `-subtle` tint (5.25:1 before the rule). The
+ * data, not the rule, is wrong — a text token that equals its fill cannot clear
+ * AA on a tint of that fill. Read the live values from the system file so this
+ * assertion guards the data, not a copy of it.
+ */
+interface SystemJson {
+  groups: { tokens: { name: string; value: string }[] }[];
+}
+
+const gemini3 = JSON.parse(read("../../../systems/gemini3.json")) as SystemJson;
+
+/** Token value from a bundled system's flat group list. */
+function systemToken(system: SystemJson, name: string): string {
+  const hit = system.groups.flatMap((g) => g.tokens).find((t) => t.name === name);
+  if (!hit) throw new Error(`system is missing ${name}`);
+  return hit.value;
+}
+
 describe("issue #87 token-toolbar contrast repair", () => {
   it("pairs .tok-btn-danger with --color-danger-text on --color-danger-subtle", () => {
     const rule = ruleText(toolbarCss, ".tok-btn-danger");
@@ -125,6 +147,21 @@ describe("issue #87 token-toolbar contrast repair", () => {
     // The pairing must resolve even for a system that omits these names.
     expect(tokensCss).toMatch(/--color-danger-text\s*:/);
     expect(tokensCss).toMatch(/--color-danger-subtle\s*:/);
+  });
+
+  it("clears AA for gemini3, whose danger text token must not equal its fill", () => {
+    const danger = systemToken(gemini3, "--color-danger");
+    const dangerText = systemToken(gemini3, "--color-danger-text");
+    const subtle = systemToken(gemini3, "--color-danger-subtle");
+    const appBg = systemToken(gemini3, "--color-bg");
+    // The root cause of the regression: `--color-danger-text` duplicated the
+    // fill. If they are equal the pairing below can never clear a tint of it.
+    expect(dangerText, "gemini3 danger text vs fill").not.toBe(danger);
+    // The live `.tok-btn-danger` pair: the danger text over the `-subtle` tint
+    // composited onto the app background. Measured 3.95:1 on this branch's
+    // parent; must clear AA on the fixed head.
+    const live = ratio(must(dangerText), over(must(subtle), must(appBg)));
+    expect(live, "gemini3 .tok-btn-danger").toBeGreaterThanOrEqual(4.5);
   });
 
   it("clears AA (4.5:1) for every system where the fill token failed", () => {
