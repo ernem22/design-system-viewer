@@ -15,7 +15,9 @@ set -uo pipefail
 ROLE="${1:?usage: reap.sh <role-slug> [dispatch-id]}"
 DISPATCH="${2:-}"
 S="${LOCALAPPDATA}/orca-orchestration/design-system-viewer"
-REPO_ID="294b7f02-d29f-464f-a65c-f6929e0b8ae2"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=/dev/null
+. "$HERE/repo-id.sh"
 
 # Orca owns the worktree list; ask it, do not cache it.
 P=$(orca worktree list 2>/dev/null | grep -E "^$REPO_ID::" | grep "/$ROLE\$" | head -1 | sed -E 's/^[^:]*::(.*)  refs.*/\1/')

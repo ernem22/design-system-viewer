@@ -39,7 +39,12 @@ git rev-parse --verify --quiet "$BASE^{commit}" >/dev/null \
   || { echo "spawn.sh: base ref '$BASE' does not exist — git fetch, or read the PR's headRefName" >&2; exit 3; }
 
 S="${LOCALAPPDATA}/orca-orchestration/design-system-viewer"
-REPO_ID="294b7f02-d29f-464f-a65c-f6929e0b8ae2"
+# The Orca repo id is machine state, not a constant: re-importing the folder mints a
+# new one, and the old value answers `repo_not_found` — which this script used to turn
+# into an empty PATH. Resolve it at runtime (see repo-id.sh).
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=/dev/null
+. "$HERE/repo-id.sh"
 CMD="opencode"
 [ "$PLAN" = "--plan" ] && CMD="opencode --agent plan"
 
@@ -120,7 +125,7 @@ sleep 6
 # runs and never reports — a silent dead dispatch with no settlement to recover.
 H=""
 for _ in $(seq 1 25); do
-  H=$(bash "$(dirname "$0")/handle.sh" "$P" --agent-only 2>/dev/null | head -1)
+  H=$(bash "$HERE/handle.sh" "$P" --agent-only 2>/dev/null | head -1)
   [ -n "$H" ] && break
   sleep 3
 done
