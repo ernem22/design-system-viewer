@@ -53,6 +53,10 @@ jobs:
   verdict:
     runs-on: ubuntu-latest
     steps:
+      # The decision below is a checked-in module, so the same code the gate runs can
+      # be probed locally (tools/orchestration/gate-logic.probe.cjs) instead of only
+      # by pushing a commit and waiting for Actions.
+      - uses: actions/checkout@v4
       - uses: actions/github-script@v7
         with:
           script: |
@@ -133,17 +137,12 @@ jobs:
               return;
             }
 
-            // ---- parse the verdicts ---------------------------------------------
-            const parse = (body) => {
-              const m = /```dsv-verdict\s*\n([\s\S]*?)```/.exec(body || '');
-              if (!m) return null;
-              const out = {};
-              for (const line of m[1].split('\n')) {
-                const kv = /^\s*([a-z_]+):\s*(.+?)\s*$/.exec(line);
-                if (kv) out[kv[1]] = kv[2];
-              }
-              return out.role ? out : null;
-            };
+            // ---- parse and decide, with the same module the probe runs ----------
+            // The rule lives in tools/orchestration/gate-logic.cjs: a malformed verdict
+            // comment is a FAILURE with a reason (not a silent `pending`), a Tester PASS
+            // must carry observed:/before:/build:, and a verdict only counts for the head
+            // it names.
+            const { evaluate } = require(`${process.env.GITHUB_WORKSPACE}/tools/orchestration/gate-logic.cjs`);
 
             const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: prNumber, per_page: 100 });
             const reviews = await github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: prNumber, per_page: 100 });
@@ -152,34 +151,6 @@ jobs:
               ...reviews.map((r) => ({ body: r.body, at: r.submitted_at || r.created_at })),
             ];
 
-            const latest = {};
-            for (const c of candidates) {
-              const v = parse(c.body);
-              if (!v) continue;
-              // A verdict is only about the head it names: no commit, or a different
-              // commit, is not evidence about this build.
-              if (!v.commit || !head.startsWith(v.commit)) {
-                core.info(`ignoring ${v.role} verdict for commit ${v.commit || '(none)'} (head ${shortHead})`);
-                continue;
-              }
-              if (!latest[v.role] || latest[v.role].at < c.at) latest[v.role] = { ...v, at: c.at };
-            }
-
-            const reviewer = latest.reviewer;
-            const tester = latest.tester;
-            if (!reviewer || !tester) {
-              const missing = [!reviewer && 'reviewer', !tester && 'tester'].filter(Boolean).join(' + ');
-              await setStatus('pending', `waiting on ${missing} verdict for head ${shortHead}`);
-              return;
-            }
-
-            const ok = reviewer.status === 'pass' && tester.status === 'pass' && reviewer.scope_ok === 'yes';
-            const why = `reviewer=${reviewer.status}${reviewer.scope_ok ? ` scope_ok=${reviewer.scope_ok}` : ''} tester=${tester.status} head=${shortHead}`;
-            if (ok) {
-              await setStatus('success', why);
-            } else {
-              const reason = reviewer.status !== 'pass' ? 'reviewer failed'
-                : tester.status !== 'pass' ? 'tester failed'
-                : 'reviewer scope_ok is not yes';
-              await setStatus('failure', `${reason} - ${why}`);
-            }
+            const result = evaluate({ head, comments: candidates });
+            core.info(`gate detail: ${JSON.stringify(result.detail)}`);
+            await setStatus(result.state, result.description);
