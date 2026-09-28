@@ -38,7 +38,15 @@ export default function SystemSwitcher({
   return (
     <span className="app-syswrap">
       <Select.Root value={activeSlug} onValueChange={onSelect}>
-      <Select.Trigger className="app-sysbtn" aria-label="Active design system">
+      {/* The name ellipsises inside the trigger (shell.css max-width). `title`
+          gives a sighted hover affordance for the clipped text, and folding
+          the name into `aria-label` gives keyboard/AT users the full string
+          the generic label otherwise hid. */}
+      <Select.Trigger
+        className="app-sysbtn"
+        title={active?.name}
+        aria-label={active ? `Active design system: ${active.name}` : "Active design system"}
+      >
         <span className="app-sysbtn-name">
           <Select.Value placeholder="Select system" />
         </span>

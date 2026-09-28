@@ -32,7 +32,12 @@
   top: 0;
   z-index: 30;
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  /* minmax(0, 1fr) lets each side track shrink below its content width. A
+     bare `1fr` has an `auto` minimum, so at narrow viewports the side
+     clusters could not shrink and their content overflowed the fixed shell
+     into the centre (measured at 390px: the topbar was 402px wide inside the
+     390px shell, and the search input covered the tab triggers). */
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   padding: 0 12px;
@@ -46,14 +51,16 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
+  /* The default `stretch` fills the track, so the cluster shrinks (and its
+     ellipsised children truncate) with the track instead of shrinking to
+     max-content and overflowing into the centre. `justify-self: start/end`
+     was the cause of that overflow: it sizes the cluster to its content. */
+  justify-self: stretch;
 }
 
-.app-topbar-left {
-  justify-self: start;
-}
-
+/* Actions stay pinned to the topbar's end edge while the track stretches. */
 .app-topbar-right {
-  justify-self: end;
+  justify-content: flex-end;
 }
 
 .app-brand {
@@ -84,7 +91,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font: inherit;
+  font-family: inherit;
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-secondary);
@@ -95,7 +102,9 @@
   padding: 0 6px 0 8px;
   max-width: 170px;
   cursor: pointer;
-  flex: none;
+  /* Shrinkable so a narrow topbar ellipsises the name rather than overflowing
+     its track; the full name stays available via the trigger's `title`. */
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -197,7 +206,10 @@
   display: flex;
   align-items: center;
   width: 200px;
-  flex: none;
+  /* Shrinkable: when the actions cluster is tight the input compresses
+     instead of pushing the search over the tab triggers. */
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .app-topbar-search > svg {
@@ -228,7 +240,11 @@
 }
 
 .app-topbar-search input:focus-visible {
-  outline: 0;
+  /* The border/background tint alone is too subtle to read as focus (the
+     audit measured outline-width 0px on :focus-visible). Give the input the
+     same token ring every other control uses. */
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
   background: var(--color-surface);
   border-color: var(--color-accent-border);
 }
@@ -268,15 +284,18 @@
   outline-offset: 1px;
 }
 
+/* Shared button reset. Only the icon button resets its type here: a
+   `font: inherit` on `.app-sysbtn` would clobber the token font-size its own
+   rule sets (the audit measured the switcher at 16px, not `--font-size-xs`). */
 .app-sysbtn,
 .app-iconbtn {
-  font: inherit;
   cursor: pointer;
 }
 
 .app-iconbtn {
   appearance: none;
   flex: none;
+  font: inherit;
   display: grid;
   place-items: center;
   width: 28px;
@@ -739,5 +758,65 @@
   .app-props-clip[data-open="false"] {
     border-color: transparent;
     box-shadow: none;
+  }
+
+  /* Topbar, drawer mode: every control stays in the layout. Dropping the
+     Preview-only chrome (coverage pill, search, edit-reset pill, dark switch)
+     removes the only search / reset / dark affordances on tablet and phone,
+     and the phone block below repeated that for the brand and copy-link
+     (#134). Instead the topbar is treated as a frame the contract allows to
+     scroll inside itself: the text cluster gives up width first (its labels
+     ellipsise) and, when even that does not fit, the topbar scrolls
+     horizontally. No control is `display: none`d, `overflow: hidden` is not
+     used, and the shell around it still never scrolls. */
+  .app-topbar {
+    display: flex;
+    overflow-x: auto;
+    /* A thin, themed bar like the rail/main scrollers: small enough to sit
+       inside the fixed 44px row without compressing the controls enough to
+       spring a second (vertical) scrollbar. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+
+  /* The text cluster gives up width first (its labels ellipsise) but never
+     collapses: `min-width: 0` from the base grid rule would let flex shrink
+     it to nothing and the tab strip would paint over it. The floor is one
+     layout step (capped at the frame itself), which keeps the rail toggle,
+     the wordmark mark and the switcher chevron on screen. The tab strip and
+     the action cluster keep their intrinsic size so every control stays
+     legible and the frame scrolls to reach it. */
+  .app-topbar-left {
+    flex: 0 1 auto;
+    min-width: min(var(--space-32), 100%);
+  }
+
+  .app-topbar-right,
+  .app-tabs {
+    flex: none;
+  }
+
+  /* Tabs stay centred in the space left between the clusters; the auto
+     margins collapse to zero once the line overflows and scrolls. */
+  .app-tabs {
+    margin-inline: auto;
+  }
+}
+
+/* Phone: there is no room to hide behind — the brand lockup, copy-link and
+   the rest compress and the topbar frame scrolls. Only the tab padding
+   tightens, so all three tabs stay on screen. */
+@media (max-width: 480px) {
+  .app-topbar {
+    padding: 0 var(--space-2);
+    gap: var(--space-2);
+  }
+
+  .app-topbar-left {
+    gap: var(--space-2);
+  }
+
+  .app-tabs button {
+    padding: 3px var(--space-2);
   }
 }

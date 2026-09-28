@@ -108,3 +108,15 @@ describe("AddSystemDialog 'Open in' preference", () => {
     expect(openInLabel()).toBe("Compare");
   });
 });
+
+// Issue #90: the dialog carried role="dialog" and a label but no aria-modal,
+// so assistive tech could not tell the page behind it was inert.
+describe("AddSystemDialog modal semantics", () => {
+  it("marks the content aria-modal on its dialog role", async () => {
+    await renderDialog();
+    const content = document.querySelector(".app-import-dialog")!;
+    expect(content.getAttribute("role")).toBe("dialog");
+    expect(content.getAttribute("aria-modal")).toBe("true");
+    expect(content.getAttribute("aria-labelledby")).toBeTruthy();
+  });
+});
