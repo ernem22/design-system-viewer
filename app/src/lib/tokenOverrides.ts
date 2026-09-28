@@ -4,14 +4,35 @@
 //  1. Edit a token's VALUE — changes what the token itself equals, so it
 //     rightfully changes every element that reads it, everywhere. Global by
 //     nature: you're editing the design system's token, not one instance.
-//     This writes through the existing `patchToken` store mutation (the
-//     Tokens-tab write-flows plumbing) — there is no separate ephemeral
-//     value-edit layer like the legacy preview had.
+//     EPHEMERAL: an override lives in this module's store, never in the
+//     system's stored css/groups, and Reset drops it — a Preview what-if is
+//     not an edit to the saved system (the Tokens tab's inline editor is the
+//     persistent write-through path). Same two layers as the legacy preview
+//     (preview/src/tokenOverrides.js `valueEdits` + `swaps`, both cleared by
+//     its Reset), restored here after #27 shipped with write-through only.
 //  2. Swap which token a single component reads — "use --color-danger here
 //     instead of --color-accent", scoped to just that component. Written as
 //     a custom property directly on the component's own DOM node (not
 //     :root), so it only affects that node's descendants via normal CSS
 //     inheritance — every other place still reads the real --color-accent.
+//
+// Resolution precedence, light and dark alike (legacy parity): a scope's swap
+// is resolved first, and its source is read through the value-edit layer. So a
+// value edit on a swap's *source* token does affect what the scope reads,
+// while a value edit on the swapped-away *target* does not override the
+// redirect — the swap is a redirect to whatever the source resolves to. A
+// swap's source is never resolved sideways through another component's scoped
+// swap (legacy `valueInDemo`, preview/src/tokenOverrides.js:89-92, returns
+// `globalValue(source)`). An override is keyed by token name only, so it
+// applies in whichever system defines that token and comes back untouched when
+// you switch back — an override on a token no system currently defines is
+// kept, not dropped.
+//
+// A value edit is global, so it is mirrored into the document (`:root`, via
+// syncValueOverridesToDocument below) on every store change — not just read
+// through `resolvedValue` by the inspector. That is what makes a what-if edit
+// repaint everything themed by the token, and what Reset removes (legacy
+// injected the same style tag).
 //
 // Not available in Compare (ambiguous which column an edit would apply to) —
 // Compare's renderers never mount the Demo/trigger below, so the feature
@@ -19,15 +40,23 @@
 //
 // Ported from preview/src/tokenOverrides.js, except state: the legacy
 // version used a React Context provider, but app/ keeps no Context for state
-// (see app/CLAUDE.md) — so selection + swaps live in a tiny module-level
-// external store (useSyncExternalStore) scoped to this Preview inspector
-// instead. Same narrow scope as a Preview-local context, minus the provider.
-import { useSyncExternalStore } from "react";
+// (see app/CLAUDE.md) — so selection + swaps + valueEdits live in a tiny
+// module-level external store (useSyncExternalStore) scoped to this Preview
+// inspector instead. Same narrow scope as a Preview-local context, minus the
+// provider. A value override applies through `resolvedValue`, which the
+// Preview panels call with the active system's own value map — keeping
+// tokenValueMap (css -> groups -> themes.dark) as the authored layer and this
+// override layer strictly above it, so there is one resolution order, not two.
+import { useSyncExternalStore, type CSSProperties } from "react";
 import { REFERENCE } from "../../../src/core/schema.js";
 import { CATEGORIES } from "../../../src/core/taxonomy.js";
 import { slugify } from "./slug.ts";
 
 export type TokenKind = "color" | "type" | "length" | "shadow" | "motion" | "number" | "raw";
+
+/** Legacy's style-tag id (preview/src/tokenOverrides.js). Kept so the
+    document-level override layer is the same, inspectable thing. */
+const VALUE_STYLE_ID = "dsv-token-value-overrides";
 
 /** Every canonical token name and its schema group label. */
 export const ALL_TOKENS: Array<{ name: string; group: string }> = (
@@ -67,6 +96,66 @@ export function baseValue(name: string): string {
   }
 }
 
+/** The authored value of a token in the active system, before any override —
+    the Preview panel passes `tokenValueMap(system, dark).get` here, so the
+    resolution order below sits on top of the one shared source rather than
+    re-deriving it. A token the system doesn't author returns "" (name-value
+    convention for "not defined anywhere"). */
+export type AuthoredValueOf = (name: string) => string;
+
+/** Authored value, else the token's live computed `:root` value, else "". */
+function authoredOrComputed(authored: AuthoredValueOf, name: string): string {
+  return authored(name) || baseValue(name);
+}
+
+/** Global value of a token: the ephemeral override wins, then the authored
+    value (css -> groups -> themes.dark via the caller's map), then whatever
+    the page computed. This is the top of the precedence chain and the value a
+    swap's *source* resolves through.
+
+    `overrides` defaults to the live store, but React callers pass the
+    `valueEdits` from their `useInspector()` snapshot so the expression depends
+    on a value the hook can see (and re-renders when it changes) instead of
+    reading module state behind the hook's back. */
+export function resolvedValue(
+  authored: AuthoredValueOf,
+  name: string,
+  overrides: Record<string, string> = state.valueEdits,
+): string {
+  return overrides[name] ?? authoredOrComputed(authored, name);
+}
+
+/** What one component actually reads for a token: swap-first, and a swap's
+    source resolves through the global value-edit layer. Mirrors legacy's
+    `valueInDemo` (preview/src/tokenOverrides.js:89-92):
+    `source ? globalValue(source) : globalValue(name)` — so a value edit on the
+    swap's *source* token (the token read instead) does affect the swap's
+    output, while a value edit on the swapped-away *target* does not override
+    the redirect. An unswapped token resolves its own authored/edited value. */
+export function valueInScope(authored: AuthoredValueOf, scopeId: string, name: string): string {
+  const source = state.swaps[scopeId]?.[name];
+  return resolvedValue(authored, source ?? name);
+}
+
+/** The inline custom properties a scope's swaps put on its own DOM node:
+    `target: var(source)` for every swap, with no value-edit substitution on
+    the target. Matches legacy's `useSwapStyle` (preview/src/ui.jsx:324-326),
+    which always emits `var(source)`; a value edit on the source still shows
+    here because it is mirrored into `:root` (syncValueOverridesToDocument
+    above) and `var(source)` resolves through that. Pure so the swap order can
+    be pinned without mounting; `useSectionScopeStyle` supplies the live
+    swaps. */
+export function scopeStyleFor(
+  swaps: Record<string, Record<string, string>>,
+  id: string,
+): CSSProperties | undefined {
+  const scope = swaps[id];
+  if (!scope || Object.keys(scope).length === 0) return undefined;
+  return Object.fromEntries(
+    Object.entries(scope).map(([target, source]) => [target, `var(${source})`]),
+  ) as CSSProperties;
+}
+
 /** Figma-style right panel selection: { id, title, tokens } of the Demo
     whose tokens the docked properties panel currently shows. Null = nothing
     selected. */
@@ -82,12 +171,43 @@ interface InspectorState {
   mobileOpen: boolean;
   /** { scopeId: { tokenName: sourceTokenName } } — per-component swaps. */
   swaps: Record<string, Record<string, string>>;
+  /** { tokenName: "literal css value" } — global, ephemeral value overrides. */
+  valueEdits: Record<string, string>;
 }
 
-let state: InspectorState = { selected: null, mobileOpen: false, swaps: {} };
+let state: InspectorState = { selected: null, mobileOpen: false, swaps: {}, valueEdits: {} };
 const listeners = new Set<() => void>();
 
+/** Mirror the ephemeral value edits into the document so a what-if edit
+    repaints everything themed by that token, not just the inspector row
+    (legacy parity). App.tsx applies the system's tokens as INLINE styles on
+    <html>, which a plain `:root{}` rule can never beat — hence `!important`.
+    Written on every store change and removed when the last edit goes, so
+    Reset (clearAll) drops it and no component mount/unmount can strand it.
+    Runs synchronously from the store, independent of React, so the document
+    layer can't drift from `state` (unlike a provider effect that unmounts). */
+function syncValueOverridesToDocument(): void {
+  if (typeof document === "undefined") return;
+  const entries = Object.entries(state.valueEdits);
+  let el = document.getElementById(VALUE_STYLE_ID) as HTMLStyleElement | null;
+  if (entries.length === 0) {
+    el?.remove();
+    return;
+  }
+  if (!el) {
+    el = document.createElement("style");
+    el.id = VALUE_STYLE_ID;
+  }
+  // appendChild moves an existing node to the end, so this stays after the
+  // Tokens tab's #dsv-tokens stylesheet regardless of mount/effect order.
+  document.head.appendChild(el);
+  el.textContent = `:root{${entries
+    .map(([name, value]) => `${name}:${value} !important`)
+    .join(";")}}`;
+}
+
 function emit(): void {
+  syncValueOverridesToDocument();
   for (const l of listeners) l();
 }
 
@@ -105,6 +225,13 @@ function getSnapshot(): InspectorState {
 /** Shared inspector state — any Demo trigger or Preview panel subscribes. */
 export function useInspector(): InspectorState {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+/** Read-only snapshot for callers that aren't React (tests, and the count
+    helper below). Components must subscribe via `useInspector` instead so a
+    change re-renders them. */
+export function getInspectorState(): InspectorState {
+  return state;
 }
 
 export function selectScope(scope: InspectorScope | null): void {
@@ -161,4 +288,47 @@ export function clearAllSwaps(): void {
   if (Object.keys(state.swaps).length === 0) return;
   state = { ...state, swaps: {} };
   emit();
+}
+
+/** Global ephemeral value override — same shape as legacy's setValueEdit.
+    Stored by token name only (not by system), so it survives switching the
+    active system and returns when that system comes back. */
+export function setValueEdit(name: string, value: string): void {
+  if (state.valueEdits[name] === value) return;
+  state = { ...state, valueEdits: { ...state.valueEdits, [name]: value } };
+  emit();
+}
+
+/** Drop one token's value override. No-op when it isn't overridden. */
+export function clearValueEdit(name: string): void {
+  if (!(name in state.valueEdits)) return;
+  const next = { ...state.valueEdits };
+  delete next[name];
+  state = { ...state, valueEdits: next };
+  emit();
+}
+
+/** The global override for a token, or undefined when it reads as authored.
+    `valueEdited` is the "is this token overridden?" predicate the inspector
+    row uses to render the edited badge. */
+export function getValueEdit(name: string): string | undefined {
+  return state.valueEdits[name];
+}
+
+/** Reset: drops BOTH layers, swaps and value edits — the whole point of
+    #27 (legacy's clearAll did the same). Counting/clearing only swaps left
+    edited values behind the button named "Reset every token edit". */
+export function clearAll(): void {
+  if (Object.keys(state.swaps).length === 0 && Object.keys(state.valueEdits).length === 0) return;
+  state = { ...state, swaps: {}, valueEdits: {} };
+  emit();
+}
+
+/** How many overrides Reset would drop, across both layers — feeds the pill
+    count. Read it from the `useInspector()` snapshot (`countOverrides`) so
+    the same subscription that re-renders the inspector re-renders the pill. */
+export function countOverrides(snapshot: InspectorState): number {
+  const edits = Object.keys(snapshot.valueEdits).length;
+  const swaps = Object.values(snapshot.swaps).reduce((n, m) => n + Object.keys(m).length, 0);
+  return edits + swaps;
 }
