@@ -135,6 +135,15 @@ button.app-rail-link[aria-current="true"] { background: var(--color-accent-subtl
 .cmp-props-block + .cmp-props-block { margin-top: var(--space-4); }
 .cmp-props-block h3 { margin: 0 0 var(--space-2); font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: var(--letter-spacing-wide); color: var(--color-text-muted); }
 .cmp-props-list { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
-.cmp-props-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); font-size: var(--font-size-sm); }
+.cmp-props-list li { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm); }
+.cmp-props-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cmp-props-pct { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-muted); }
+.cmp-props-remove {
+  appearance: none; flex: none; display: grid; place-items: center;
+  width: var(--size-icon-lg); height: var(--size-icon-lg);
+  padding: 0; border: none; border-radius: var(--radius-sm);
+  background: none; color: var(--color-text-muted); cursor: pointer;
+}
+.cmp-props-remove:hover { background: var(--color-hover-overlay); color: var(--color-text); }
+.cmp-props-remove:focus-visible { outline: var(--focus-ring-width) solid var(--color-focus-ring); outline-offset: var(--focus-ring-offset); }
 .cmp-props-empty { margin: 0; font-size: var(--font-size-sm); color: var(--color-text-muted); }
