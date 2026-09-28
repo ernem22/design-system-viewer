@@ -48,6 +48,7 @@ function App() {
     error: loadError,
     active,
     activeSlug,
+    retry,
     setActiveSlug,
     addSystem,
     mergeCss,
@@ -294,7 +295,7 @@ function App() {
       label: "Preview",
       content: active ? (
         <>
-          <PreviewNotes system={active} error={loadError} />
+          <PreviewNotes system={active} error={loadError} onRetry={retry} />
           {shownEntries?.size === 0 && <div className="dsv-err">No sections match “{query.trim()}”.</div>}
           {COMPONENT_ENTRIES.map((entry) => (
             <GallerySection key={entry.id} {...entry} hidden={shownEntries ? !shownEntries.has(entry.id) : false} />
@@ -308,6 +309,7 @@ function App() {
           error={loadError}
           onPaste={() => openAdd()}
           onUpload={() => fileInputRef.current?.click()}
+          onRetry={retry}
         />
       ),
       rail: (

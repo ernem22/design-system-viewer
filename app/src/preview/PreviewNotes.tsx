@@ -82,11 +82,18 @@ function PreviewEmpty({ onPaste, onUpload }: { onPaste: () => void; onUpload: ()
    legacy viewer's report (preview/src/App.jsx:411) verbatim — the reason is
    the one the systems load already carries, not a string invented here. Like
    legacy it is a *notice*: the seed fallback keeps rendering the gallery with
-   its tokens, and this says what happened on the way there. */
-function PreviewError({ error }: { error: string }) {
+   its tokens, and this says what happened on the way there. The retry control
+   lives inside the same alert region: it re-attempts the load in place, so the
+   message is kept and announced once, not replaced. */
+function PreviewError({ error, onRetry }: { error: string; onRetry?: () => void }) {
   return (
     <div className="dsv-err" role="alert">
-      Failed to load system ({error}). Components shown with fallback tokens.
+      Failed to load system ({error}). Components shown with fallback tokens.{" "}
+      {onRetry && (
+        <button type="button" className="dsv-btn dsv-btn--outline dsv-btn--sm" onClick={onRetry}>
+          Retry
+        </button>
+      )}
     </div>
   );
 }
@@ -104,17 +111,19 @@ export function PreviewNotes({
   error = null,
   onPaste = noop,
   onUpload = noop,
+  onRetry,
 }: {
   system: DesignSystem | null;
   loading?: boolean;
   error?: string | null;
   onPaste?: () => void;
   onUpload?: () => void;
+  onRetry?: () => void;
 }) {
   if (loading) return <p className="app-placeholder app-loading">Loading systems…</p>;
   return (
     <>
-      {error && <PreviewError error={error} />}
+      {error && <PreviewError error={error} onRetry={onRetry} />}
       {system ? (
         <>
           <SchemaNote css={system.css} />
