@@ -174,3 +174,17 @@ describe("App shell props frame (issue #95)", () => {
     expect(after[0].scrollTop).toBe(200);
   });
 });
+
+// Issue #117: the document had 0 <h1> and 94 <h2> — the outline had no top at
+// all. The shell supplies exactly one h1 for the page; sections and blocks stay
+// below it. This fails on the parent commit with 0 h1 nodes.
+describe("App heading outline (issue #117)", () => {
+  it("renders exactly one h1 as the document's outline root", async () => {
+    const el = await mountApp();
+    const h1s = el.querySelectorAll("h1");
+    expect(h1s).toHaveLength(1);
+    expect(h1s[0].textContent).toBe("Design System Viewer");
+    // The sections it introduces remain lower in the outline.
+    expect(el.querySelectorAll("h2").length).toBeGreaterThan(0);
+  });
+});

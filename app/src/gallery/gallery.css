@@ -37,7 +37,7 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
    (same badge flow as .dsv-block-head, one level up — screens have no Demo
    blocks, so this is their inspector entry point). */
 .dsv-section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin: 0 0 var(--space-1); }
-.dsv-section-head h2 { font-size: var(--font-size-2xl); font-weight: var(--font-weight-semibold); margin: 0; }
+.dsv-section-head h2 { font-size: var(--heading-section); font-weight: var(--font-weight-semibold); margin: 0; }
 .dsv-section > p { color: var(--color-text-muted); margin: 0 0 var(--space-6); }
 /* Anchor-scroll target for Rail's per-demo links: without this, clicking
    one lands its top flush with .app-main's edge — above the scrollspy band
@@ -49,7 +49,7 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
   margin: 0 0 var(--space-3); padding-bottom: var(--space-2);
   border-bottom: var(--border-width-thin) solid var(--color-border-subtle);
 }
-.dsv-block-head h3 { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-text-secondary); margin: 0; }
+.dsv-block-head h3 { font-size: var(--heading-subsection); font-weight: var(--font-weight-semibold); color: var(--color-text-secondary); margin: 0; }
 .dsv-row { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center; }
 
 /* Preview-level notices (schema extras, unavailable fonts, empty search). */
@@ -162,7 +162,7 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
   animation: dsv-pop var(--motion-modal); overflow: auto;
 }
 @media (min-width: 900px) { .dsv-modal { border-radius: var(--radius-2xl); } }
-.dsv-modal h3 { margin: 0 0 var(--space-2); font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); }
+.dsv-modal h3 { margin: 0 0 var(--space-2); font-size: var(--heading-subsection); font-weight: var(--font-weight-semibold); }
 .dsv-modal p { margin: 0 0 var(--space-5); color: var(--color-text-secondary); font-size: var(--font-size-sm); }
 .dsv-modal-actions { display: flex; justify-content: flex-end; gap: var(--space-3); }
 .dsv-pop {
@@ -289,7 +289,7 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
   color: var(--color-text-secondary); margin-bottom: var(--space-4);
   border: var(--border-width-thin) solid var(--color-border-subtle); box-shadow: var(--shadow-xs);
 }
-.dsv-empty h4 { margin: 0 0 var(--space-1); color: var(--color-text); font-size: var(--font-size-base); }
+.dsv-empty h4 { margin: 0 0 var(--space-1); color: var(--color-text); font-size: var(--heading-subsection); }
 .dsv-empty p { margin: 0 0 var(--space-4); font-size: var(--font-size-sm); }
 
 @keyframes dsv-fade { from { opacity: 0; } to { opacity: 1; } }

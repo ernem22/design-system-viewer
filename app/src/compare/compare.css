@@ -54,7 +54,7 @@
 .cmp-col-head {
   display: flex; align-items: center; gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold);
+  font-size: var(--heading-label); font-weight: var(--font-weight-semibold);
   background: var(--color-surface); color: var(--color-text);
   border-bottom: var(--border-width-thin) solid var(--color-divider);
 }
@@ -133,7 +133,7 @@ button.app-rail-link[aria-current="true"] { background: var(--color-accent-subtl
 /* ── props panel ── */
 .cmp-props { padding: var(--space-4); }
 .cmp-props-block + .cmp-props-block { margin-top: var(--space-4); }
-.cmp-props-block h3 { margin: 0 0 var(--space-2); font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: var(--letter-spacing-wide); color: var(--color-text-muted); }
+.cmp-props-block h3 { margin: 0 0 var(--space-2); font-size: var(--heading-label); font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: var(--letter-spacing-wide); color: var(--color-text-muted); }
 .cmp-props-list { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
 .cmp-props-list li { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm); }
 .cmp-props-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
