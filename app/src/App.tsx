@@ -350,7 +350,6 @@ function App() {
               active={active}
               activeSlug={activeSlug}
               onSelect={setActiveSlug}
-              onAddClick={() => openAdd()}
             />
           }
           actions={
@@ -376,6 +375,11 @@ function App() {
               )}
               {tab === "preview" && <SectionSearch value={query} onChange={setQuery} />}
               <IconActionButton onClick={copyLink} icon={<Icon name="link" size={15} />} label="Copy link to this view" />
+              <IconActionButton
+                onClick={() => openAdd()}
+                icon={<Icon name="plus" size={15} />}
+                label="Add a design system"
+              />
               <IconToggleButton
                 pressed={propsOpen}
                 onPressedChange={toggleProps}

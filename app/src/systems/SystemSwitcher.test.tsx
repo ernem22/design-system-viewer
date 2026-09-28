@@ -67,7 +67,6 @@ async function render(systems: DesignSystem[], active: DesignSystem | null) {
         active={active}
         activeSlug={active?.slug ?? ""}
         onSelect={() => {}}
-        onAddClick={() => {}}
       />,
     );
   });
@@ -81,7 +80,6 @@ async function rerender(systems: DesignSystem[], active: DesignSystem | null) {
         active={active}
         activeSlug={active?.slug ?? ""}
         onSelect={() => {}}
-        onAddClick={() => {}}
       />,
     );
   });

@@ -12,3 +12,240 @@
   height: 30px;
   flex: none;
 }
+
+/* ── Add System dialog (#124): the work owns the surface ──────────────────
+   Near-fullscreen so the schema fill and the raw text are both live at once,
+   filling everything between a one-line top bar and a one-line bottom bar.
+   Two classes on purpose: `.tok-dialog-wide` lives in TokenToolbar.css, which
+   lands after this file in the bundle (SystemSwitcher imports this css first),
+   so a single-class rule would lose the cascade. */
+.tok-dialog.app-import-dialog {
+  width: min(1280px, 96vw);
+  height: min(92vh, 900px);
+  max-height: min(92vh, 900px);
+  padding: 0;
+  display: grid;
+  /* Exactly three rows: head / work / foot. The optional source rows live
+     inside the head, so a row count that shifts with what is open can never
+     push the footer into the wrong track (measured once: the foot landed in
+     the 1fr track and its buttons were clipped 29px below the dialog). */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: clip;
+}
+
+.app-import-head {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Top bar: what this is, the ways in, where the text came from, close. */
+.app-import-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+  min-width: 0;
+}
+
+.app-import-title {
+  margin: 0;
+  flex: none;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
+}
+
+.app-import-sub {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.app-import-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.app-import-tools .tok-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.app-import-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  max-width: 340px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-import-status b {
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.app-import-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.app-import-close:hover {
+  background: var(--color-hover-overlay);
+  color: var(--color-text);
+}
+
+.app-import-close:focus-visible,
+.app-import-tools .tok-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* A source that needs input opens exactly one row and nothing else. */
+.app-import-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-sunken);
+}
+
+.app-import-inline .tok-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.app-import-inline-json {
+  flex-wrap: wrap;
+}
+
+.app-import-inline-json .tok-textarea {
+  flex: 1 1 100%;
+  min-height: 72px;
+}
+
+.app-import-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+/* The work area: one scroller per pane, so both stay usable at once. */
+.app-import-work {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  min-height: 0;
+  overflow: clip;
+}
+
+.app-import-pane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.app-import-pane + .app-import-pane {
+  border-left: 1px solid var(--color-border-subtle);
+}
+
+.app-import-panehead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.app-import-panetitle {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.app-import-panebody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.app-import-textarea {
+  flex: 1 1 auto;
+  min-height: 220px;
+  resize: none;
+}
+
+/* Bottom bar: identity, the error if any, the write. */
+.app-import-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-surface);
+}
+
+.app-import-name {
+  flex: 0 1 320px;
+}
+
+.app-import-error {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+}
+
+.app-import-write {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.app-import-openin {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+/* Narrow: the panes stack instead of squeezing. */
+@media (max-width: 1080px) {
+  .app-import-work {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .app-import-pane + .app-import-pane {
+    border-left: 0;
+    border-top: 1px solid var(--color-border-subtle);
+  }
+}
