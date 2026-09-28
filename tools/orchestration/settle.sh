@@ -71,8 +71,12 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   try{ const t=(JSON.parse(s).result||{}).tasks||[]; const x=t.find(y=>y.id===want);
     process.stdout.write(x?(x.status||"?"):"MISSING"); }catch(e){ process.stdout.write("PARSE_ERROR"); }
 });' "$TASK")"
-INBOX_HIT="$(ls "$INBOX" 2>/dev/null | grep -c -- "$DISPATCH" || true)"
-say "task status=$TASK_STATUS  settlement in inbox: ${INBOX_HIT:-0}"
+# An inbox file only counts as "already handled" when it records an ACK. A file alone
+# proves nothing (CodeRabbit Major): a --dry-run item, an item whose ack then failed, and
+# the informational "nothing to ack" note must all leave the delivery unhandled.
+INBOX_HIT="$(grep -l -E '^acked: (yes|n/a)' "$INBOX"/*"$DISPATCH"* 2>/dev/null | wc -l | tr -d ' ')"
+INBOX_ANY="$(ls "$INBOX" 2>/dev/null | grep -c -- "$DISPATCH" || true)"
+say "task status=$TASK_STATUS  acked settlement in inbox: ${INBOX_HIT:-0} (files naming it: ${INBOX_ANY:-0})"
 
 SETTLED=""
 case "$TASK_STATUS" in completed|failed) SETTLED=1;; esac
@@ -112,6 +116,7 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
       # second source - and a settlement found there needs no ack, because the watcher
       # already acked it.
       LOG="${LOCALAPPDATA:-$HOME}/Temp/watchd.log"
+      SETTLE_LOG="$(dirname "$INBOX")/settlements.log"
       BLOCK=""
       if [ -f "$LOG" ]; then
         BLOCK="$(awk -v want="$DISPATCH" '
@@ -119,13 +124,24 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
           index($0, want) { last=$0 }
           END{ if (last!="") print "=== SETTLEMENT" last }' "$LOG")"
       fi
+      # Third source: the inbox the newer watcher (watch-settlements.sh) appends to. It
+      # drains the queue itself, so a settlement can be in neither the queue nor watchd.log
+      # and still be on disk - measured on reviewer-136b, whose settlement only ever
+      # existed there.
+      if [ -z "$BLOCK" ] && [ -f "$SETTLE_LOG" ]; then
+        BLOCK="$(awk -v want="$DISPATCH" '
+          BEGIN{RS="=== SETTLEMENT"}
+          index($0, want) { last=$0 }
+          END{ if (last!="") print "=== SETTLEMENT" last }' "$SETTLE_LOG")"
+        [ -n "$BLOCK" ] && say "settlement found in the watcher's own inbox ($SETTLE_LOG)"
+      fi
       if [ -n "$BLOCK" ]; then
         ITEM="$INBOX/$(date -u +%Y%m%dT%H%M%SZ)-$DISPATCH-from-watchd-log.md"
-        printf '%s\n' "$BLOCK" > "$ITEM" || die "could not write $ITEM"
+        { printf 'acked: n/a (the watcher had already acked it)\n'; printf '%s\n' "$BLOCK"; } > "$ITEM" || die "could not write $ITEM"
         say "settlement recovered from watchd.log into $ITEM (the watcher had already acked it)"
       else
         NOTE="$INBOX/$(date -u +%Y%m%dT%H%M%SZ)-$DISPATCH-task-settled-no-delivery.md"
-        printf 'dispatch: %s\ntask: %s\ntask status: %s\nnote: the Task reads %s but no delivery was in the queue and no settlement was in watchd.log; nothing was acked.\n' \
+        printf 'acked: no (nothing to ack)\ndispatch: %s\ntask: %s\ntask status: %s\nnote: the Task reads %s but no delivery was in the queue and no settlement was in watchd.log; nothing was acked.\n' \
           "$DISPATCH" "$TASK" "$TASK_STATUS" "$TASK_STATUS" > "$NOTE"
         say "no delivery in the queue and none in the log; wrote $NOTE"
       fi
@@ -134,15 +150,16 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
     *)
       DELIVERY="$(printf '%s' "$PARSED" | head -1)"
       ITEM="$INBOX/${DELIVERY}-$DISPATCH.md"
-      printf '%s\n' "$PARSED" | tail -n +2 > "$ITEM" || die "could not write $ITEM"
-      [ -s "$ITEM" ] || die "wrote an empty inbox item $ITEM"
-      say "settlement written to $ITEM ($(wc -l < "$ITEM") lines)"
-      if [ -z "$DRY" ]; then
-        orca orchestration check --run "$RUN" --ack "$DELIVERY" --json >/dev/null 2>&1 \
-          || die "could not ack $DELIVERY"
-        say "acked $DELIVERY (after the inbox write)"
+      if [ -n "$DRY" ]; then
+        say "DRY-RUN would write $ITEM and ack $DELIVERY (nothing written)"
       else
-        say "DRY-RUN would ack $DELIVERY"
+        { printf 'acked: pending\n'; printf '%s\n' "$PARSED" | tail -n +2; } > "$ITEM" || die "could not write $ITEM"
+        [ -s "$ITEM" ] || die "wrote an empty inbox item $ITEM"
+        orca orchestration check --run "$RUN" --ack "$DELIVERY" --json >/dev/null 2>&1 \
+          || die "could not ack $DELIVERY (the inbox item stays marked 'pending', so a later run will retry)"
+        # Only now is it acked; record that, because the next run reads this marker.
+        printf 'acked: yes %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$ITEM"
+        say "settlement written to $ITEM and acked ($DELIVERY)"
       fi
       ;;
   esac
@@ -188,22 +205,27 @@ case "$WT" in
   *)  say "worktree: $WT" ;;
 esac
 
-# ---- 5. release, then close the terminals, then remove the worktree -------------------
-if [ -n "$WT" ]; then
-  if [ -z "$DRY" ]; then
-    REL="$(orca orchestration worker-release --dispatch "$DISPATCH" --json 2>&1 | node -e '
+# ---- 5. release (always, even with no worktree), then close, then remove --------------
+# CodeRabbit Major: the release used to live inside `if [ -n "$WT" ]`, so a dispatch whose
+# worktree was already gone was never released and the script still printed DONE. The
+# release is now unconditional, and an unconfirmed one is fatal instead of a log line.
+if [ -z "$DRY" ]; then
+  REL="$(orca orchestration worker-release --dispatch "$DISPATCH" --json 2>&1 | node -e '
 let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   try{ const j=JSON.parse(s); process.stdout.write(j.ok?((j.result&&j.result.state)||"released"):("ERR:"+((j.error&&j.error.code)||"?"))); }
   catch(e){ process.stdout.write("UNPARSED"); }
 });')"
-    say "release -> $REL"
-    case "$REL" in
-      ERR:*|UNPARSED) say "release did not confirm; the dispatch may already be fenced - continuing" ;;
-    esac
-  else
-    say "DRY-RUN would release $DISPATCH"
-  fi
+  say "release -> $REL"
+  case "$REL" in
+    ERR:*|UNPARSED) die "release did not confirm ($REL) - the dispatch may still be held" ;;
+    retained) say "release reported 'retained' (measured on this host: it does not free the dispatch); continuing" ;;
+    *) say "release state: $REL" ;;
+  esac
+else
+  say "DRY-RUN would release $DISPATCH"
+fi
 
+if [ -n "$WT" ]; then
   . "$HERE/repo-id.sh" 2>/dev/null || true
   [ -n "${REPO_ID:-}" ] || die "could not resolve the Orca repo id (see repo-id.sh)"
   run_or_show orca terminal close --worktree "id:$REPO_ID::$WT" --all --json >/dev/null 2>&1
