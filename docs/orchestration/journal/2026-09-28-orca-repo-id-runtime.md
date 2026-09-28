@@ -47,7 +47,28 @@ stale; it was found because the first dispatch of the 2026-09-28 cycle failed.
   directory with no `.git`, so `git -C` failed there and the "behind by N commits" line
   silently read 0.
 
+## Review response — inherited git context (CodeRabbit, 2026-09-28)
+
+CodeRabbit raised, as a Medium / inferred security finding, that an inherited git context
+can make the runtime resolution pick a different registered repo. It reproduces, and the
+repo already carried the guard for exactly this: `identity.sh` unsets
+`GIT_DIR`/`GIT_WORK_TREE`/`GIT_COMMON_DIR` before its own `git rev-parse`. Raw:
+
+    $ GIT_DIR=D:/code/sup-sandbox/.git . tools/orchestration/repo-id.sh ; echo "$REPO_ID"
+    e9d610bd-705f-4875-8f50-77caa350bd5b        # = D:\code\sup-sandbox — the WRONG repo
+
+Fixed by clearing the same three variables inside the root lookup's command substitution,
+so the caller's environment is untouched. All four variants (none, `GIT_DIR`,
+`GIT_DIR`+`GIT_WORK_TREE`, `GIT_COMMON_DIR`) now resolve `9e918a40-…`.
+
+The same review noted a second thing: a reused `rebase-<PR>` worktree is selected by repo
+id + path suffix, not by the PR head. `rebase.sh` now refuses to reuse a worktree whose
+HEAD is not the PR head — a `--force-with-lease` push from a stale worktree would republish
+the old head and drop the commits pushed since, and the lease would not refuse it, because
+the fetch just before it refreshes the remote-tracking ref.
+
 ## Verification
+
 Raw output is on the PR: the helper resolving the id, then a throwaway
 `spawn.sh … --worktree-only` creating a worktree and `reap.sh` removing it.
 

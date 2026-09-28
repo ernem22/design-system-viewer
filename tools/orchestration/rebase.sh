@@ -68,6 +68,19 @@ if [ -z "$WT" ]; then
 fi
 [ -n "$WT" ] || { echo "rebase.sh: no worktree path for rebase-$PR" >&2; exit 2; }
 
+# A reused worktree can be stale. If the PR head moved since it was created, rebasing it
+# and pushing with --force-with-lease would republish the OLD head and drop the commits
+# pushed since — the lease is satisfied, because the fetch above just refreshed the
+# remote-tracking ref, so nothing refuses it. Reuse only a worktree that is actually at
+# the PR head; anything else is the operator's to remove, not ours to reset (it may hold
+# an abandoned conflict resolution).
+WTH=$(git -C "$WT" rev-parse HEAD 2>/dev/null || echo "")
+if [ "$WTH" != "$HEAD" ]; then
+  echo "  refusing to reuse $WT: it is at ${WTH:0:7}, the PR head is ${HEAD:0:7}" >&2
+  echo "  remove it and re-run:  orca worktree rm --worktree \"id:\$REPO_ID::$WT\" --force" >&2
+  exit 4
+fi
+
 cd "$WT" || exit 2
 if git rebase "$BASE" >/tmp/rebase-$PR.log 2>&1; then
   echo "  rebase clean: $(git log --oneline -1)"

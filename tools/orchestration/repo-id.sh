@@ -22,7 +22,14 @@
 
 orca_root_checkout() {
   local common
-  common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  # An inherited GIT_DIR / GIT_WORK_TREE / GIT_COMMON_DIR sends `git rev-parse` to a
+  # DIFFERENT repository than the one we are standing in. Measured 2026-09-28: with
+  # GIT_DIR pointing at another registered Orca repo this helper resolved that repo's id
+  # (e9d610bd-… = D:\code\sup-sandbox instead of 9e918a40-… = this checkout), so every
+  # worktree command would have run against the wrong repository. identity.sh clears the
+  # same three for the same reason. Cleared inside the command substitution, so the
+  # caller's environment is untouched.
+  common="$(unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR; git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
   [ -n "$common" ] || return 1
   dirname "$common"
 }
