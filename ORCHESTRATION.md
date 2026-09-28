@@ -1155,13 +1155,11 @@ worker's model or personal identity.
   (`6cf38f9`, `e425c79`, `df02f59`, `30c162d`) carry `[coder]` in the subject and
   only `erne` as author — the worker author survives on its own branch and
   nowhere else.
-- **The human trailer was removed on 2026-09-28.** Until then this section required
-  the worker's commit body to name the human as `Co-authored-by: erne <ernmctt@gmail.com>`.
-  That address is private on GitHub, and a push carrying it as an author email is
-  rejected — measured three times in one session, verbatim:
-  `remote: error: GH007: Your push would publish a private email address.` /
-  `! [remote rejected] HEAD -> ernem22/coder-27 (push declined due to email privacy restrictions)`.
-  The human identity is already on the merge commit itself: `gh api
+- **The human trailer was removed on 2026-09-28.** Until then this section required the
+  worker's commit body to name the human as `Co-authored-by: erne <ernmctt@gmail.com>`,
+  which contradicted the "Coordinator commits use the real human identity" line above:
+  that address is private and a push carrying it is rejected with `GH007`. The human
+  identity is already on the merge commit itself — `gh api
   repos/ernem22/design-system-viewer/commits/<sha> --jq .author.login` returns `ernem22`
   for every merge, and the squash author is `erne <97901269+ernem22@users.noreply.github.com>`.
   Do not reintroduce a private address into a commit body.
