@@ -37,8 +37,13 @@ EVIDENCE — the same evidence a Coder owes, plus:
   - rewrite the PR body so `## Verified` / `## Not verified` describe the FIXED
     head, not the pre-fix one.
 
-DELIVERY: set your worktree identity first — `tools/orchestration/identity.sh fixer`
-(sets `user.name=orca-fixer`, `user.email=$BOT_EMAIL`) — then commit with a
+DELIVERY: set your worktree identity first — `bash tools/orchestration/identity.sh fixer`
+(sets `user.name=orca-fixer`, `user.email=$BOT_EMAIL`). If your branch predates that
+script — a PR opened before it landed — run the coordinator checkout's copy from inside
+your own worktree: `bash <coordinator-checkout>/tools/orchestration/identity.sh fixer`.
+It reads the `identity.env` beside itself and writes `--worktree` config for the
+worktree you are standing in, so the PR branch gains no files and no review history is
+disturbed. Then commit with a
 `[fixer]` prefix in the subject and push to the PR's own
 branch. Do not open a new PR, do not merge, do not change labels.
 

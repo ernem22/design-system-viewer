@@ -1076,8 +1076,12 @@ worker's model or personal identity.
 - **Author**: set `git config --worktree user.name`/`user.email` in each
   worker's worktree before it commits (or instruct the worker to do so as its
   first step) to a fixed role identity by running
-  `tools/orchestration/identity.sh <role>`, which reads the role's account from
-  `tools/orchestration/identity.env` — never `ernem22`, never a model name. The
+  `bash tools/orchestration/identity.sh <role>`, which reads the role's account from
+  `tools/orchestration/identity.env` — never `ernem22`, never a model name. A branch
+  that predates the script runs the coordinator checkout's copy from inside its own
+  worktree (`bash <coordinator-checkout>/tools/orchestration/identity.sh <role>`): the
+  script reads the `identity.env` beside itself and its `--worktree` write lands on the
+  worktree it is run in, so the branch gains no files. The
   email MUST be the role bot's `users.noreply.github.com` address so GitHub links
   the commit to that account; `@localhost`/`@local` resolves to no account, and a
   legacy `username@users.noreply.github.com` address resolves to whoever currently

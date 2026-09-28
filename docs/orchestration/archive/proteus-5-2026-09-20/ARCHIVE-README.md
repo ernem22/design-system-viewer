@@ -56,3 +56,5 @@ that read `tools/orchestration/` and `docs/orchestration/specs/` are untouched b
   the shell scripts here are data, not hooks.
 * If any of it turns out to be worth keeping, the change belongs in its own reviewed pull request
   against the live path — with the diff read first, not copied from here.
+
+See also `../supervisor-v2/Supervisor_v2.md` — a superseded v1 task specification whose internal contradictions were resolved during execution, kept for history only.

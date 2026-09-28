@@ -2,8 +2,10 @@
 
 ## Outcome
 Agent commits on origin now attribute to real, linkable bot accounts instead of
-`@localhost`/stale addresses. Six in-scope branch tips on origin were re-identified;
-all other refs, the protected base, and GitHub signatures were left byte-identical.
+`@localhost`/stale addresses. **Seven** in-scope branch tips were re-identified in total:
+the six in the table below, plus `ernem22/tooling-guardrails` (`b4b78431` → `1ec5dea5`),
+amended in the follow-up recorded in the addendum. All other refs, the protected base,
+and GitHub signatures were left byte-identical.
 Future worker commits get the right identity automatically (identity.env + identity.sh
 + spec/contract updates).
 
@@ -40,6 +42,17 @@ the `[role]` subject tag (no tag → human).
    | `ernem22/coder-4` | `5d883c4f` | `3f57c9ee` | coder |
    | `ernem22/coder-5` | `789c4ba2` | `7817a478` | coder |
    | `fix/shell-onto-pipeline-base` | `7831121a` | `5085f573` | human (noreply) |
+
+   Verified 2026-09-28 against git itself: the six `old` values above are byte-for-byte
+   the pre-rewrite tips preserved in the `ds-backup.git` mirror, and the one rewritten
+   ref that still exists on origin carries its table `new` value
+   (`fix/shell-onto-pipeline-base` → `5085f573`). The other six were deleted from the
+   remote by the 2026-09-27 branch cleanup (origin 20 → 8 branches, one of which is this
+   change's own branch), so their post-rewrite tips are no longer fetchable: the count
+   above records what the rewrite did, not what the remote carries today. The addendum's
+   follow-up amend is verified from the objects — `b4b78431` is authored
+   `erne@users.noreply.github.com` (the wrong account) and `1ec5dea5` is authored **and**
+   committed `ernem22 <97901269+ernem22@users.noreply.github.com>`.
 4. **Phase 6 proof** (`gh api .../commits/<sha>`): each tip resolves to
    `ernem22-tester`, `ernem22-coder` (×4), and `ernem22` respectively.
 5. **Future-proofing**: `tools/orchestration/identity.env` (accounts) +

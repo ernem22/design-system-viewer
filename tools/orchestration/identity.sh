@@ -39,6 +39,19 @@ case "$email" in
   *) echo "identity.sh: ${role} email must be a users.noreply.github.com address, got '${email:-<unset>}'" >&2; exit 2 ;;
 esac
 
+# `--worktree` only takes effect in a repository that has opted in. Without it git falls
+# back to the shared local config and rewrites EVERY worktree's identity, the
+# coordinator's included — the exact failure this script exists to prevent. Refuse
+# instead of writing, and write nothing at all.
+if [ "$(git config --get extensions.worktreeConfig 2>/dev/null || true)" != "true" ]; then
+  echo "identity.sh: extensions.worktreeConfig is not enabled in this repository." >&2
+  echo "  'git config --worktree' would fall back to the shared config and change the" >&2
+  echo "  identity of every worktree, not just this one. Nothing was written." >&2
+  echo "  Enable it once per repository, then re-run:" >&2
+  echo "    git config extensions.worktreeConfig true" >&2
+  exit 3
+fi
+
 git config --worktree user.name  "orca-$role"
 git config --worktree user.email "$email"
 printf 'worktree identity: orca-%s <%s>\n' "$role" "$email"
