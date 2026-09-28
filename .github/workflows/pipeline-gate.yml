@@ -38,6 +38,10 @@ on:
       pr:
         description: PR number to re-evaluate
         required: true
+      simulate_gate_error:
+        description: 'TEST HOOK: set to "module_missing" to make the gate fail on purpose and prove the fail-closed wrapper writes a failure status instead of silence. Leave empty in normal use.'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -142,36 +146,61 @@ jobs:
             }
 
             // ---- parse and decide, with the same module the probe runs ----------
-            // The rule lives in tools/orchestration/gate-logic.cjs: a malformed verdict
-            // comment is a FAILURE with a reason (not a silent `pending`), a Tester PASS
-            // must carry observed:/before:/build:, and a verdict only counts for the head
-            // it names.
-            const fs = require('fs');
-            const { evaluate } = require(`${process.env.GITHUB_WORKSPACE}/tools/orchestration/gate-logic.cjs`);
-
-            // The allowlist is read from the TRUSTED BASE checkout (the same one the module
-            // comes from), never from the PR head, so a PR cannot add itself to the list.
-            // Comment text never reaches a shell `run:` line: the whole decision is JS and
-            // the only data crossing into it is field values on the API objects.
-            let allowlist = ['ernem22'];
+            // FAIL CLOSED. Everything below is wrapped: a missing module, a throw inside the
+            // decision, or an unexpected shape must end with a `pipeline/verdict` status of
+            // `failure` and a non-zero exit - never with no status at all. Measured
+            // 2026-09-28: the unguarded require meant a crash left the PR on whatever status
+            // it already had, and the gate self-test's case (v) could not produce a failure
+            // with a reason. The wrapper is the fix.
             try {
-              const parsed = JSON.parse(fs.readFileSync(`${process.env.GITHUB_WORKSPACE}/tools/orchestration/gate-allowlist.json`, 'utf8'));
-              if (Array.isArray(parsed.allowed) && parsed.allowed.length) allowlist = parsed.allowed;
-            } catch (e) {
-              core.warning(`gate-allowlist.json unreadable (${e.message}); using the built-in default`);
+              // Test hook: reachable only through workflow_dispatch, never in normal use.
+              if (context.payload.inputs && context.payload.inputs.simulate_gate_error === 'module_missing') {
+                require(`${process.env.GITHUB_WORKSPACE}/tools/orchestration/does-not-exist.cjs`);
+              }
+
+              const fs = require('fs');
+              const { evaluate } = require(`${process.env.GITHUB_WORKSPACE}/tools/orchestration/gate-logic.cjs`);
+
+              // The allowlist is read from the TRUSTED BASE checkout (the same one the module
+              // comes from), never from the PR head, so a PR cannot add itself to the list.
+              // Comment text never reaches a shell `run:` line: the whole decision is JS and
+              // the only data crossing into it is field values on the API objects.
+              let allowlist = ['ernem22'];
+              try {
+                const parsed = JSON.parse(fs.readFileSync(`${process.env.GITHUB_WORKSPACE}/tools/orchestration/gate-allowlist.json`, 'utf8'));
+                if (Array.isArray(parsed.allowed) && parsed.allowed.length) allowlist = parsed.allowed;
+              } catch (e) {
+                core.warning(`gate-allowlist.json unreadable (${e.message}); using the built-in default`);
+              }
+
+              const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: prNumber, per_page: 100 });
+              const reviews = await github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: prNumber, per_page: 100 });
+              const authorOf = (o) => ({
+                login: (o && o.user && o.user.login) || '',
+                author_association: (o && o.author_association) || '',
+              });
+              const candidates = [
+                ...comments.map((c) => ({ body: c.body, at: c.created_at, author: authorOf(c) })),
+                ...reviews.map((r) => ({ body: r.body, at: r.submitted_at || r.created_at, author: authorOf(r) })),
+              ];
+
+              const result = evaluate({ head, comments: candidates, allowlist });
+              core.info(`gate detail: ${JSON.stringify(result.detail)}`);
+              await setStatus(result.state, result.description);
+            } catch (err) {
+              const reason = String((err && err.message) || err).replace(/\s+/g, ' ').slice(0, 120);
+              core.error(`gate unavailable: ${reason}`);
+              // Write the failure with a direct API call, not through setStatus, so a failure
+              // inside setStatus cannot hide itself. If even this fails, the non-zero exit
+              // below is still the loud part.
+              try {
+                await github.rest.repos.createCommitStatus({
+                  owner, repo, sha: head, state: 'failure', context: 'pipeline/verdict',
+                  description: `gate unavailable: ${reason}`.slice(0, 140), target_url: target,
+                });
+              } catch (e2) {
+                core.error(`could not write the failure status either: ${String((e2 && e2.message) || e2)}`);
+              }
+              core.setFailed(`gate unavailable: ${reason}`);
+              return;
             }
-
-            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: prNumber, per_page: 100 });
-            const reviews = await github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: prNumber, per_page: 100 });
-            const authorOf = (o) => ({
-              login: (o && o.user && o.user.login) || '',
-              author_association: (o && o.author_association) || '',
-            });
-            const candidates = [
-              ...comments.map((c) => ({ body: c.body, at: c.created_at, author: authorOf(c) })),
-              ...reviews.map((r) => ({ body: r.body, at: r.submitted_at || r.created_at, author: authorOf(r) })),
-            ];
-
-            const result = evaluate({ head, comments: candidates, allowlist });
-            core.info(`gate detail: ${JSON.stringify(result.detail)}`);
-            await setStatus(result.state, result.description);
