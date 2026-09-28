@@ -12,6 +12,11 @@ const { evaluate, parseVerdict } = require('./gate-logic.cjs');
 const HEAD = '12469a25021aecbcbb03a7fa94336c1ff9645966';
 const at = (n) => `2026-09-28T16:0${n}:00Z`;
 
+// The gate now ignores any verdict not written by an allowed author, so every existing
+// case needs one. `asOwner` supplies it by default and the author cases below override it.
+const OWNER = { login: 'ernem22', author_association: 'OWNER' };
+const asOwner = (c) => ({ ...c, author: c.author || OWNER });
+
 const good = (role, extra = '') => ({
   body: '```dsv-verdict\n'
     + `status: pass\nrole: ${role}\ncommit: ${HEAD.slice(0, 7)}\n`
@@ -91,11 +96,73 @@ const cases = [
     ],
     expect: 'failure',
   },
+  {
+    name: '8. a forged author with a perfect verdict is IGNORED (no valid verdict, not pass)',
+    head: HEAD,
+    comments: [
+      { ...good('reviewer'), author: { login: 'attacker', author_association: 'NONE' } },
+      { ...good('tester'), author: { login: 'attacker', author_association: 'NONE' } },
+    ],
+    expect: 'pending',
+  },
+  {
+    name: '9. an allowed author works, with the allowlist passed explicitly',
+    head: HEAD,
+    comments: [good('reviewer'), good('tester')],
+    allowlist: ['ernem22'],
+    expect: 'success',
+  },
+  {
+    name: '10. a case-variant login of an allowed author works',
+    head: HEAD,
+    comments: [
+      { ...good('reviewer'), author: { login: 'ERNEM22', author_association: 'OWNER' } },
+      { ...good('tester'), author: { login: 'ErneM22', author_association: 'COLLABORATOR' } },
+    ],
+    expect: 'success',
+  },
+  {
+    name: '11. a non-listed collaborator is ignored',
+    head: HEAD,
+    comments: [
+      { ...good('reviewer'), author: { login: 'someone-else', author_association: 'COLLABORATOR' } },
+      { ...good('tester'), author: { login: 'someone-else', author_association: 'COLLABORATOR' } },
+    ],
+    expect: 'pending',
+  },
+  {
+    name: '12. an edited comment from a non-allowed author is ignored too',
+    head: HEAD,
+    comments: [
+      { ...good('reviewer'), author: { login: 'ernem22', author_association: 'OWNER' } },
+      { body: good('tester').body, at: at(9), author: { login: 'attacker', author_association: 'OWNER' } },
+    ],
+    expect: 'pending', // the tester verdict is ignored, so only the reviewer is present
+  },
+  {
+    name: '13. a listed login whose association is NOT trusted is ignored',
+    head: HEAD,
+    comments: [
+      { ...good('reviewer'), author: { login: 'ernem22', author_association: 'CONTRIBUTOR' } },
+      { ...good('tester'), author: { login: 'ernem22', author_association: 'CONTRIBUTOR' } },
+    ],
+    expect: 'pending',
+  },
+  {
+    name: '14. a non-allowed author cannot lock the gate with a malformed fence either',
+    head: HEAD,
+    comments: [
+      { body: '\\\dsv-verdict\nstatus: pass\nrole: reviewer\ncommit: ' + HEAD.slice(0, 7) + '\nscope_ok: yes', at: at(2), author: { login: 'attacker', author_association: 'NONE' } },
+      good('tester'),
+      good('reviewer'),
+    ],
+    expect: 'success', // the forged malformed block is ignored, and the real reviewer approves
+  },
 ];
 
 let bad = 0;
 for (const c of cases) {
-  const got = evaluate({ head: c.head, comments: c.comments });
+  const got = evaluate({ head: c.head, comments: c.comments.map(asOwner), allowlist: c.allowlist });
   const ok = got.state === c.expect;
   if (!ok) bad++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  expected=${c.expect.padEnd(8)} got=${got.state.padEnd(8)} :: ${c.name}`);

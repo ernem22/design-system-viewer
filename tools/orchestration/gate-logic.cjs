@@ -25,6 +25,31 @@ const STRICT = /```dsv-verdict[ \t]*\r?\n([\s\S]*?)```/;
 
 const TESTER_EVIDENCE_FIELDS = ['observed', 'before', 'build'];
 
+// The gate is the only thing standing between a PR and the default branch, and this repo
+// is public: without an author check, anyone could post a `dsv-verdict` block and approve
+// someone else's PR. Measured 2026-09-28 - `evaluate` never saw the commenter at all, and
+// the workflow dropped `user.login` when it built its candidate list.
+const DEFAULT_ALLOWLIST = ['ernem22'];
+const TRUSTED_ASSOCIATIONS = ['OWNER', 'MEMBER', 'COLLABORATOR'];
+
+function normalizeAllowlist(allowlist) {
+  const list = Array.isArray(allowlist) && allowlist.length ? allowlist : DEFAULT_ALLOWLIST;
+  return list.map((a) => String(a).toLowerCase());
+}
+
+/**
+ * A verdict counts only when BOTH hold: the login is listed (case-insensitive) and the
+ * author_association is trusted. A `[bot]` account is accepted only if it is listed.
+ * @param {{login?: string, author_association?: string}} author
+ * @param {string[]} [allowlist]
+ */
+function isAllowedAuthor(author, allowlist) {
+  if (!author || !author.login) return false;
+  const login = String(author.login).toLowerCase();
+  const assoc = String(author.author_association || '').toUpperCase();
+  return normalizeAllowlist(allowlist).includes(login) && TRUSTED_ASSOCIATIONS.includes(assoc);
+}
+
 /** Parse one comment body. Returns null when the body is not a verdict attempt at all. */
 function parseVerdict(body) {
   const text = body || '';
@@ -62,9 +87,20 @@ function evaluate(input) {
 
   const unparsable = [];
   const attempts = [];
+  const ignoredAuthors = [];
   for (const c of comments) {
     const p = parseVerdict(c.body);
     if (!p) continue;
+    // The author check comes FIRST. A block from a non-allowed author is not a verdict at
+    // all: it can neither approve the PR nor lock the gate with a malformed fence.
+    if (!isAllowedAuthor(c.author, input.allowlist)) {
+      ignoredAuthors.push({
+        at: c.at || '',
+        login: (c.author && c.author.login) || '(none)',
+        association: (c.author && c.author.author_association) || '(none)',
+      });
+      continue;
+    }
     if (!p.ok) {
       unparsable.push({ at: c.at || '', reason: p.reason, commit: p.commit || '' });
       continue;
@@ -129,4 +165,4 @@ function evaluate(input) {
   return { state: 'failure', description: `${reason} - ${why}`, detail: { reviewer, tester } };
 }
 
-module.exports = { parseVerdict, evaluate, STRICT, TESTER_EVIDENCE_FIELDS };
+module.exports = { parseVerdict, evaluate, isAllowedAuthor, normalizeAllowlist, STRICT, TESTER_EVIDENCE_FIELDS };

@@ -146,15 +146,32 @@ jobs:
             // comment is a FAILURE with a reason (not a silent `pending`), a Tester PASS
             // must carry observed:/before:/build:, and a verdict only counts for the head
             // it names.
+            const fs = require('fs');
             const { evaluate } = require(`${process.env.GITHUB_WORKSPACE}/tools/orchestration/gate-logic.cjs`);
+
+            // The allowlist is read from the TRUSTED BASE checkout (the same one the module
+            // comes from), never from the PR head, so a PR cannot add itself to the list.
+            // Comment text never reaches a shell `run:` line: the whole decision is JS and
+            // the only data crossing into it is field values on the API objects.
+            let allowlist = ['ernem22'];
+            try {
+              const parsed = JSON.parse(fs.readFileSync(`${process.env.GITHUB_WORKSPACE}/tools/orchestration/gate-allowlist.json`, 'utf8'));
+              if (Array.isArray(parsed.allowed) && parsed.allowed.length) allowlist = parsed.allowed;
+            } catch (e) {
+              core.warning(`gate-allowlist.json unreadable (${e.message}); using the built-in default`);
+            }
 
             const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: prNumber, per_page: 100 });
             const reviews = await github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: prNumber, per_page: 100 });
+            const authorOf = (o) => ({
+              login: (o && o.user && o.user.login) || '',
+              author_association: (o && o.author_association) || '',
+            });
             const candidates = [
-              ...comments.map((c) => ({ body: c.body, at: c.created_at })),
-              ...reviews.map((r) => ({ body: r.body, at: r.submitted_at || r.created_at })),
+              ...comments.map((c) => ({ body: c.body, at: c.created_at, author: authorOf(c) })),
+              ...reviews.map((r) => ({ body: r.body, at: r.submitted_at || r.created_at, author: authorOf(r) })),
             ];
 
-            const result = evaluate({ head, comments: candidates });
+            const result = evaluate({ head, comments: candidates, allowlist });
             core.info(`gate detail: ${JSON.stringify(result.detail)}`);
             await setStatus(result.state, result.description);
