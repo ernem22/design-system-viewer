@@ -1,8 +1,18 @@
-CODER TEMPLATE — fill every `<>`, delete nothing.
+CODER TEMPLATE — the coordinator fills every `<>` before dispatch, and the scope line is the
+one that matters most: name the files you own AND the files an open PR already holds.
+
+If you receive this with any `<...>` still unfilled, treat it as a dispatch error: ask the
+coordinator which files are yours (one question, then wait) — never guess, and never read an
+unfilled scope line as permission for the whole tree. Two Coders in one night caught real
+collisions this way (one with a PR that already implemented its issue, one with three open
+PRs holding the exact files it was told to change); both were right to stop.
 
 You work in this worktree only. Write only under `app/`, and only these files:
 `<file set>`. Do not touch any file outside `app/`. Do not touch
-`<files held by other open PRs>` — other workers hold those.
+`<files held by other open PRs>` — other workers hold those. If part of the issue lands in a
+held file, do the rest and report that part under `## Blocked by an open PR` with the PR
+number, the file and the exact line or selector — the coordinator picks it up when that PR
+lands.
 
 Read the issue in full first: `gh issue view <n> --json number,title,body`.
 Honour its stated outcome and its `Verify:` line exactly; do not widen it.
@@ -31,16 +41,15 @@ EVIDENCE — run all of these and paste the real numbers into the PR body:
     and paste its failing assertion.
   - Anything you could not run, in a `## Not verified` section — no guessing.
 
-DELIVERY: set your worktree identity first — `bash tools/orchestration/identity.sh coder`
-(sets `user.name=orca-coder`, `user.email=$BOT_EMAIL`; never `ernem22`, never a
-model name). If your branch predates that script, run the coordinator checkout's copy
-from inside your own worktree —
-`bash <coordinator-checkout>/tools/orchestration/identity.sh coder` — which reads the
-`identity.env` beside itself and writes `--worktree` config for the worktree you are
-standing in, so your branch gains no files. Then commit with a `[coder]` prefix in the
-subject, push your branch,
-open a PR against `refactor/full-react-migration` titled
-`[coder] <fix|feat|perf>(app): <what changed> (#<n>)`, and label the issue
+DELIVERY: commit with a `[coder]` prefix in the subject, push your branch, then open the
+PR with the base PINNED. Never let it default: the repo's default branch is `main`, which
+is NOT the pipeline's base, and a PR that defaults there drags the whole migration into it
+(one did, and the diff was 245 files instead of 3).
+
+    gh pr create --base refactor/full-react-migration \
+      --title "[coder] <fix|feat|perf>(app): <what changed> (#<n>)" --body-file <file>
+
+Title format `[coder] <fix|feat|perf>(app): <what changed> (#<n>)`, and label the issue
 `needs-review`. Do not merge, do not close the issue, do not approve anything.
 
 OBSERVABLE ACCEPTANCE — your worker_done body must start with exactly:
@@ -65,6 +74,13 @@ about to run carries all of:
     --outcome=succeeded          (equals sign; the space form is rejected)
     --files-modified <csv>
     --dispatch-capability <token from your preamble>
+
+**Push to the PR's own branch, never a new one.** A commit sitting on
+`<role>/<something>` instead of the branch the PR tracks leaves the PR at its old head:
+the coordinator sees the old commit, the review and test waves run against code that does
+not contain your fix, and your report looks correct while the change is invisible. The
+branch is named in your spec; push with `git push origin HEAD:<that branch>` and say in
+your report which branch you pushed to.
 
 TWO OPERATIONAL RULES, both learned from a real failure:
   - **`--outcome=succeeded`, with the equals sign.** The space form

@@ -1,0 +1,375 @@
+diff --git a/docs/orchestration/specs/coder.md b/docs/orchestration/specs/coder.md
+index 753f562..b81e4c3 100644
+--- a/docs/orchestration/specs/coder.md
++++ b/docs/orchestration/specs/coder.md
+@@ -1,8 +1,18 @@
+-CODER TEMPLATE — fill every `<>`, delete nothing.
++CODER TEMPLATE — the coordinator fills every `<>` before dispatch, and the scope line is the
++one that matters most: name the files you own AND the files an open PR already holds.
++
++If you receive this with any `<...>` still unfilled, treat it as a dispatch error: ask the
++coordinator which files are yours (one question, then wait) — never guess, and never read an
++unfilled scope line as permission for the whole tree. Two Coders in one night caught real
++collisions this way (one with a PR that already implemented its issue, one with three open
++PRs holding the exact files it was told to change); both were right to stop.
+ 
+ You work in this worktree only. Write only under `app/`, and only these files:
+ `<file set>`. Do not touch any file outside `app/`. Do not touch
+-`<files held by other open PRs>` — other workers hold those.
++`<files held by other open PRs>` — other workers hold those. If part of the issue lands in a
++held file, do the rest and report that part under `## Blocked by an open PR` with the PR
++number, the file and the exact line or selector — the coordinator picks it up when that PR
++lands.
+ 
+ Read the issue in full first: `gh issue view <n> --json number,title,body`.
+ Honour its stated outcome and its `Verify:` line exactly; do not widen it.
+diff --git a/docs/orchestration/specs/reviewer.md b/docs/orchestration/specs/reviewer.md
+index baf2073..36b795a 100644
+--- a/docs/orchestration/specs/reviewer.md
++++ b/docs/orchestration/specs/reviewer.md
+@@ -2,7 +2,10 @@ REVIEWER TEMPLATE — fill every `<>`, delete nothing.
+ 
+ You are read-only. Do not edit, create, delete or commit any file. Do not run
+ `npm`, `vitest`, `tsc`, `eslint` or `vite` — CI already did. Do not add or change
+-any label, PR comment or issue comment. Your entire output is one report.
++any label or issue comment. Your only write to GitHub is the single `dsv-verdict`
++PR comment described under OBSERVABLE ACCEPTANCE below — that comment is your
++verdict, and the merge gate cannot see a verdict that was never posted. Your entire
++output is that one comment plus one report.
+ 
+ INPUT — read exactly these and nothing else:
+   1. the issue:      gh issue view <n> --json number,title,body
+@@ -34,16 +37,11 @@ reason: <one short line, only if fail>
+ fix_required: <one short actionable instruction, only if fail>
+ scope_ok: yes | no
+ 
+-OBSERVABLE ACCEPTANCE — worker_done body starts with exactly:
++OBSERVABLE ACCEPTANCE — two steps, IN THIS ORDER. Step 1 is the verdict; step 2 only tells the
++coordinator it exists. A worker_done without step 1 is a verdict the gate cannot see:
+ 
+-status: pass | fail
+-role: reviewer
+-task: <task id from your preamble>
+-commit: none
+-tests: n/a
+-
+-THEN POST THE SAME BLOCK AS A PR COMMENT — the merge gate is computed by GitHub from
+-comments, not from the coordinator reading your message:
++**STEP 1 — post the verdict as a PR comment** (the merge gate is computed by GitHub from
++comments, not from the coordinator reading your message):
+ 
+     gh pr comment <n> --body "$(printf '```dsv-verdict\nstatus: pass\nrole: reviewer\ncommit: %s\nscope_ok: yes\n```\n' "$(git rev-parse --short HEAD)")"
+ 
+@@ -51,6 +49,14 @@ comments, not from the coordinator reading your message:
+ current head does not count — a verdict about a different build is not evidence about
+ this one, and that field is the whole reason the gate is machine-computed.
+ 
++**STEP 2 — worker_done body starts with exactly:**
++
++status: pass | fail
++role: reviewer
++task: <task id from your preamble>
++commit: none
++tests: n/a
++
+ Send worker_done once, from this terminal. **Do not retype the command: your
+ dispatch preamble prints it verbatim, including the `--dispatch-capability dcap_...`
+ token that is unique to your dispatch.** A hand-written command is rejected with
+diff --git a/docs/orchestration/specs/tester.md b/docs/orchestration/specs/tester.md
+index 21137a7..933cc29 100644
+--- a/docs/orchestration/specs/tester.md
++++ b/docs/orchestration/specs/tester.md
+@@ -44,7 +44,20 @@ do not claim it, and do not fake the environment to make it producible.
+ PORT: <port> is yours. If it stops answering, restart the preview yourself from
+ `app/` in this worktree on the same port (it is the only process you may start).
+ 
+-OUTPUT — worker_done body:
++OUTPUT — two steps, IN THIS ORDER. Step 1 is the verdict; step 2 only tells the coordinator
++it exists. A worker_done without step 1 is a verdict the gate cannot see, so do step 1 first:
++
++**STEP 1 — post the verdict as a PR comment.** This is what the merge gate reads; without it
++your run does not count, however good the measurements were:
++
++    gh pr comment <n> --body "$(printf '```dsv-verdict\nstatus: pass\nrole: tester\ncommit: %s\nbuild: %s\n```\n' "$(git rev-parse --short HEAD)" "<the asset hash you served>")"
++
++`commit:` must be the head whose build you verified (your STEP 0 answer). A verdict whose
++commit is not the PR's current head does not count — that field exists because a Tester
++once verified a build from the wrong branch, and the coordinator merged on the strength
++of it.
++
++**STEP 2 — worker_done body:**
+ 
+ status: pass | fail
+ role: tester
+diff --git a/tools/orchestration/close.sh b/tools/orchestration/close.sh
+index a5f7904..47f0e1b 100644
+--- a/tools/orchestration/close.sh
++++ b/tools/orchestration/close.sh
+@@ -86,3 +86,11 @@ for pr in $(gh pr list --repo "$REPO" --state open --json number --jq '.[].numbe
+ done
+ 
+ [ "$DRY" = "--dry-run" ] || echo "close.sh: merged $merged PR(s)"
++
++# Sweep the settled tasks off the board. Every worker leaves a task; a worker that dies
++# mid-run leaves it in ready/blocked forever, and nothing in the merge path revisited it —
++# the board grew to 37 "open" tasks for work that had landed. sweep.sh closes only the
++# unambiguous ones (names a merged PR / closed issue) and never touches a live dispatch.
++if [ "$DRY" != "--dry-run" ] && [ -x "$(dirname "$0")/sweep.sh" ]; then
++  bash "$(dirname "$0")/sweep.sh" || echo "close.sh: sweep failed (board may hold stale tasks)" >&2
++fi
+diff --git a/tools/orchestration/reap.sh b/tools/orchestration/reap.sh
+index c2bcb2e..3e35a02 100644
+--- a/tools/orchestration/reap.sh
++++ b/tools/orchestration/reap.sh
+@@ -32,6 +32,25 @@ else
+   echo "release: skipped (no dispatch id)"
+ fi
+ 
++# Kill any preview/dev server still running out of this worktree, BEFORE the worktree goes.
++# reap.sh used to remove the directory and leave the server holding it: the process kept its
++# memory and its port, and `worktree rm` came back false because the directory was busy. Those
++# orphans accumulated all night (13 of them at one point) and were the real cause of the
++# "memory full" agent deaths — not the worktrees themselves.
++# NB: `taskkill //F //PID` is NOT equivalent to `taskkill -F -PID` in this shell: MSYS path
++# conversion is disabled, so the double-slash form is rejected with "Invalid argument/option"
++# and the kill silently no-ops while the caller believes it succeeded.
++kill_servers() {
++  powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { \$_.CommandLine -like '*$ROLE*' -and \$_.CommandLine -match 'vite' } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force -ErrorAction SilentlyContinue }" >/dev/null 2>&1
++  for port in 4210 4211 4212 4213 4214 4215 4216 4217 4218 4219 4220 4221; do
++    PID=$(netstat -ano 2>/dev/null | grep ":$port " | grep LISTENING | head -1 | awk '{print $NF}')
++    [ -z "$PID" ] && continue
++    CL=$(powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter \"ProcessId=$PID\").CommandLine" 2>/dev/null)
++    case "$CL" in *"$ROLE"*) taskkill -F -PID "$PID" >/dev/null 2>&1 && echo "server on :$port killed ($ROLE)";; esac
++  done
++}
++kill_servers
++
+ if [ -n "$P" ]; then
+   orca terminal close --worktree "id:$REPO_ID::$P" --all --json >/dev/null 2>&1 \
+     && echo "terminals closed: $ROLE" || echo "terminals: none for $ROLE"
+diff --git a/tools/orchestration/spawn.sh b/tools/orchestration/spawn.sh
+index b40ade2..19a144f 100644
+--- a/tools/orchestration/spawn.sh
++++ b/tools/orchestration/spawn.sh
+@@ -53,12 +53,17 @@ P=$(printf '%s' "$RAW" | node -e \
+ #     phase. That is the whole point: a prompt is a stall the coordinator has to
+ #     notice, and denying predictably is cheaper than asking.
+ #   * destructive git/rm patterns are denied outright; a worker that needs one has
+-#     to say so in its report.
++#     to say so in its report. Note the force-push pattern is `git push --force *`
++#     (with the space), NOT `git push --force*`: the pipeline requires
++#     `--force-with-lease` to publish a rebase onto a moved base, and the wildcard
++#     form swallowed it too. The lease form refuses when the remote has moved, so it
++#     cannot destroy work the way a plain --force can — denying both cost a whole
++#     fixer round trip, with the worker correctly stopping to ask.
+ if [ "$PLAN" = "--plan" ]; then
+   # A Reviewer is read-only by contract; enforce it here instead of trusting prose.
+   printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "opencode-go/deepseek-v4.1-flash",\n  "permission": {\n    "external_directory": "deny",\n    "edit": "deny",\n    "write": "deny",\n    "*": "allow",\n    "bash": { "*": "deny", "orca *": "allow", "gh *": "allow", "curl *": "allow", "git log *": "allow", "git show *": "allow", "git diff *": "allow", "ls *": "allow", "cat *": "allow", "grep *": "allow", "rg *": "allow", "head *": "allow", "tail *": "allow", "wc *": "allow" }\n  }\n}\n' > "$P/opencode.json"
+ else
+-  printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "opencode-go/deepseek-v4.1-flash",\n  "permission": {\n    "external_directory": "deny",\n    "*": "allow",\n    "bash": { "*": "allow", "rm -rf *": "deny", "git push --force*": "deny", "git reset --hard*": "deny", "git clean *": "deny" }\n  }\n}\n' > "$P/opencode.json"
++  printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "opencode-go/deepseek-v4.1-flash",\n  "permission": {\n    "external_directory": "deny",\n    "*": "allow",\n    "bash": { "*": "allow", "rm -rf *": "deny", "git push --force *": "deny", "git push -f *": "deny", "git reset --hard*": "deny", "git clean *": "deny" }\n  }\n}\n' > "$P/opencode.json"
+ fi
+ 
+ orca terminal create --worktree "id:$REPO_ID::$P" --title "$ROLE" --command "$CMD" --json >/dev/null
+@@ -68,8 +73,17 @@ sleep 6
+ # Look the handle up by the worktree PATH, not by the role name: orca suffixes a
+ # taken name (`role` -> `role-2`), and a name lookup then returns the terminal of
+ # the older worktree, which worker-start rejects as terminal_worktree_mismatch.
+-H=$(bash "$(dirname "$0")/handle.sh" "$P" 2>/dev/null | head -1)
+-[ -z "$H" ] && { echo "NO_TERMINAL_HANDLE for $ROLE (path $P) — inspect: orca terminal list" >&2; exit 2; }
++# Wait for the AGENT terminal, not the first terminal in the worktree. A worktree gets
++# a plain shell at creation and the opencode TUI registers a few seconds later; taking
++# the shell binds the dispatch to a terminal with no agent in it, so the worker never
++# runs and never reports — a silent dead dispatch with no settlement to recover.
++H=""
++for _ in $(seq 1 25); do
++  H=$(bash "$(dirname "$0")/handle.sh" "$P" --agent-only 2>/dev/null | head -1)
++  [ -n "$H" ] && break
++  sleep 3
++done
++[ -z "$H" ] && { echo "NO_TERMINAL_HANDLE for $ROLE (path $P) — the agent terminal never registered; inspect: orca terminal list" >&2; exit 2; }
+ 
+ echo "PATH=$P"
+ echo "HANDLE=$H"
+diff --git a/tools/orchestration/start.sh b/tools/orchestration/start.sh
+index ccec988..33c9bdc 100644
+--- a/tools/orchestration/start.sh
++++ b/tools/orchestration/start.sh
+@@ -35,9 +35,23 @@ echo "start.sh: $P -> $H"
+ 
+ orca terminal wait --terminal "$H" --for tui-idle --timeout-ms 90000 --json >/dev/null 2>&1
+ 
+-orca orchestration worker-start --spec "$(cat "$SPEC")" --task-title "$TITLE" \
+-  --terminal "$H" --worktree "id:$REPO_ID::$P" --run "$RUN" --from "$FROM" --json 2>&1 \
+-  | node -e "
++# worker-start is fenced unless the Run is bound to the coordinator terminal we pass as
++# --from. The binding does not survive forever (the coordinator pane's incarnation changes),
++# so a wave that starts after a lull fails with `consumer_fenced` and every dispatch in it is
++# lost. Re-bind once and retry, instead of making the operator notice and redo the wave.
++attempt() {
++  orca orchestration worker-start --spec "$(cat "$SPEC")" --task-title "$TITLE" \
++    --terminal "$H" --worktree "id:$REPO_ID::$P" --run "$RUN" --from "$FROM" --json 2>&1
++}
++
++out="$(attempt)"
++if printf '%s' "$out" | grep -q 'consumer_fenced'; then
++  echo "start.sh: fenced, re-binding $RUN to $FROM" >&2
++  orca orchestration run-use --id "$RUN" --from "$FROM" --json >/dev/null 2>&1 || true
++  out="$(attempt)"
++fi
++
++printf '%s' "$out" | node -e "
+ let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
+   try{ const j=JSON.parse(s);
+     if(j.ok){ console.log('STARTED task='+(j.result&&j.result.taskId)+' dispatch='+(j.result&&j.result.dispatchId)); }
+diff --git a/tools/orchestration/watch.sh b/tools/orchestration/watch.sh
+index 32e9873..eedbc61 100644
+--- a/tools/orchestration/watch.sh
++++ b/tools/orchestration/watch.sh
+@@ -1,10 +1,10 @@
+ #!/usr/bin/env bash
+-# Wake the coordinator when a settlement arrives.
++# Wake the coordinator when something needs acting on.
+ #
+ # Why it exists: Orca has no push channel into the coordinator's session, so a
+ # settlement sat in the queue until a human poked the coordinator — measured at
+ # 24-31 minutes on this run. This script blocks on Orca's own queue and EXITS the
+-# moment an informative settlement arrives, so the completion notice of the
++# moment something informative arrives, so the completion notice of the
+ # background process *is* the push channel. Run it as:
+ #
+ #   terminal(background=true, notify=true): bash tools/orchestration/watch.sh <run-id> [max-seconds]
+@@ -12,11 +12,27 @@
+ # Then: read its output, act on the settlement, and start a fresh watcher. The
+ # watcher holds no state; Orca's queue is the only queue.
+ #
+-# Exit codes: 0 = informative settlement (its report is on stdout)
++# TWO things count as informative, because a settlement is not the only thing that
++# gets missed:
++#   1. a settlement in the queue (worker_done / escalation / question / status)
++#   2. a STALLED worker — one that is still live but has stopped progressing. This is
++#      the case that reads as "it finished" while nothing was posted and nothing ever
++#      will be: the agent ended its turn and is waiting for input, or is waiting for a
++#      permission it will never get (a plan-mode reviewer asking to exit plan mode is
++#      the canonical example — it sat 25 minutes like that).
++#
++# The stall signal is read off the TUI, which is the only place it exists:
++#   - the context counter   `76.7K (8%)`   grows as the agent works
++#   - the turn timer        `· 2m 48s`     ticks while a turn is running
++# A working worker moves at least one of them between samples; a stopped one moves
++# neither, and its footer shows a dotted bar with no timer. Two consecutive frozen
++# samples (≈2 polls) is a stall — one sample can be a long tool call.
++#
++# Exit codes: 0 = something to act on (its report is on stdout)
+ #             3 = max-seconds elapsed with nothing but heartbeats
+ #             4 = another waiter already holds this run (Orca allows one)
+ #
+-# usage: watch.sh [run-id] [max-seconds]
++# usage: watch.sh [run-id] [max-seconds] [--skip-existing]
+ set -uo pipefail
+ 
+ RUN="${1:-run_4e539259ab29}"
+@@ -26,7 +42,9 @@ for arg in "$@"; do [ "$arg" = "--skip-existing" ] && SKIP_EXISTING=1; done
+ case "$MAX" in --*) MAX=3600 ;; esac
+ S="${LOCALAPPDATA}/orca-orchestration/design-system-viewer"
+ TMP="${LOCALAPPDATA}/Temp/watch_$$.json"
++STALLTMP="${LOCALAPPDATA}/Temp/watch_stall_$$.txt"
+ START=$(date +%s)
++: > "$STALLTMP"
+ 
+ # An unacked settlement is redelivered forever, and every watcher wakes on it
+ # immediately — so an old message makes this script useless. With --skip-existing
+@@ -62,11 +80,60 @@ try{ const j=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
+   fi
+ fi
+ 
++# The workers that are still live: those whose TASK is still `dispatched`. Listing every
++# opencode terminal instead would flag finished workers too — their terminal lingers after
++# their verdict is posted, and calling that "stalled" is a false alarm that trains you to
++# ignore the signal.
++live_workers() {
++  orca orchestration task-list --json 2>/dev/null | node -e "
++    let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
++      let j; try{ j=JSON.parse(s); }catch(e){ process.exit(0); }
++      for(const t of ((j.result||{}).tasks)||[]){
++        if(t.status==='dispatched') console.log(t.id);
++      }
++    });" | while read -r tid; do
++      [ -z "$tid" ] && continue
++      orca orchestration dispatch-show --task "$tid" --json 2>/dev/null | node -e "
++        let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
++          let j; try{ j=JSON.parse(s); }catch(e){ process.exit(0); }
++          const d=(j.result||{}).dispatch||{};
++          if(d.assignee_handle) console.log(d.assignee_handle+' '+(d.task_id||'').slice(5,13));
++        });"
++    done
++}
++
++# "<timer>|<counter>" for one terminal — either part may be empty.
++progress_of() {
++  orca terminal read --terminal "$1" 2>&1 | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' \
++    | grep -aoE '[0-9]+\.[0-9]K \([0-9]+%\)|· [0-9]+m [0-9]+s|· [0-9]+s' | tail -2 | tr '\n' '|'
++}
++
++# Print one line per stalled worker, or nothing.
++stalled_workers() {
++  local handle name sig prev n out=""
++  while read -r handle name; do
++    [ -z "$handle" ] && continue
++    sig="$(progress_of "$handle")"
++    prev="$(grep -F "$handle " "$STALLTMP" 2>/dev/null | head -1 | cut -d' ' -f2- | cut -d: -f2)"
++    if [ -n "$sig" ] && [ "$sig" = "$prev" ]; then
++      n="$(grep -F "$handle " "$STALLTMP" 2>/dev/null | head -1 | cut -d: -f1 | awk '{print $2}')"
++      n=$(( ${n:-0} + 1 ))
++      grep -vF "$handle " "$STALLTMP" > "$STALLTMP.new" 2>/dev/null; mv "$STALLTMP.new" "$STALLTMP" 2>/dev/null
++      echo "$handle $n:$sig" >> "$STALLTMP"
++      [ "$n" -ge 2 ] && out="$out  $name ($handle) — frozen at $sig for $((n * 30))s, turn ended, no settlement"$'\n'
++    else
++      grep -vF "$handle " "$STALLTMP" > "$STALLTMP.new" 2>/dev/null; mv "$STALLTMP.new" "$STALLTMP" 2>/dev/null
++      echo "$handle 0:$sig" >> "$STALLTMP"
++    fi
++  done < <(live_workers)
++  printf '%s' "$out"
++}
++
+ while :; do
+   NOW=$(date +%s)
+   if [ $((NOW - START)) -ge "$MAX" ]; then
+     echo "watch: ${MAX}s elapsed, heartbeats only, no settlement"
+-    rm -f "$TMP"; exit 3
++    rm -f "$TMP" "$STALLTMP"; exit 3
+   fi
+ 
+   orca orchestration check --run "$RUN" --wait \
+@@ -79,13 +146,13 @@ while :; do
+     *informative=true*)
+       echo "=== SETTLEMENT $(date +%T)"
+       node "$S/tools/parse_check.js" "$TMP" | head -60
+-      rm -f "$TMP"
++      rm -f "$TMP" "$STALLTMP"
+       exit 0
+       ;;
+     "")
+       # no parse: could be the one-waiter lock, or Orca refusing the wait
+       echo "watch: could not read the queue — $(printf '%s' "$SUM" | head -c 120)"
+-      rm -f "$TMP"; exit 4
++      rm -f "$TMP" "$STALLTMP"; exit 4
+       ;;
+     *)
+       # heartbeat-only batch: ack it so the queue does not grow, keep waiting
+@@ -93,4 +160,15 @@ while :; do
+       [ -n "$DID" ] && orca orchestration check --run "$RUN" --ack "$DID" --json >/dev/null 2>&1
+       ;;
+   esac
++
++  # Nothing in the queue — but is anyone still working?
++  STALLED="$(stalled_workers)"
++  if [ -n "$STALLED" ]; then
++    echo "=== STALLED WORKER(S) $(date +%T)"
++    echo "A live dispatch whose turn has ended and whose progress signal has not moved."
++    echo "It will not settle on its own: nudge it (terminal send), or reap and re-dispatch."
++    printf '%s' "$STALLED"
++    rm -f "$TMP" "$STALLTMP"
++    exit 0
++  fi
+ done
