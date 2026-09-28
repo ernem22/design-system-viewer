@@ -6,15 +6,34 @@
 # the session was interrupted mid-call — the handle lookup, the wait and the start
 # are three steps that must run together.
 #
-#   start.sh <worktree-path> <spec-file> <task-title>
+#   start.sh <worktree-path> <spec-file> <task-title> [--retry-of <dispatch>] [--min <mb>]
+#
+# --retry-of   fence-and-retry: pass the OLD dispatch id through to worker-start. Doing this by
+#              hand was a mechanical intervention (the contract says a dispatch that never settled
+#              must be abandoned and retried with --retry-of, never released) and this script did
+#              not support it, so the coordinator had to write the worker-start call by hand.
+# --min        the capacity floor in MB for this dispatch (default 600, the stopgap A4 threshold;
+#              override with WATCH_MIN_MB or this flag).
 #
 # Prints the worker-start result line. Exit 0 only when ok=true.
 set -uo pipefail
 
-P="${1:?usage: start.sh <worktree-path> <spec-file> <task-title>}"
-SPEC="${2:?usage: start.sh <worktree-path> <spec-file> <task-title>}"
-TITLE="${3:?usage: start.sh <worktree-path> <spec-file> <task-title>}"
+P=""; SPEC=""; TITLE=""; RETRY_OF=""; MIN_MB="${WATCH_MIN_MB:-600}"
+POS=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --retry-of) RETRY_OF="${2:?--retry-of needs a dispatch id}"; shift 2;;
+    --min) MIN_MB="${2:?--min needs a number}"; shift 2;;
+    -*) echo "start.sh: unknown flag $1" >&2; exit 2;;
+    *) POS+=("$1"); shift;;
+  esac
+done
+[ "${#POS[@]}" -ge 3 ] || { echo "usage: start.sh <worktree-path> <spec-file> <task-title> [--retry-of <dispatch>] [--min <mb>]" >&2; exit 2; }
+P="${POS[0]}"; SPEC="${POS[1]}"; TITLE="${POS[2]}"
 RUN="${WATCH_RUN:-run_4e539259ab29}"
+# Both are overridable so the capacity gate can be probed with a fake reading and a short timeout.
+CAPACITY_JS="${CAPACITY_JS:-D:/code/orca-supervisor/src/capacity.js}"
+CAP_TIMEOUT="${WATCH_CAP_TIMEOUT:-900}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=/dev/null
 . "$HERE/repo-id.sh"
@@ -46,8 +65,27 @@ echo "start.sh: $P -> $H"
 
 orca terminal wait --terminal "$H" --for tui-idle --timeout-ms 90000 --json >/dev/null 2>&1
 
+# CAPACITY IS A GATE, NOT ADVICE. Measured 2026-09-28: three dispatches went out at 334, 419 and
+# 426 MB available, below the documented 400 MB floor, because the rule lived in prose and this
+# script never consulted it. wait-capacity.sh waits rather than stopping (the machine frees itself;
+# closing idle terminals does not help, measured 740 -> 681 MB), and gives up only after its
+# timeout - writing an inbox item and exiting 1. On a timeout we do NOT dispatch: proceeding anyway
+# is what the gate exists to prevent.
+echo "start.sh: available_mb before dispatch: $(node "$CAPACITY_JS" 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(String(JSON.parse(s).available_mb))}catch(e){process.stdout.write("?")}})')"
+CAP_RC=0
+bash "$HERE/wait-capacity.sh" --min "$MIN_MB" --timeout "$CAP_TIMEOUT" --note "dispatch: $TITLE" >&2 || CAP_RC=$?
+if [ "$CAP_RC" -ne 0 ]; then
+  echo "start.sh: NOT dispatching '$TITLE' - capacity did not reach ${MIN_MB} MB in time (wait-capacity exit $CAP_RC)." >&2
+  echo "  An inbox item was written; do other work and retry. This is not a stop signal." >&2
+  exit 1
+fi
+
+RETRY_ARG=()
+[ -n "$RETRY_OF" ] && RETRY_ARG=(--retry-of "$RETRY_OF")
+
 orca orchestration worker-start --spec "$(cat "$SPEC")" --task-title "$TITLE" \
-  --terminal "$H" --worktree "id:$REPO_ID::$P" --run "$RUN" --from "$FROM" --json 2>&1 \
+  --terminal "$H" --worktree "id:$REPO_ID::$P" --run "$RUN" --from "$FROM" \
+  ${RETRY_ARG[@]+"${RETRY_ARG[@]}"} --json 2>&1 \
   | node -e "
 let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
   try{ const j=JSON.parse(s);
