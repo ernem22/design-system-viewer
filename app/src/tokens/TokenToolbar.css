@@ -119,8 +119,12 @@
   border-color: var(--color-accent-border);
 }
 
+/* --color-danger is a fill token: on --color-surface-raised it fell below AA
+   (perp-ultra-v2 2.84:1). The danger text token on its designed -subtle
+   surface is the same pairing #88 used for the gallery's error text. */
 .tok-btn-danger {
-  color: var(--color-danger);
+  color: var(--color-danger-text);
+  background: var(--color-danger-subtle);
 }
 
 .tok-menu {
