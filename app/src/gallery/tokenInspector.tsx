@@ -23,7 +23,7 @@ import {
   setValueEdit,
   useInspector,
 } from "../lib/tokenOverrides.ts";
-import type { TokenKind } from "../lib/tokenOverrides.ts";
+import type { InspectorScope, TokenKind } from "../lib/tokenOverrides.ts";
 import { Icon } from "../lib/icons.tsx";
 import "./tokenInspector.css";
 
@@ -350,6 +350,34 @@ function ScopePanelBody({
   );
 }
 
+/** Escape dismisses the docked panel the same way the app's Radix overlays
+    dismiss themselves — a document `keydown` listener that preventDefaults
+    once it acts. Because Radix's DismissableLayer (AlertDialog, Dialog,
+    Popover) listens in the capture phase and calls `preventDefault`, a stacked
+    overlay consumes the key first and this handler bails on `defaultPrevented`,
+    so the panel never closes out from under an overlay that owns the keyboard.
+    Closing reuses the same `selectScope(null)` the "Close panel" button calls,
+    and restores focus to whatever had it when the panel opened, since
+    de-selecting unmounts the control focus would otherwise fall back to
+    <body> from. The mobile variant already lives inside a Radix Dialog and
+    gets both behaviours there, so it is skipped. */
+function useDockedEscapeToClose(inDialog: boolean, selected: InspectorScope | null): void {
+  useEffect(() => {
+    if (inDialog || !selected) return;
+    const returnTo = document.activeElement;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      selectScope(null);
+      if (returnTo instanceof HTMLElement && returnTo.isConnected) {
+        returnTo.focus({ preventScroll: true });
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [inDialog, selected]);
+}
+
 /** Docked right-panel content and mobile dialog body: the selected scope's
     tokens, or the empty state when nothing is selected. Both edits are
     EPHEMERAL here (value overrides + scoped swaps) — nothing reaches the
@@ -362,6 +390,7 @@ export function ScopePanel({
   inDialog?: boolean;
 }) {
   const { selected, swaps, valueEdits } = useInspector();
+  useDockedEscapeToClose(inDialog, selected);
   const valueEditCount = Object.keys(valueEdits).length;
   if (!selected) {
     const totalSwaps = Object.values(swaps).reduce((n, demo) => n + Object.keys(demo).length, 0);
