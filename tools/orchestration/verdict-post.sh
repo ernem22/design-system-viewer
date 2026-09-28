@@ -94,23 +94,36 @@ if [ "$STATUS" = fail ] && [ -z "$REASON" ] && [ -z "$FIXREQ" ]; then
   fail "a fail verdict must carry --reason and/or --fix-required"
 fi
 
-# --- render: exactly three backticks, one line per field -------------------------------
-BODY="$(printf '%s\n' '```dsv-verdict')"
-BODY="$BODY$(printf 'status: %s\n' "$STATUS")"
-BODY="$BODY$(printf 'role: %s\n' "$ROLE")"
-BODY="$BODY$(printf 'commit: %s\n' "$COMMIT")"
-if [ "$ROLE" = reviewer ]; then
-  BODY="$BODY$(printf 'scope_ok: %s\n' "$SCOPE_OK")"
-  [ -n "$REASON" ] && BODY="$BODY$(printf 'reason: %s\n' "$REASON")"
-  [ -n "$FIXREQ" ] && BODY="$BODY$(printf 'fix_required: %s\n' "$FIXREQ")"
-else
-  [ -n "$OBSERVED" ] && BODY="$BODY$(printf 'observed: %s\n' "$OBSERVED")"
-  [ -n "$BEFORE" ] && BODY="$BODY$(printf 'before: %s\n' "$BEFORE")"
-  [ -n "$BUILD" ] && BODY="$BODY$(printf 'build: %s\n' "$BUILD")"
-fi
-[ -n "$SOURCE" ] && BODY="$BODY$(printf 'source: %s\n' "$SOURCE")"
-BODY="$BODY$(printf '%s' '```')"
-[ -n "$NOTE" ] && BODY="$BODY$(printf '\n\n%s\n' "$NOTE")"
+# --- render into a FILE: exactly three backticks, one field per line -------------------
+# Not into a variable: `$(printf 'x\n')` strips the trailing newline, so building the
+# body by concatenating command substitutions silently glues every line together. That
+# is what the first version of this script did, and the probe caught it: the block
+# posted as "```dsv-verdictstatus: passrole: testercommit: ...", which no parser can
+# read -- the same class of defect this script exists to prevent.
+BODYF="$(mktemp "${TMPDIR:-/tmp}/dsv-verdict.XXXXXX")" || fail "could not create a temp file"
+{
+  printf '%s\n' '```dsv-verdict'
+  printf 'status: %s\n' "$STATUS"
+  printf 'role: %s\n' "$ROLE"
+  printf 'commit: %s\n' "$COMMIT"
+  if [ "$ROLE" = reviewer ]; then
+    printf 'scope_ok: %s\n' "$SCOPE_OK"
+    [ -n "$REASON" ] && printf 'reason: %s\n' "$REASON"
+    [ -n "$FIXREQ" ] && printf 'fix_required: %s\n' "$FIXREQ"
+  else
+    [ -n "$OBSERVED" ] && printf 'observed: %s\n' "$OBSERVED"
+    [ -n "$BEFORE" ] && printf 'before: %s\n' "$BEFORE"
+    [ -n "$BUILD" ] && printf 'build: %s\n' "$BUILD"
+  fi
+  [ -n "$SOURCE" ] && printf 'source: %s\n' "$SOURCE"
+  printf '%s\n' '```'
+  [ -n "$NOTE" ] && printf '\n%s\n' "$NOTE"
+} > "$BODYF"
+
+# The fence is the gate: prove it is byte-exact before anything is posted.
+grep -qxF '```dsv-verdict' "$BODYF" || fail "internal error: the fence line is not exactly three backticks + dsv-verdict"
+LINES="$(wc -l < "$BODYF")"
+[ "$LINES" -ge 5 ] || fail "internal error: the rendered block is $LINES lines"
 
 # --- one comment per role per head: edit the existing one, else create -----------------
 EXISTING="$(gh api "repos/{owner}/{repo}/issues/$PR/comments" --paginate 2>/dev/null | node -e '
@@ -120,7 +133,7 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   try{ const a=JSON.parse(s);
     for(const c of a){ const b=c.body||"";
       if(b.indexOf("```dsv-verdict")<0) continue;
-      const m=/role:\s*([a-z]+)/.exec(b), k=/commit:\s*([0-9a-fA-F]+)/.exec(b);
+      const m=/^role:\s*([a-z]+)$/m.exec(b), k=/^commit:\s*([0-9a-fA-F]+)$/m.exec(b);
       if(m && m[1]===role && k && head.startsWith(k[1])) out=String(c.id);
     }
   }catch(e){}
@@ -128,14 +141,15 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
 });' "$HEAD" "$ROLE")"
 
 if [ -n "$EXISTING" ]; then
-  gh api --method PATCH "repos/{owner}/{repo}/issues/comments/$EXISTING" -f body="$BODY" >/dev/null 2>&1 \
+  gh api --method PATCH "repos/{owner}/{repo}/issues/comments/$EXISTING" -F body=@"$BODYF" >/dev/null 2>&1 \
     || fail "could not edit comment $EXISTING"
   ACTION="edited comment $EXISTING"
 else
-  URL="$(gh pr comment "$PR" --body "$BODY" 2>&1 | grep -oE 'https://[^ ]+' | head -1)"
+  URL="$(gh pr comment "$PR" --body-file "$BODYF" 2>&1 | grep -oE 'https://[^ ]+' | head -1)"
   [ -n "$URL" ] || fail "could not post the verdict comment on PR #$PR"
   ACTION="created $URL"
 fi
+rm -f "$BODYF"
 
 # --- read it back: a write that is not verified is not a write -------------------------
 VERIFY="$(gh api "repos/{owner}/{repo}/issues/$PR/comments" --paginate 2>/dev/null | node -e '
@@ -145,25 +159,18 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   try{ const a=JSON.parse(s);
     for(const c of a){ const b=c.body||"";
       if(b.indexOf("```dsv-verdict")<0) continue;
-      const m=/role:\s*([a-z]+)/.exec(b), k=/commit:\s*([0-9a-fA-F]+)/.exec(b);
+      const m=/^role:\s*([a-z]+)$/m.exec(b), k=/^commit:\s*([0-9a-fA-F]+)$/m.exec(b);
       if(m&&m[1]===role&&k&&head.startsWith(k[1])){ n++; hit=b; }
     }
   }catch(e){}
-  process.stdout.write(n+"|"+(hit?"present":"missing"));
+  process.stdout.write(n+"|"+(hit?"present":"missing")+"|"+(hit||""));
 });' "$HEAD" "$ROLE")"
-COUNT="${VERIFY%%|*}"; STATE="${VERIFY##*|}"
+COUNT="$(printf '%s' "$VERIFY" | cut -d'|' -f1)"
+STATE="$(printf '%s' "$VERIFY" | cut -d'|' -f2)"
 [ "$STATE" = present ] || fail "posted, but no $ROLE verdict for head $HEAD reads back"
+[ "$COUNT" = 1 ] || fail "read back $COUNT $ROLE verdicts for head $HEAD; there must be exactly one"
 echo "verdict-post: $ACTION"
 echo "verdict-post: $ROLE verdicts for head ${HEAD:0:7} now: $COUNT (must be 1)"
 echo "--- body as stored ---"
-gh api "repos/{owner}/{repo}/issues/$PR/comments" --paginate 2>/dev/null | node -e '
-let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
-  const head=process.argv[1], role=process.argv[2];
-  try{ const a=JSON.parse(s);
-    for(const c of a){ const b=c.body||"";
-      const m=/role:\s*([a-z]+)/.exec(b), k=/commit:\s*([0-9a-fA-F]+)/.exec(b);
-      if(m&&m[1]===role&&k&&head.startsWith(k[1])) process.stdout.write(b+"\n");
-    }
-  }catch(e){}
-});' "$HEAD" "$ROLE"
+printf '%s' "$VERIFY" | cut -d'|' -f3-
 exit 0
