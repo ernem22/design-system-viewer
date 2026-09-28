@@ -93,11 +93,15 @@ function mix(a: string, b: string, pct: number): string {
   return `#${out.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 }
 
-// Gemini 1 (systems/gemini1.json) has a dark hero gradient but a light accent:
-// its --color-text-on-accent is dark, so the #88 token swap put dark text on
-// dark copy. The pre-#88 literal was #fff; --color-neutral-50 is the lightest
-// token in every system (min relative luminance 0.875 across all 40 maps).
+// Gemini 1 (systems/gemini1.json) has a dark hero gradient but a bright
+// brand gradient and a light accent. Its --color-text-on-accent is dark, so
+// the token has the opposite job on each surface: it is the light-on-dark
+// repair for the hero and the dark-on-bright repair for the brand. Neither
+// surface can share one token. --color-neutral-50 is the lightest token in
+// every system (min relative luminance 0.875 across all 40 maps).
 const gemini1 = {
+  brandStart: "#ccff00",
+  brandEnd: "#00f0ff",
   heroStart: "#14161d",
   heroEnd: "#08090c",
   neutral50: "#f0f2f8",
@@ -200,7 +204,17 @@ describe("issue #88 contrast repairs", () => {
     expect(screensCss).not.toMatch(/rgb\(0 0 0/);
   });
 
-  it("keeps hero/on-dark gradient copy light with --color-neutral-50, not --color-text-on-accent", () => {
+  it("pairs every gradient surface with the token that is light or dark *there*", () => {
+    // The surfaces have opposite needs. Gemini 1's hero gradient is dark
+    // (#14161d -> #08090c) so it needs the light token; its brand gradient is
+    // bright (#ccff00 -> #00f0ff) so it needs the dark one. Applying
+    // --color-neutral-50 to both (3ead660) fixed the hero and regressed the
+    // brand to 1.05:1 / 1.26:1, down from 16.42:1 / 13.69:1.
+    expect(contrast(gemini1.neutral50, gemini1.brandStart)).toBeLessThan(4.5);
+    expect(contrast(gemini1.neutral50, gemini1.brandEnd)).toBeLessThan(4.5);
+    expect(contrast(gemini1.textOnAccent, gemini1.brandStart)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(gemini1.textOnAccent, gemini1.brandEnd)).toBeGreaterThanOrEqual(4.5);
+
     // Regression (57d7a7c): gemini1's on-accent text #0d0e12 on its dark hero
     // gradient #14161d -> #08090c is 1.07:1 / 1.03:1 — dark-on-dark. The
     // lightest token is light on that gradient.
@@ -209,8 +223,14 @@ describe("issue #88 contrast repairs", () => {
     expect(contrast(gemini1.neutral50, gemini1.heroStart)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(gemini1.neutral50, gemini1.heroEnd)).toBeGreaterThanOrEqual(4.5);
 
+    // Bright brand fill -> the token that is dark there. The brand tile must
+    // not go back to the light token.
+    const brand = ruleText(foundationCss, ".dsv-gradient-tile--brand");
+    expect(brand).toContain("var(--color-text-on-accent)");
+    expect(brand).not.toContain("var(--color-neutral-50)");
+
+    // Dark gradients / on-dark surfaces -> the token that is light there.
     for (const [css, selector] of [
-      [foundationCss, ".dsv-gradient-tile--brand"],
       [foundationCss, ".dsv-gradient-tile--fade"],
       [foundationCss, ".dsv-gradient-tile--hero"],
       [foundationCss, ".dsv-media-tile"],

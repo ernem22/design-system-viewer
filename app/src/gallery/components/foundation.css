@@ -30,7 +30,7 @@
   background: var(--color-surface);
 }
 
-.dsv-gradient-tile--brand { background: var(--gradient-brand); color: var(--color-neutral-50); border-color: transparent; }
+.dsv-gradient-tile--brand { background: var(--gradient-brand); color: var(--color-text-on-accent); border-color: transparent; }
 
 .dsv-gradient-tile--brand-subtle { background: var(--gradient-brand-subtle); }
 
