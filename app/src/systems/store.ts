@@ -218,6 +218,11 @@ export function useSystems() {
   const [loading, setLoading] = useState(stored === null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeSlug, setActiveSlugState] = useState<string>(() => readActive(systems));
+  // Retry re-runs the boot load through this same effect — bumping the attempt
+  // re-attempts `fetchBundled`, not a page reload. `loading` is deliberately
+  // not re-raised, so on failure the notice stays mounted and is not
+  // re-announced; only a success swaps the fallback out.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (stored !== null) return;
@@ -232,7 +237,9 @@ export function useSystems() {
     return () => {
       alive = false;
     };
-  }, [stored]);
+  }, [stored, attempt]);
+
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
   const setActiveSlug = useCallback((slug: string) => {
     setActiveSlugState(slug);
@@ -306,6 +313,7 @@ export function useSystems() {
     error: loadError,
     active,
     activeSlug: active?.slug ?? "",
+    retry,
     setActiveSlug,
     addSystem,
     mergeCss,
