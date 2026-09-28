@@ -101,6 +101,13 @@ fi
 # posted as "```dsv-verdictstatus: passrole: testercommit: ...", which no parser can
 # read -- the same class of defect this script exists to prevent.
 BODYF="$(mktemp "$(cd "${TMPDIR:-/tmp}" >/dev/null 2>&1 && { pwd -W 2>/dev/null || pwd; })/dsv-verdict.XXXXXX")" || fail "could not create a temp file"
+# Sanitise every value that goes inside the block. Two bot findings, both real: a value
+# containing three backticks would CLOSE the fence early, and a value with a newline would
+# break the one-field-per-line shape. The block is a wire format, so the text is made
+# safe rather than trusted.
+sanitize() { printf '%s' "$1" | tr '\n\r' '  ' | sed 's/```/` ` `/g'; }
+OBSERVED="$(sanitize "$OBSERVED")"; BEFORE="$(sanitize "$BEFORE")"; BUILD="$(sanitize "$BUILD")"
+REASON="$(sanitize "$REASON")"; FIXREQ="$(sanitize "$FIXREQ")"; SOURCE="$(sanitize "$SOURCE")"; NOTE="$(sanitize "$NOTE")"
 {
   printf '%s\n' '```dsv-verdict'
   printf 'status: %s\n' "$STATUS"
@@ -126,11 +133,11 @@ LINES="$(wc -l < "$BODYF")"
 [ "$LINES" -ge 5 ] || fail "internal error: the rendered block is $LINES lines"
 
 # --- one comment per role per head: edit the existing one, else create -----------------
-EXISTING="$(gh api "repos/{owner}/{repo}/issues/$PR/comments" --paginate 2>/dev/null | node -e '
+EXISTING="$(gh api "repos/{owner}/{repo}/issues/$PR/comments" --paginate --slurp 2>/dev/null | node -e '
 let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   const head=process.argv[1], role=process.argv[2];
   let out="";
-  try{ const a=JSON.parse(s);
+  try{ const pages=JSON.parse(s); const a=Array.isArray(pages)?pages.flat():pages;
     for(const c of a){ const b=c.body||"";
       if(b.indexOf("```dsv-verdict")<0) continue;
       const m=/^role:\s*([a-z]+)\s*$/m.exec(b), k=/^commit:\s*([0-9a-fA-F]+)\s*$/m.exec(b);
@@ -152,11 +159,11 @@ fi
 rm -f "$BODYF"
 
 # --- read it back: a write that is not verified is not a write -------------------------
-VERIFY="$(gh api "repos/{owner}/{repo}/issues/$PR/comments" --paginate 2>/dev/null | node -e '
+VERIFY="$(gh api "repos/{owner}/{repo}/issues/$PR/comments" --paginate --slurp 2>/dev/null | node -e '
 let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   const head=process.argv[1], role=process.argv[2];
   let hit=null, n=0;
-  try{ const a=JSON.parse(s);
+  try{ const pages=JSON.parse(s); const a=Array.isArray(pages)?pages.flat():pages;
     for(const c of a){ const b=c.body||"";
       if(b.indexOf("```dsv-verdict")<0) continue;
       const m=/^role:\s*([a-z]+)\s*$/m.exec(b), k=/^commit:\s*([0-9a-fA-F]+)\s*$/m.exec(b);

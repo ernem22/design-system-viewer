@@ -31,8 +31,11 @@ function parseVerdict(body) {
   if (!text.includes(VERDICT_FENCE)) return null; // not a verdict, not our business
 
   const m = STRICT.exec(text);
+  // Best-effort commit for a malformed attempt: the gate only treats a malformed block as
+  // fatal when it is about the CURRENT head, so it needs to know which head it names.
+  const commitish = (/commit:\s*([0-9a-fA-F]{7,40})/.exec(text) || [])[1] || '';
   if (!m) {
-    return { ok: false, reason: `a verdict block is fenced with the wrong delimiter (the block after "dsv-verdict" must open with exactly three backticks, and close)` };
+    return { ok: false, reason: `a verdict block is fenced with the wrong delimiter (the block after "dsv-verdict" must open with exactly three backticks, and close)`, commit: commitish };
   }
   const fields = {};
   for (const line of m[1].split(/\r?\n/)) {
@@ -40,10 +43,10 @@ function parseVerdict(body) {
     if (kv) fields[kv[1]] = kv[2];
   }
   if (!fields.role) {
-    return { ok: false, reason: 'a verdict block has no `role:` line' };
+    return { ok: false, reason: 'a verdict block has no `role:` line', commit: fields.commit || commitish };
   }
   if (!['reviewer', 'tester'].includes(fields.role)) {
-    return { ok: false, reason: `a verdict block has an unknown role: ${fields.role}` };
+    return { ok: false, reason: `a verdict block has an unknown role: ${fields.role}`, commit: fields.commit || commitish };
   }
   return { ok: true, fields };
 }
@@ -63,21 +66,27 @@ function evaluate(input) {
     const p = parseVerdict(c.body);
     if (!p) continue;
     if (!p.ok) {
-      unparsable.push({ at: c.at || '', reason: p.reason });
+      unparsable.push({ at: c.at || '', reason: p.reason, commit: p.commit || '' });
       continue;
     }
     attempts.push({ ...p.fields, at: c.at || '' });
   }
 
   if (unparsable.length) {
-    // A malformed attempt is louder than a missing one: someone tried to report and
-    // the gate cannot read it, so `pending` would look like "not reported yet".
-    const first = unparsable.sort((a, b) => String(a.at).localeCompare(String(b.at)))[0];
-    return {
-      state: 'failure',
-      description: `unparsable verdict comment - ${first.reason} - head ${shortHead}`,
-      detail: { unparsable },
-    };
+    // A malformed attempt is louder than a missing one - but only when it is ABOUT THIS
+    // HEAD. Failing on any comment that ever mentioned the token would let one stale typo
+    // lock a PR forever (CodeRabbit: "limit unparsable-verdict failures to current,
+    // relevant attempts"). An attempt counts as current when it names this head's short
+    // sha, or names no commit at all (so a fence typo on a fresh verdict still fails).
+    const relevant = unparsable.filter((u) => !u.commit || head.startsWith(u.commit));
+    if (relevant.length) {
+      const first = relevant.sort((a, b) => String(a.at).localeCompare(String(b.at)))[0];
+      return {
+        state: 'failure',
+        description: `unparsable verdict comment - ${first.reason} - head ${shortHead}`,
+        detail: { unparsable: relevant, ignoredUnparsable: unparsable.filter((u) => !relevant.includes(u)) },
+      };
+    }
   }
 
   const latest = {};

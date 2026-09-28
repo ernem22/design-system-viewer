@@ -53,10 +53,14 @@ jobs:
   verdict:
     runs-on: ubuntu-latest
     steps:
-      # The decision below is a checked-in module, so the same code the gate runs can
-      # be probed locally (tools/orchestration/gate-logic.probe.cjs) instead of only
-      # by pushing a commit and waiting for Actions.
+      # Checkout the BASE, never the PR's own tree: this step exists only so the gate can
+      # require tools/orchestration/gate-logic.cjs, and if that file came from the PR the
+      # PR would be deciding its own gate. Greptile and CodeRabbit both flagged exactly
+      # that ("PR code controls the gate"); the module must come from the commit the PR
+      # is merging into.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.repository.default_branch }}
       - uses: actions/github-script@v7
         with:
           script: |

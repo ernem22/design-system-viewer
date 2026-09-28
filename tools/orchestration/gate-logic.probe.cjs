@@ -22,11 +22,22 @@ const good = (role, extra = '') => ({
 
 const cases = [
   {
-    name: '1. the broken fence, verbatim bytes from PR #134 (three backslashes, no backticks)',
+    name: '1. the broken fence, verbatim bytes from PR #134 (three backslashes, no backticks) - it names the OLD head 5dbe297, so it must NOT lock this PR',
     head: HEAD,
     comments: [
       { body: 'CORRECTION - supersedes prior comment on this PR (that verdict was posted in error).\n\n'
         + '\\\\\\dsv-verdict\nstatus: pass\nrole: reviewer\ncommit: 5dbe297\nscope_ok: yes\n\\\\\\nconflicts: none',
+        at: at(2) },
+      good('tester'),
+    ],
+    expect: 'pending', // CodeRabbit: "limit unparsable-verdict failures to current, relevant attempts"
+  },
+  {
+    name: '1b. the same malformed fence, but naming the CURRENT head - that one is fatal',
+    head: HEAD,
+    comments: [
+      { body: 'CORRECTION - supersedes prior comment.\n\n'
+        + '\\\\\\dsv-verdict\nstatus: pass\nrole: reviewer\ncommit: ' + HEAD.slice(0, 7) + '\nscope_ok: yes\n',
         at: at(2) },
       good('tester'),
     ],
