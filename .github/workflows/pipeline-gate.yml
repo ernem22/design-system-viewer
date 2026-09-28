@@ -132,6 +132,22 @@ jobs:
               }
             }
 
+            // ---- FAIL CLOSED from here down -------------------------------------
+            // Everything below is wrapped, INCLUDING the scope checks: a missing module, a
+            // throw inside the decision, or an unexpected shape must end with a
+            // `pipeline/verdict` status of `failure` and a non-zero exit - never with no
+            // status at all. Measured 2026-09-28: the unguarded require meant a crash left
+            // the PR on whatever status it already had (fail-open), and the gate self-test's
+            // case (v) could not produce a failure with a reason.
+            try {
+              // Test hook: reachable only through workflow_dispatch, never from a PR event.
+              // It sits before the scope checks on purpose - otherwise a dispatch against a
+              // PR that touches no app/src would return early and never exercise the wrapper
+              // (CodeRabbit Major).
+              if (context.payload.inputs && context.payload.inputs.simulate_gate_error === 'module_missing') {
+                require(`${process.env.GITHUB_WORKSPACE}/tools/orchestration/does-not-exist.cjs`);
+              }
+
             // ---- is this PR in scope at all? ------------------------------------
             const files = await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: prNumber, per_page: 100 });
             const touchesApp = files.some((f) => f.filename.startsWith('app/src/'));
@@ -146,20 +162,8 @@ jobs:
             }
 
             // ---- parse and decide, with the same module the probe runs ----------
-            // FAIL CLOSED. Everything below is wrapped: a missing module, a throw inside the
-            // decision, or an unexpected shape must end with a `pipeline/verdict` status of
-            // `failure` and a non-zero exit - never with no status at all. Measured
-            // 2026-09-28: the unguarded require meant a crash left the PR on whatever status
-            // it already had, and the gate self-test's case (v) could not produce a failure
-            // with a reason. The wrapper is the fix.
-            try {
-              // Test hook: reachable only through workflow_dispatch, never in normal use.
-              if (context.payload.inputs && context.payload.inputs.simulate_gate_error === 'module_missing') {
-                require(`${process.env.GITHUB_WORKSPACE}/tools/orchestration/does-not-exist.cjs`);
-              }
-
-              const fs = require('fs');
-              const { evaluate } = require(`${process.env.GITHUB_WORKSPACE}/tools/orchestration/gate-logic.cjs`);
+            const fs = require('fs');
+            const { evaluate } = require(`${process.env.GITHUB_WORKSPACE}/tools/orchestration/gate-logic.cjs`);
 
               // The allowlist is read from the TRUSTED BASE checkout (the same one the module
               // comes from), never from the PR head, so a PR cannot add itself to the list.
