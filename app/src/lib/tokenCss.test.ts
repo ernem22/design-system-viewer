@@ -45,6 +45,17 @@ describe("setTokenValue", () => {
     expect(setTokenValue(css, "--color-bg", "#111")).toBe("--color-bg-alt: #fff;\n--color-bg: #111;");
   });
 
+  // A minified stylesheet puts several declarations on one line, so a value
+  // edit must find the declaration where it sits rather than anchor a whole
+  // line and then append an orphan duplicate of the one it failed to match.
+  it("edits one declaration on a minified block without duplicating it", () => {
+    const css = ":root{--a:1px;--b:2px}";
+    const next = setTokenValue(css, "--a", "3px");
+    expect(next).toBe(":root{--a:3px;--b:2px}");
+    expect(next.match(/--a\b/g)).toHaveLength(1);
+    expect(next).toContain("--b:2px");
+  });
+
   it("removes the declaration when the value is cleared", () => {
     expect(setTokenValue("--color-bg: #fff;\n--color-text: #000;", "--color-bg", "  ")).toBe(
       "--color-text: #000;",
@@ -62,6 +73,11 @@ describe("removeTokenValue", () => {
   it("is a no-op when the name is not there", () => {
     const css = "--color-text: #000;";
     expect(removeTokenValue(css, "--color-bg")).toBe(css);
+  });
+
+  it("removes one declaration from a minified block and leaves the rest", () => {
+    expect(removeTokenValue(":root{--a:1px;--b:2px}", "--a")).toBe(":root{--b:2px}");
+    expect(removeTokenValue(":root{--a:1px;--b:2px}", "--b")).toBe(":root{--a:1px;}");
   });
 });
 

@@ -37,6 +37,28 @@ function formatBytes(n: number): string {
   return `${(n / 1024).toFixed(1)} KB`;
 }
 
+/** Resolve with `task` unless `signal` aborts first — then reject with an
+    AbortError. `readCssFile`/`fetchCss` take no signal, so this is what stops
+    the dialog's continuation the moment an import is superseded or the dialog
+    closes, instead of letting a stale result sit and then land. */
+function untilAborted<T>(task: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new DOMException("Aborted", "AbortError"));
+    signal.addEventListener("abort", onAbort, { once: true });
+    task.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (err) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(err);
+      },
+    );
+  });
+}
+
 /**
  * Add System dialog (controlled — the topbar `+`, the empty-state cards and a
  * page-level file drop all open the same instance).
@@ -80,6 +102,21 @@ export function AddSystemDialog({
   const cssFileRef = useRef<HTMLInputElement>(null);
   const jsonFileRef = useRef<HTMLInputElement>(null);
   const urlRef = useRef<HTMLInputElement>(null);
+  // One in-flight import at a time. Starting a new one aborts the old and takes
+  // over the ref; only the request still referenced here may write the buffer,
+  // so a slow import cannot land on top of the one that replaced it.
+  const importReqRef = useRef<{ controller: AbortController } | null>(null);
+  const beginImport = () => {
+    importReqRef.current?.controller.abort();
+    const request = { controller: new AbortController() };
+    importReqRef.current = request;
+    return request;
+  };
+  const isCurrentImport = (request: { controller: AbortController }) =>
+    importReqRef.current === request && !request.controller.signal.aborted;
+  const endImport = (request: { controller: AbortController }) => {
+    if (importReqRef.current === request) importReqRef.current = null;
+  };
 
   // Fresh buffer per open (a dropped file pre-fills it). Re-read the "Open in"
   // preference too, so a legacy key migrated after this dialog mounted is
@@ -96,6 +133,13 @@ export function AddSystemDialog({
     setJsonDraft("");
     setStrippedPrefixes([]);
     setAfterSave(readAfterSave());
+    setBusy(false);
+    // A close (or a re-seed) supersedes anything still in flight: abort it so
+    // its handler cannot settle on a buffer that is no longer ours.
+    return () => {
+      importReqRef.current?.controller.abort();
+      importReqRef.current = null;
+    };
   }, [open, initialCss]);
 
   const prefixes = useMemo(
@@ -152,15 +196,20 @@ export function AddSystemDialog({
 
   const onCssFile = async (file: File | undefined) => {
     if (!file) return;
+    const request = beginImport();
     setError(null);
     try {
-      const text = await readCssFile(file);
+      const text = await untilAborted(readCssFile(file), request.controller.signal);
+      if (!isCurrentImport(request)) return;
       load(text, { kind: "Uploaded file", detail: file.name, bytes: file.size });
       onToast(`Loaded ${file.name}`, "ok");
     } catch (e) {
+      if (!isCurrentImport(request)) return;
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
       onToast(msg, "err");
+    } finally {
+      endImport(request);
     }
   };
 
@@ -170,19 +219,23 @@ export function AddSystemDialog({
       setError("Enter a stylesheet URL");
       return;
     }
+    const request = beginImport();
     setError(null);
     setBusy(true);
     try {
-      const text = await fetchCss(target);
+      const text = await untilAborted(fetchCss(target), request.controller.signal);
+      if (!isCurrentImport(request)) return;
       load(text, { kind: "Fetched URL", detail: target, bytes: text.length });
       setUrlOpen(false);
       onToast("CSS fetched", "ok");
     } catch (e) {
+      if (!isCurrentImport(request)) return;
       const msg = `Fetch failed: ${e instanceof Error ? e.message : String(e)}`;
       setError(msg);
       onToast(msg, "err");
     } finally {
       setBusy(false);
+      endImport(request);
     }
   };
 

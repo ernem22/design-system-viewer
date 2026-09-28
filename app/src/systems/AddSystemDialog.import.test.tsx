@@ -3,6 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import type { Root } from "react-dom/client";
 import { AddSystemDialog } from "./AddSystemDialog.tsx";
+import { fetchCss } from "../lib/cssImport.ts";
+
+vi.mock("../lib/cssImport.ts", () => ({
+  fetchCss: vi.fn(),
+  readCssFile: vi.fn(),
+}));
 
 // Issue #124, second composition. The dialog exists to add a system, so the
 // work owns the surface: the schema fill and the raw text are both live, and
@@ -148,5 +154,36 @@ describe("AddSystemDialog composition", () => {
     expect(added).toEqual([{ name: "Probe", css: "--color-bg: #fff;" }]);
     expect(closed).toBe(1);
     expect(savedTabs).toHaveLength(1);
+  });
+
+  // A slow import that resolves after a newer one must not replace the newer
+  // buffer: only the newest request may write, and the superseded one is
+  // ignored (and its controller aborted).
+  it("lets only the newest import write the buffer", async () => {
+    const pending: Array<(value: string) => void> = [];
+    vi.mocked(fetchCss).mockImplementation(
+      () => new Promise<string>((resolve) => pending.push(resolve)),
+    );
+    await renderDialog();
+    await click(button("Fetch URL"));
+    const urlField = document.querySelector<HTMLInputElement>('input[aria-label="Stylesheet URL"]')!;
+
+    await act(async () => setValue(urlField, "https://one.example/slow.css"));
+    await act(async () =>
+      urlField.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
+    );
+    expect(pending).toHaveLength(1);
+
+    await act(async () => setValue(urlField, "https://two.example/fast.css"));
+    await act(async () =>
+      urlField.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
+    );
+    expect(pending).toHaveLength(2);
+
+    // The newer import resolves first; the stale one lands last.
+    await act(async () => pending[1]("--newer: 1;"));
+    await act(async () => pending[0]("--stale: 1;"));
+
+    expect(textPane()!.value).toBe("--newer: 1;");
   });
 });

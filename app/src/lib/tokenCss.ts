@@ -11,9 +11,22 @@ import { parseTokens } from "../../../src/core/parse.js";
  * the export.
  */
 
+/**
+ * A declaration anywhere in the file, not anchored to a whole line: a minified
+ * stylesheet puts several declarations on one line (`:root{--a:1px;--b:2px}`),
+ * so scanning line-by-line misses every one but a lone declaration and then
+ * appends a duplicate of the declaration it could not match.
+ *
+ * Groups: 1 = the character before the name (start of file or a separator),
+ * 2 = whitespace between the name and `:`, 3 = whitespace after the `:` (the
+ * value's own leading whitespace, newlines included), 4 = the value, 5 =
+ * whitespace before the terminator, 6 = `;` or the `}` that closes it.
+ */
 function declarationRe(name: string): RegExp {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^([ \\t]*)${escaped}([ \\t]*):[^;\\n]*;?[ \\t]*$`, "m");
+  return new RegExp(
+    `(^|[^A-Za-z0-9_-])${escaped}([ \\t]*):(\\s*)([^;}]*?)(\\s*)(;|(?=\\}))`,
+  );
 }
 
 /** Name -> value for every declaration the parser can read. */
@@ -31,18 +44,38 @@ export function tokenValueMap(css: string): Map<string, string> {
 export function setTokenValue(css: string, name: string, value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return removeTokenValue(css, name);
-  const line = `${name}: ${trimmed};`;
   const re = declarationRe(name);
-  if (re.test(css)) return css.replace(re, (_match, indent: string) => `${indent}${line}`);
+  if (re.test(css)) {
+    // Swap only the value: the name, the colons and every run of whitespace
+    // (minified or hand-formatted) stay exactly as the file wrote them.
+    return css.replace(
+      re,
+      (_match, pre: string, postName: string, postColon: string, _old: string, preTerm: string, term: string) =>
+        `${pre}${name}${postName}:${postColon}${trimmed}${preTerm}${term}`,
+    );
+  }
+  const line = `${name}: ${trimmed};`;
   if (!css.trim()) return `${line}\n`;
   return `${css}${css.endsWith("\n") ? "" : "\n"}${line}\n`;
 }
 
-/** Removes one declaration's line (and its newline) when it is there. */
+/** Removes one declaration when it is there. A declaration alone on its line
+    takes its line break with it; on a minified block (several declarations on
+    one line) only the declaration itself is removed, so its neighbours and the
+    file's formatting stay put. */
 export function removeTokenValue(css: string, name: string): string {
-  const re = declarationRe(name);
-  if (!re.test(css)) return css;
-  return css.replace(new RegExp(`${re.source}\\n?`, "m"), "");
+  const match = declarationRe(name).exec(css);
+  if (!match) return css;
+  const start = match.index + match[1].length;
+  const end = match.index + match[0].length;
+  const lineStart = css.lastIndexOf("\n", start - 1) + 1;
+  const after = css.slice(end);
+  const tail = after.match(/^[ \t]*\n?/)?.[0] ?? "";
+  const ownLine = css.slice(lineStart, start).trim() === "";
+  if (ownLine && (tail.includes("\n") || after.trim() === "")) {
+    return css.slice(0, lineStart) + css.slice(end + tail.length);
+  }
+  return css.slice(0, start) + css.slice(end);
 }
 
 /** Renames one declaration — what an extras suggestion applies. */
