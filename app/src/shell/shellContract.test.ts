@@ -98,3 +98,36 @@ describe("topbar narrow-viewport contract (issue #90)", () => {
     }
   });
 });
+
+// Issue #134: the ≤900px block dropped the Preview-only chrome (coverage pill,
+// search, edit-reset pill, dark switch) and the ≤480px block dropped the brand
+// and the copy-link action — the only in-app copy-link. `display: none` on a
+// control a user needs is not a narrow-viewport fix, so the topbar now keeps
+// every control and scrolls inside its own frame instead. Like the rules
+// above, the invariants are read from the stylesheet text (happy-dom has no
+// layout engine); the before/after geometry was measured in the running app.
+describe("topbar keeps its functional controls at narrow widths (#134)", () => {
+  it("never hides a functional topbar control with display: none", () => {
+    const controls = [
+      ".app-pill",
+      ".app-topbar-cov",
+      ".app-dark",
+      ".app-brand",
+      ".app-topbar-search",
+      '.app-iconbtn[aria-label="Copy link to this view"]',
+    ];
+    for (const selector of controls) {
+      const hidden = declarationsFor(selector).some((body) =>
+        /display:\s*none\b/.test(body),
+      );
+      expect(hidden, `${selector} must not be display: none`).toBe(false);
+    }
+  });
+
+  it("scrolls the topbar inside its own frame rather than the shell", () => {
+    const bar = declarationsFor(".app-topbar").join("\n");
+    expect(bar).toMatch(/overflow-x:\s*auto\b/);
+    // The shell stays the one non-scrolling frame; only .app-main scrolls.
+    expect(declarationsFor(".app-shell").join("\n")).toMatch(/overflow:\s*clip\b/);
+  });
+});

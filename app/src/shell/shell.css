@@ -760,34 +760,56 @@
     box-shadow: none;
   }
 
-  /* Topbar, drawer mode: drop the secondary chrome so the functional
-     controls (rail toggle, switcher, tabs, actions) fit beside the tabs. The
-     coverage pill is redundant with the menu rows, and search / edit-reset /
-     dark are Preview-only conveniences. */
-  .app-topbar-cov,
-  .app-pill,
-  .app-topbar-search,
-  .app-dark {
-    display: none;
+  /* Topbar, drawer mode: every control stays in the layout. Dropping the
+     Preview-only chrome (coverage pill, search, edit-reset pill, dark switch)
+     removes the only search / reset / dark affordances on tablet and phone,
+     and the phone block below repeated that for the brand and copy-link
+     (#134). Instead the topbar is treated as a frame the contract allows to
+     scroll inside itself: the text cluster gives up width first (its labels
+     ellipsise) and, when even that does not fit, the topbar scrolls
+     horizontally. No control is `display: none`d, `overflow: hidden` is not
+     used, and the shell around it still never scrolls. */
+  .app-topbar {
+    display: flex;
+    overflow-x: auto;
+    /* A thin, themed bar like the rail/main scrollers: small enough to sit
+       inside the fixed 44px row without compressing the controls enough to
+       spring a second (vertical) scrollbar. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+
+  /* The text cluster gives up width first (its labels ellipsise) but never
+     collapses: `min-width: 0` from the base grid rule would let flex shrink
+     it to nothing and the tab strip would paint over it. The floor is one
+     layout step (capped at the frame itself), which keeps the rail toggle,
+     the wordmark mark and the switcher chevron on screen. The tab strip and
+     the action cluster keep their intrinsic size so every control stays
+     legible and the frame scrolls to reach it. */
+  .app-topbar-left {
+    flex: 0 1 auto;
+    min-width: min(var(--space-32), 100%);
+  }
+
+  .app-topbar-right,
+  .app-tabs {
+    flex: none;
+  }
+
+  /* Tabs stay centred in the space left between the clusters; the auto
+     margins collapse to zero once the line overflows and scrolls. */
+  .app-tabs {
+    margin-inline: auto;
   }
 }
 
-/* Phone. Even without the secondary chrome, the wordmark lockup and the
-   copy-link action cannot fit beside three tabs and two actions, so they
-   drop and the tabs tighten. The switcher still truncates rather than
-   collapsing: its full name is exposed through `title` (SystemSwitcher). */
+/* Phone: there is no room to hide behind — the brand lockup, copy-link and
+   the rest compress and the topbar frame scrolls. Only the tab padding
+   tightens, so all three tabs stay on screen. */
 @media (max-width: 480px) {
   .app-topbar {
     padding: 0 var(--space-2);
     gap: var(--space-2);
-  }
-
-  /* The brand is decorative (no link); the rail toggle is its own button and
-     stays. Copy-link is the first of the three action icons (its aria-label
-     is the stable App.tsx string) — add and the props toggle remain. */
-  .app-brand,
-  .app-iconbtn[aria-label="Copy link to this view"] {
-    display: none;
   }
 
   .app-topbar-left {
