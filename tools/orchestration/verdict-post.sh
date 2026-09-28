@@ -100,7 +100,7 @@ fi
 # is what the first version of this script did, and the probe caught it: the block
 # posted as "```dsv-verdictstatus: passrole: testercommit: ...", which no parser can
 # read -- the same class of defect this script exists to prevent.
-BODYF="$(mktemp "${TMPDIR:-/tmp}/dsv-verdict.XXXXXX")" || fail "could not create a temp file"
+BODYF="$(mktemp "$(cd "${TMPDIR:-/tmp}" >/dev/null 2>&1 && { pwd -W 2>/dev/null || pwd; })/dsv-verdict.XXXXXX")" || fail "could not create a temp file"
 {
   printf '%s\n' '```dsv-verdict'
   printf 'status: %s\n' "$STATUS"
@@ -133,7 +133,7 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   try{ const a=JSON.parse(s);
     for(const c of a){ const b=c.body||"";
       if(b.indexOf("```dsv-verdict")<0) continue;
-      const m=/^role:\s*([a-z]+)$/m.exec(b), k=/^commit:\s*([0-9a-fA-F]+)$/m.exec(b);
+      const m=/^role:\s*([a-z]+)\s*$/m.exec(b), k=/^commit:\s*([0-9a-fA-F]+)\s*$/m.exec(b);
       if(m && m[1]===role && k && head.startsWith(k[1])) out=String(c.id);
     }
   }catch(e){}
@@ -159,18 +159,22 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   try{ const a=JSON.parse(s);
     for(const c of a){ const b=c.body||"";
       if(b.indexOf("```dsv-verdict")<0) continue;
-      const m=/^role:\s*([a-z]+)$/m.exec(b), k=/^commit:\s*([0-9a-fA-F]+)$/m.exec(b);
+      const m=/^role:\s*([a-z]+)\s*$/m.exec(b), k=/^commit:\s*([0-9a-fA-F]+)\s*$/m.exec(b);
       if(m&&m[1]===role&&k&&head.startsWith(k[1])){ n++; hit=b; }
     }
   }catch(e){}
-  process.stdout.write(n+"|"+(hit?"present":"missing")+"|"+(hit||""));
+  process.stdout.write(n+"|"+(hit?"present":"missing")+"\n"+(hit||""));
 });' "$HEAD" "$ROLE")"
-COUNT="$(printf '%s' "$VERIFY" | cut -d'|' -f1)"
-STATE="$(printf '%s' "$VERIFY" | cut -d'|' -f2)"
+# The payload carries the body, which is multi-line: parse the first line only. `cut -f1`
+# over the whole string splits per line and silently returns the body too.
+FIRST="$(printf '%s\n' "$VERIFY" | head -1)"
+COUNT="${FIRST%%|*}"
+STATE="${FIRST##*|}"
+BODY="$(printf '%s\n' "$VERIFY" | tail -n +2)"
 [ "$STATE" = present ] || fail "posted, but no $ROLE verdict for head $HEAD reads back"
 [ "$COUNT" = 1 ] || fail "read back $COUNT $ROLE verdicts for head $HEAD; there must be exactly one"
 echo "verdict-post: $ACTION"
 echo "verdict-post: $ROLE verdicts for head ${HEAD:0:7} now: $COUNT (must be 1)"
 echo "--- body as stored ---"
-printf '%s' "$VERIFY" | cut -d'|' -f3-
+printf '%s\n' "$BODY"
 exit 0
