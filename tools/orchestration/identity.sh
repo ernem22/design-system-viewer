@@ -11,6 +11,11 @@
 # coordinator's.
 set -euo pipefail
 
+# An inherited GIT_DIR/GIT_WORK_TREE/GIT_COMMON_DIR would send both the guard below and the
+# --worktree writes to a DIFFERENT repository than the one we are standing in, which is the
+# opposite of what this script promises. Clear them first.
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR
+
 role="${1:?usage: identity.sh <coder|reviewer|tester|fixer>}"
 case "$role" in
   coder|reviewer|tester|fixer) ;;
