@@ -35,7 +35,22 @@ done
 [ -n "$DISPATCH" ] || { echo "usage: settle.sh <dispatch_id> [--dry-run] [--kill-ghosts]" >&2; exit 2; }
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-RUN="${WATCH_RUN:-run_4e539259ab29}"
+# Native tools (node) cannot read an MSYS path on this host: MSYS path conversion is disabled,
+# so /c/Users/... becomes C:\c\Users\... and node says "Cannot find module". Measured
+# 2026-09-28 - the ghost check silently saw 0 terminals because of exactly this.
+HERE_NATIVE="$(cygpath -m "$HERE" 2>/dev/null || printf '%s' "$HERE")"
+# Derive the run from Orca instead of carrying a session constant. The old fallback
+# (run_4e539259ab29) was a leftover from the session that created it; every copy of it would
+# release and fence dispatches in a run that may not be the current one.
+if [ -n "${WATCH_RUN:-}" ]; then
+  RUN="$WATCH_RUN"
+else
+  RUN="$(orca orchestration run-current --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write((((JSON.parse(s).result||{}).run)||{}).id||"")}catch(e){}})')"
+  if [ -z "$RUN" ]; then
+    echo "settle: could not read the current run (orca orchestration run-current); pass WATCH_RUN=<id>" >&2
+    exit 2
+  fi
+fi
 FROM="${WATCH_FROM:-${ORCA_TERMINAL_HANDLE:-}}"
 INBOX="${INBOX_DIR:-${LOCALAPPDATA:-$HOME}/orca-orchestration/design-system-viewer/inbox}/settlements"
 say() { printf 'settle: %s\n' "$*"; }
@@ -280,16 +295,25 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
 fi
 
 # ---- 7. ghost terminals: a terminal whose dispatch is gone ---------------------------
-GHOSTS="$(orca terminal list --json 2>/dev/null | node -e '
-let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
-  try{ const t=(JSON.parse(s).result||{}).terminals||[];
-    const out=t.filter(x=>!x.orphaned).map(x=>x.handle+" "+(x.worktreePath||"")+" "+(x.agentIdentity||"-"));
-    process.stdout.write(out.join("\n"));
-  }catch(e){}
-});')"
-say "terminals seen: $(printf '%s' "$GHOSTS" | grep -c . || true) (ghost detection needs the dispatch map; run --kill-ghosts to act)"
+AGENTS="$(orca terminal list --json 2>/dev/null | node "$HERE_NATIVE/lib/agent-terminals.cjs")"
+N_AGENTS="$(printf '%s' "$AGENTS" | grep -c . || true)"
+say "agent terminals seen: $N_AGENTS"
+# A ghost is an AGENT terminal whose handle no dispatch in this run names any more - the shape that
+# kept 341 MB and kept sending heartbeats Orca rejected. The coordinator's own terminal and plain
+# shells are never candidates: only terminals with an agent identity are considered, and each
+# decision prints its evidence before anything is closed.
 if [ -n "$KILL_GHOSTS" ]; then
-  say "ghost handling is driven by the coordinator's dispatch list, not by this script alone"
+  LIVE_HANDLES="$(orca orchestration worker-list --run "$RUN" --json 2>/dev/null | node "$HERE_NATIVE/lib/dispatch-handles.cjs")"
+  say "dispatch-named handles: $(printf '%s' "$LIVE_HANDLES" | grep -c . || true)"
+  printf '%s\n' "$AGENTS" | while IFS='|' read -r h w a; do
+    [ -n "$h" ] || continue
+    if printf '%s\n' "$LIVE_HANDLES" | grep -qx "$h"; then
+      say "  keep  $h ($a) - a dispatch in $RUN still names it"
+    else
+      say "  ghost $h ($a) at $w - no dispatch in $RUN names it; closing"
+      run_or_show orca terminal close --terminal "$h" --json
+    fi
+  done
 fi
 
 say "DONE $DISPATCH"
