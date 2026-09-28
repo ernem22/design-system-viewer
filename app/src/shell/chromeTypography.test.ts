@@ -108,4 +108,27 @@ describe("viewer chrome typography (issue #112)", () => {
     expect(heading).toMatch(/font-size:\s*var\(--font-size-/);
     expect(heading).toMatch(/font-family:\s*var\(--font-sans\)/);
   });
+
+  it("keeps the system switcher's token size from a `font: inherit` reset", () => {
+    // Issue #90: `.app-sysbtn, .app-iconbtn { font: inherit }` sat after the
+    // trigger rule, so the shorthand reset font-size to the 16px base and won
+    // over `.app-sysbtn`'s token size. The reset now lives only on
+    // `.app-iconbtn`.
+    const sysbtn = declarationsFor(shellCss, ".app-sysbtn").join("\n");
+    expect(sysbtn).toMatch(/font-size:\s*var\(--font-size-/);
+    expect(sysbtn).not.toMatch(/font:\s*inherit\b/);
+    expect(declarationsFor(shellCss, ".app-iconbtn").join("\n")).toMatch(
+      /font:\s*inherit\b/,
+    );
+  });
+
+  it("gives the topbar search input a visible token focus ring", () => {
+    // Issue #90: `:focus-visible { outline: 0 }` left no focus indicator the
+    // audit could measure (outline-width 0px on a focused input).
+    const focus = declarationsFor(shellCss, ".app-topbar-search input:focus-visible").join(
+      "\n",
+    );
+    expect(focus).toMatch(/outline:\s*var\(--focus-ring-width\)/);
+    expect(focus).not.toMatch(/outline:\s*0\b/);
+  });
 });

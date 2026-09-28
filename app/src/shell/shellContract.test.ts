@@ -17,11 +17,16 @@ const shellCss = readFileSync(
 // pairs — the selector is the text between the previous `}` and the `{`.
 // A selector is matched once per rule, so a media-query re-declaration of
 // `.app-shell` is collected alongside its base rule.
+// A grouped selector (`.app-topbar-left, .app-topbar-right { ... }`) defines
+// both members, so split it and match by membership — otherwise the shared
+// rule counts for neither. A re-declaration inside a media query is collected
+// alongside the base rule.
 function declarationsFor(selector: string): string[] {
   const bodies: string[] = [];
   const re = /([^{}]+)\{([^{}]*)\}/g;
   for (let m = re.exec(shellCss); m !== null; m = re.exec(shellCss)) {
-    if (m[1].trim() === selector) bodies.push(m[2]);
+    const selectors = m[1].split(",").map((s) => s.trim());
+    if (selectors.includes(selector)) bodies.push(m[2]);
   }
   return bodies;
 }
@@ -60,5 +65,36 @@ describe("shell layout contract", () => {
       .join(" ");
     expect(rows).toContain("var(--app-topbar-height)");
     expect(rows).not.toMatch(/\d+px/);
+  });
+});
+
+// Issue #90: at 390px the fixed shell can be narrower than the topbar's
+// content, so the topbar overflowed its own frame and the search input
+// covered the tab triggers. The fix is structural — the side tracks shrink
+// (minmax(0, 1fr)) and their clusters stretch rather than sizing to content.
+// happy-dom has no layout engine, so, like the rules above, the invariant is
+// read from the stylesheet text; the running-app overlap was measured by hand
+// in the PR body.
+describe("topbar narrow-viewport contract (issue #90)", () => {
+  it("lets the side tracks shrink below their content", () => {
+    const bar = declarationsFor(".app-topbar").join("\n");
+    const columns = bar.match(/grid-template-columns:[^;]*/)?.[0] ?? "";
+    expect(columns).toContain("minmax(0, 1fr)");
+  });
+
+  it("stretches the side clusters instead of shrink-wrapping them", () => {
+    // The clusters are grouped with `.app-topbar-left`; match by selector
+    // membership (like chromeTypography.test.ts) so the shared rule counts
+    // for both, and a re-declared `justify-self: start|end` is caught.
+    for (const selector of [".app-topbar-left", ".app-topbar-right"]) {
+      const bodies = declarationsFor(selector);
+      expect(bodies.some((b) => /justify-self:\s*stretch/.test(b)), selector).toBe(
+        true,
+      );
+      expect(
+        bodies.some((b) => /justify-self:\s*(start|end|center)/.test(b)),
+        selector,
+      ).toBe(false);
+    }
   });
 });
