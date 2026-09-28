@@ -1,6 +1,7 @@
-/* WCAG contrast section: row shell mirrors tok-row geometry (rows.css) so
-   contrast rows align with the token gallery; chip/badge treatment ports
-   the legacy viewer's .contrast-* styles onto system tokens. */
+/* WCAG contrast section: a pair list, not a token row — it keeps its own
+   label/demo geometry (the token grid in rows.css is per-token columns).
+   Chip/badge treatment ports the legacy viewer's .contrast-* styles onto
+   system tokens. */
 
 .tok-contrast-rows {
   display: flex;

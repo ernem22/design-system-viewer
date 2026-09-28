@@ -13,7 +13,7 @@ import {
   NumberRow,
   OpacityRow,
   RadiusRow,
-  RawTable,
+  RawRows,
   ShadowRow,
   TypeRow,
   type RowCallbacks,
@@ -101,5 +101,5 @@ function GroupBody({
   if (id === "opacity") return <OpacityRow tokens={tokens} {...cb} />;
   if (id === "z-index") return <NumberRow tokens={tokens} {...cb} />;
   if (id === "breakpoint") return <BreakpointRow tokens={tokens} {...cb} />;
-  return <RawTable tokens={tokens} {...cb} />;
+  return <RawRows tokens={tokens} {...cb} />;
 }
