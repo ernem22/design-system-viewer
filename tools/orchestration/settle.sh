@@ -85,7 +85,28 @@ case "$STATE" in abandoned|revoked) SETTLED="";; esac
 
 if [ -z "$SETTLED" ]; then
   echo "settle: REFUSED - $DISPATCH has not settled (task=$TASK_STATUS, state=$STATE)." >&2
-  echo "  A dispatch that never settled must be fenced, not released. Run:" >&2
+  # Before telling the operator to fence it, ask whether it is actually still working. Orca's
+  # projection is not evidence (measured: it read "unverifiable" while two Fixers sat frozen for
+  # 1.5-2 hours); two readings of the terminal's own counter are.
+  SC="$(bash "$HERE/stall-check.sh" "$DISPATCH" --interval "${STALL_INTERVAL:-95}" --json 2>/dev/null)"
+  SCV="$(printf '%s' "$SC" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s).verdict)}catch(e){process.stdout.write("UNKNOWN")}})')"
+  case "$SCV" in
+    STALL)
+      echo "  stall-check: STALL - $(printf '%s' "$SC" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s).why)}catch(e){}})')" >&2
+      echo "  The worker is frozen: fence it and retry. Run:" >&2
+      ;;
+    PROGRESSING|TOOL_ACTIVE)
+      echo "  stall-check: $SCV - it is still working (counter or tool output moved), so WAIT rather than fencing." >&2
+      echo "  If you still want to fence it, the commands are:" >&2
+      ;;
+    EXITED)
+      echo "  stall-check: EXITED - the process tree is gone from the sampler; this is a finished or killed worker, not a stall." >&2
+      echo "  Fence the dispatch so the Task stops reading 'dispatched':" >&2
+      ;;
+    *)
+      echo "  stall-check: could not decide ($SCV). Treat as unknown and inspect the terminal by hand." >&2
+      ;;
+  esac
   echo "    orca orchestration worker-abandon --dispatch $DISPATCH" >&2
   echo "    orca orchestration worker-start --task $TASK --retry-of $DISPATCH \\" >&2
   echo "      --terminal <fresh agent handle> --worktree \"id:<repo>::<fresh path>\" \\" >&2
