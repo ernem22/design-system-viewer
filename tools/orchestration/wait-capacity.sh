@@ -20,13 +20,16 @@
 set -uo pipefail
 
 MIN=""; TIMEOUT=900; INTERVAL=15; NOTE=""; CAPACITY_JS="${CAPACITY_JS:-D:/code/orca-supervisor/src/capacity.js}"
+# An option with a missing value must exit 2 (the documented usage code), not 1: ${2:?}
+# exits 1 and a caller cannot tell a usage error from a real failure (CodeRabbit Major).
+need_val() { [ "$1" -ge 2 ] || { echo "wait-capacity: $2 needs a value" >&2; exit 2; }; }
 while [ $# -gt 0 ]; do
   case "$1" in
-    --min) MIN="${2:?}"; shift 2;;
-    --timeout) TIMEOUT="${2:?}"; shift 2;;
-    --interval) INTERVAL="${2:?}"; shift 2;;
-    --note) NOTE="${2:?}"; shift 2;;
-    --capacity-js) CAPACITY_JS="${2:?}"; shift 2;;
+    --min) need_val $# --min; MIN="$2"; shift 2;;
+    --timeout) need_val $# --timeout; TIMEOUT="$2"; shift 2;;
+    --interval) need_val $# --interval; INTERVAL="$2"; shift 2;;
+    --note) need_val $# --note; NOTE="$2"; shift 2;;
+    --capacity-js) need_val $# --capacity-js; CAPACITY_JS="$2"; shift 2;;
     *) echo "wait-capacity: unknown argument: $1" >&2; exit 2;;
   esac
 done
@@ -58,7 +61,10 @@ while :; do
   if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
     mkdir -p "$INBOX_DIR" || { echo "wait-capacity: cannot create inbox $INBOX_DIR" >&2; exit 2; }
     STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-    ITEM="$INBOX_DIR/${STAMP}-capacity-timeout.md"
+    # The pid makes the path unique: two waits timing out in the same second used to
+    # collide on one filename and the later write silently replaced the earlier item
+    # (CodeRabbit Major).
+    ITEM="$INBOX_DIR/${STAMP}-capacity-timeout-$$.md"
     {
       printf '# Capacity wait timed out\n\n'
       printf -- '- at: %s\n' "$STAMP"
