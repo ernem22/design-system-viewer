@@ -17,16 +17,54 @@ import { parseTokens } from "../../../src/core/parse.js";
  * so scanning line-by-line misses every one but a lone declaration and then
  * appends a duplicate of the declaration it could not match.
  *
- * Groups: 1 = the character before the name (start of file or a separator),
- * 2 = whitespace between the name and `:`, 3 = whitespace after the `:` (the
- * value's own leading whitespace, newlines included), 4 = the value, 5 =
- * whitespace before the terminator, 6 = `;` or the `}` that closes it.
+ * Groups: 1 = whitespace between the name and `:`, 2 = whitespace after the
+ * `:` (the value's own leading whitespace, newlines included), 3 = the value,
+ * 4 = whitespace before the terminator, 5 = `;` or the `}` that closes it.
+ *
+ * The preceding character is a lookbehind (not a consumed group) so a global
+ * scan can find a declaration that begins right after a previous match's `;`,
+ * and not be pushed past its boundary.
+ *
+ * Global: `findDeclaration` walks every occurrence to choose the one the
+ * parser would read.
  */
 function declarationRe(name: string): RegExp {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(
-    `(^|[^A-Za-z0-9_-])${escaped}([ \\t]*):(\\s*)([^;}]*?)(\\s*)(;|(?=\\}))`,
+    `(?<![A-Za-z0-9_-])${escaped}([ \\t]*):(\\s*)([^;}]*?)(\\s*)(;|(?=\\}))`,
+    "g",
   );
+}
+
+/** The spans of the file covered by a CSS block comment. `parseTokens` drops
+    comments before reading a declaration, so an edit that ignores them
+    rewrites a comment instead. */
+function commentRanges(css: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  const re = /\/\*[\s\S]*?\*\//g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(css)) !== null) ranges.push([m.index, m.index + m[0].length]);
+  return ranges;
+}
+
+function inside(ranges: Array<[number, number]>, index: number): boolean {
+  return ranges.some(([start, end]) => index >= start && index < end);
+}
+
+/** The declaration the parser would read for `name`: the last one outside a
+    comment, because `parseTokens` strips comments and is last-write-wins. An
+    edit that targets the first textual match can rewrite a comment or a
+    shadowed duplicate and leave the effective token unchanged. */
+function findDeclaration(css: string, name: string): RegExpExecArray | null {
+  const re = declarationRe(name);
+  const comments = commentRanges(css);
+  let found: RegExpExecArray | null = null;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(css)) !== null) {
+    if (!inside(comments, m.index)) found = m;
+    if (m.index === re.lastIndex) re.lastIndex += 1;
+  }
+  return found;
 }
 
 /** Name -> value for every declaration the parser can read. */
@@ -44,15 +82,12 @@ export function tokenValueMap(css: string): Map<string, string> {
 export function setTokenValue(css: string, name: string, value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return removeTokenValue(css, name);
-  const re = declarationRe(name);
-  if (re.test(css)) {
+  const match = findDeclaration(css, name);
+  if (match) {
     // Swap only the value: the name, the colons and every run of whitespace
     // (minified or hand-formatted) stay exactly as the file wrote them.
-    return css.replace(
-      re,
-      (_match, pre: string, postName: string, postColon: string, _old: string, preTerm: string, term: string) =>
-        `${pre}${name}${postName}:${postColon}${trimmed}${preTerm}${term}`,
-    );
+    const replaced = `${name}${match[1]}:${match[2]}${trimmed}${match[4]}${match[5]}`;
+    return css.slice(0, match.index) + replaced + css.slice(match.index + match[0].length);
   }
   const line = `${name}: ${trimmed};`;
   if (!css.trim()) return `${line}\n`;
@@ -64,9 +99,9 @@ export function setTokenValue(css: string, name: string, value: string): string 
     one line) only the declaration itself is removed, so its neighbours and the
     file's formatting stay put. */
 export function removeTokenValue(css: string, name: string): string {
-  const match = declarationRe(name).exec(css);
+  const match = findDeclaration(css, name);
   if (!match) return css;
-  const start = match.index + match[1].length;
+  const start = match.index;
   const end = match.index + match[0].length;
   const lineStart = css.lastIndexOf("\n", start - 1) + 1;
   const after = css.slice(end);

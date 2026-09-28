@@ -186,4 +186,110 @@ describe("AddSystemDialog composition", () => {
 
     expect(textPane()!.value).toBe("--newer: 1;");
   });
+
+  // Finding 3 (#124 fix): a superseded fetch's `finally` must not clear the
+  // live fetch's loading state while the newer request is still in flight.
+  it("keeps the live fetch's loading state when an earlier one is superseded", async () => {
+    const pending: Array<(value: string) => void> = [];
+    vi.mocked(fetchCss).mockImplementation(
+      () => new Promise<string>((resolve) => pending.push(resolve)),
+    );
+    await renderDialog();
+    await click(button("Fetch URL"));
+    const urlField = document.querySelector<HTMLInputElement>('input[aria-label="Stylesheet URL"]')!;
+
+    await act(async () => setValue(urlField, "https://one.example/slow.css"));
+    await act(async () =>
+      urlField.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
+    );
+    await act(async () => setValue(urlField, "https://two.example/fast.css"));
+    await act(async () =>
+      urlField.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
+    );
+
+    const fetchButton = document.querySelector<HTMLButtonElement>(
+      ".app-import-inline .tok-btn-primary",
+    )!;
+    expect(fetchButton.disabled).toBe(true);
+    expect(fetchButton.textContent).toBe("…");
+
+    await act(async () => pending[1]("--newer: 1;"));
+  });
+
+  // Finding 4 (#124 fix): the `.json` file read has no request guard, so its
+  // late result overwrites the buffer even after a newer import took over.
+  it("ignores a JSON file read that a newer import superseded", async () => {
+    const pending: Array<(value: string) => void> = [];
+    vi.mocked(fetchCss).mockImplementation(
+      () => new Promise<string>((resolve) => pending.push(resolve)),
+    );
+    await renderDialog();
+    await click(button("JSON export"));
+
+    let resolveJson!: (value: string) => void;
+    const file = {
+      name: "aurora.json",
+      text: () => new Promise<string>((resolve) => (resolveJson = resolve)),
+    } as unknown as File;
+    const jsonInput = document.querySelector<HTMLInputElement>('input[type="file"][accept*="json"]')!;
+    Object.defineProperty(jsonInput, "files", { value: [file], configurable: true });
+    await act(async () => jsonInput.dispatchEvent(new Event("change", { bubbles: true })));
+
+    await click(button("Fetch URL"));
+    const urlField = document.querySelector<HTMLInputElement>('input[aria-label="Stylesheet URL"]')!;
+    await act(async () => setValue(urlField, "https://two.example/fast.css"));
+    await act(async () =>
+      urlField.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
+    );
+    await act(async () => pending[0]("--newer: 1;"));
+
+    await act(async () => resolveJson(JSON_EXPORT));
+    expect(textPane()!.value).toBe("--newer: 1;");
+  });
+
+  // Finding 5 (#124 fix): editing the text by hand is a newer buffer than a
+  // slow URL import, so the completion must not replace it.
+  it("cancels a pending URL fetch when the text is edited by hand", async () => {
+    const pending: Array<(value: string) => void> = [];
+    vi.mocked(fetchCss).mockImplementation(
+      () => new Promise<string>((resolve) => pending.push(resolve)),
+    );
+    await renderDialog();
+    await click(button("Fetch URL"));
+    const urlField = document.querySelector<HTMLInputElement>('input[aria-label="Stylesheet URL"]')!;
+    await act(async () => setValue(urlField, "https://slow.example/tokens.css"));
+    await act(async () =>
+      urlField.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
+    );
+
+    await act(async () => setValue(textPane()!, "--manual: 1;"));
+    await act(async () => pending[0]("--fetched: 1;"));
+
+    expect(textPane()!.value).toBe("--manual: 1;");
+  });
+
+  // Finding 5 (#124 fix), the other named path: filling a schema row is a
+  // manual buffer edit too, and must cancel the in-flight fetch.
+  it("cancels a pending URL fetch when a schema row is filled by hand", async () => {
+    const pending: Array<(value: string) => void> = [];
+    vi.mocked(fetchCss).mockImplementation(
+      () => new Promise<string>((resolve) => pending.push(resolve)),
+    );
+    await renderDialog();
+    await click(button("Fetch URL"));
+    const urlField = document.querySelector<HTMLInputElement>('input[aria-label="Stylesheet URL"]')!;
+    await act(async () => setValue(urlField, "https://slow.example/tokens.css"));
+    await act(async () =>
+      urlField.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
+    );
+
+    const filter = document.querySelector<HTMLInputElement>('input[aria-label="Filter tokens by name"]')!;
+    await act(async () => setValue(filter, "--color-bg"));
+    const row = document.querySelector<HTMLInputElement>('input[aria-label="--color-bg"]')!;
+    await act(async () => setValue(row, "#fff"));
+    await act(async () => pending[0]("--fetched: 1;"));
+
+    expect(textPane()!.value).toContain("--color-bg: #fff;");
+    expect(textPane()!.value).not.toContain("--fetched: 1;");
+  });
 });

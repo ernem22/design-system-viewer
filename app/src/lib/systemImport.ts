@@ -106,7 +106,11 @@ export function detectPrefixes(css: string, minCount = 2): string[] {
 export function stripPrefix(css: string, prefix: string): string {
   const clean = prefix.replace(/^--/, "").replace(/-+$/, "");
   if (!clean) return css;
-  return css.replace(new RegExp(`--${escapeRe(clean)}-`, "g"), "--");
+  // Boundary check: `--ds-` also occurs inside a longer name (`--foo--ds-x`),
+  // and that name merely contains the prefix — rewriting it would corrupt it.
+  // The prefix only starts a name or a `var()` reference, so the match must
+  // not be preceded by a name character.
+  return css.replace(new RegExp(`(^|[^A-Za-z0-9_-])--${escapeRe(clean)}-`, "g"), "$1--");
 }
 
 /** Abbreviations the same idea gets written with. Canonicalising both sides

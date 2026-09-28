@@ -40,6 +40,25 @@ describe("setTokenValue", () => {
     expect(next.match(/--color-bg/g)).toHaveLength(1);
   });
 
+  // Finding 1 (#124 fix): parseTokens strips comments first, so a declaration
+  // that only exists inside a comment is not a token. An edit keyed on the raw
+  // text rewrites the comment and leaves the name missing in the saved system.
+  it("ignores a declaration that only exists inside a comment", () => {
+    const css = "/* --color-bg: #fff; */\n--color-text: #000;";
+    const next = setTokenValue(css, "--color-bg", "#111");
+    expect(next).toContain("/* --color-bg: #fff; */");
+    expect(tokenValueMap(next).get("--color-bg")).toBe("#111");
+  });
+
+  // Finding 2 (#124 fix): parseTokens is last-write-wins, so the effective
+  // declaration is the last one. Editing the first textual match changed a
+  // shadowed value and left the live one untouched.
+  it("edits the last declaration the parser reads, not an earlier duplicate", () => {
+    const css = "--color-bg: #111;\n--color-bg: #fff;";
+    expect(tokenValueMap(css).get("--color-bg")).toBe("#fff");
+    expect(setTokenValue(css, "--color-bg", "#222")).toBe("--color-bg: #111;\n--color-bg: #222;");
+  });
+
   it("does not touch a similarly prefixed name", () => {
     const css = "--color-bg-alt: #fff;\n--color-bg: #000;";
     expect(setTokenValue(css, "--color-bg", "#111")).toBe("--color-bg-alt: #fff;\n--color-bg: #111;");
@@ -79,6 +98,18 @@ describe("removeTokenValue", () => {
     expect(removeTokenValue(":root{--a:1px;--b:2px}", "--a")).toBe(":root{--b:2px}");
     expect(removeTokenValue(":root{--a:1px;--b:2px}", "--b")).toBe(":root{--a:1px;}");
   });
+
+  // Finding 2 (#124 fix): clearing must remove the declaration the parser
+  // actually reads (the last duplicate), or the token survives the clear.
+  it("removes the declaration the parser reads, not an earlier duplicate", () => {
+    const css = "--color-bg: #111;\n--color-text: #000;\n--color-bg: #fff;";
+    expect(removeTokenValue(css, "--color-bg")).toBe("--color-bg: #111;\n--color-text: #000;\n");
+  });
+
+  it("leaves a commented declaration alone instead of deleting it", () => {
+    const css = "/* --color-bg: #fff; */\n--color-text: #000;";
+    expect(removeTokenValue(css, "--color-bg")).toBe(css);
+  });
 });
 
 describe("renameToken", () => {
@@ -91,5 +122,16 @@ describe("renameToken", () => {
   it("is a no-op for a name that is not there", () => {
     const css = "--color-bg: #fff;";
     expect(renameToken(css, "--color-background", "--color-bg")).toBe(css);
+  });
+
+  // Finding 2 (#124 fix): the value comes from the parser's last-write read,
+  // so the rename has to remove that same declaration — not the first match,
+  // which would leave the source behind and move the wrong value.
+  it("renames the declaration the parser reads (the last duplicate)", () => {
+    const css = "--color-background: #eee;\n--color-bg: #111;\n--color-bg: #fff;";
+    expect(tokenValueMap(css).get("--color-bg")).toBe("#fff");
+    expect(tokenValueMap(renameToken(css, "--color-background", "--color-bg")).get("--color-bg")).toBe(
+      "#eee",
+    );
   });
 });

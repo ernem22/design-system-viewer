@@ -89,6 +89,20 @@ describe("stripPrefix", () => {
   it("is a no-op for an empty prefix", () => {
     expect(stripPrefix("--ds-color-bg: #fff;", "")).toBe("--ds-color-bg: #fff;");
   });
+
+  // Finding 6 (#124 fix): `--ds-` also matches inside a longer name, so
+  // `--foo--ds-x` used to lose its tail. A prefix rewrite must only touch a
+  // name that starts with the prefix, never one that merely contains it.
+  it("never rewrites a longer name that merely contains the prefix", () => {
+    expect(stripPrefix("--foo--ds-x: 1;", "ds")).toBe("--foo--ds-x: 1;");
+    expect(stripPrefix("--brand--ds-bg: #fff;", "ds")).toBe("--brand--ds-bg: #fff;");
+  });
+
+  it("still rewrites the prefix at a reference position", () => {
+    expect(stripPrefix("--color-text: var(--ds-color-bg);", "ds")).toBe(
+      "--color-text: var(--color-bg);",
+    );
+  });
 });
 
 describe("near-miss suggestions", () => {

@@ -117,6 +117,12 @@ export function AddSystemDialog({
   const endImport = (request: { controller: AbortController }) => {
     if (importReqRef.current === request) importReqRef.current = null;
   };
+  // A manual edit replaces the buffer with something newer than any import in
+  // flight, so it supersedes that import exactly as a new import would.
+  const cancelImport = () => {
+    importReqRef.current?.controller.abort();
+    importReqRef.current = null;
+  };
 
   // Fresh buffer per open (a dropped file pre-fills it). Re-read the "Open in"
   // preference too, so a legacy key migrated after this dialog mounted is
@@ -158,6 +164,7 @@ export function AddSystemDialog({
   /** A JSON export is read into its `css` + `name`; anything else is kept as
       the CSS text it claims to be. */
   const applyText = (text: string) => {
+    cancelImport();
     setError(null);
     if (detectImportFormat(text) === "system-json") {
       try {
@@ -178,6 +185,13 @@ export function AddSystemDialog({
     setStatus({ kind: "Pasted text", detail: detectImportFormat(text) === "css" ? "CSS" : "unrecognised", bytes: text.length });
   };
 
+  /** A fill-pane edit is a manual buffer replacement too: it must supersede an
+      in-flight import so the import's late result cannot land on top of it. */
+  const editCss = (next: string) => {
+    cancelImport();
+    setCss(next);
+  };
+
   const importJson = (text: string) => {
     setError(null);
     try {
@@ -191,6 +205,22 @@ export function AddSystemDialog({
       setJsonDraft("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const onJsonFile = async (file: File | undefined) => {
+    if (!file) return;
+    const request = beginImport();
+    setError(null);
+    try {
+      const text = await untilAborted(file.text(), request.controller.signal);
+      if (!isCurrentImport(request)) return;
+      importJson(text);
+    } catch (e) {
+      if (!isCurrentImport(request)) return;
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      endImport(request);
     }
   };
 
@@ -234,7 +264,10 @@ export function AddSystemDialog({
       setError(msg);
       onToast(msg, "err");
     } finally {
-      setBusy(false);
+      // Only the fetch that still owns the ref may clear the button: a
+      // superseded fetch settles here while a newer one is still in flight,
+      // and clearing `busy` would hide that newer fetch's loading state.
+      if (isCurrentImport(request)) setBusy(false);
       endImport(request);
     }
   };
@@ -397,10 +430,10 @@ export function AddSystemDialog({
                 type="file"
                 accept=".json,application/json"
                 hidden
-                onChange={async (e) => {
+                onChange={(e) => {
                   const file = e.target.files?.[0];
                   e.target.value = "";
-                  if (file) importJson(await file.text());
+                  void onJsonFile(file);
                 }}
               />
             </div>
@@ -436,7 +469,7 @@ export function AddSystemDialog({
                 <span className="app-import-sub">{FULL_TEMPLATE_COUNT} names in 54 groups</span>
               </div>
               <div className="app-import-panebody">
-                <SchemaFill css={css} onChange={setCss} />
+                <SchemaFill css={css} onChange={editCss} />
               </div>
             </section>
             <section className="app-import-pane" aria-label="CSS text">
