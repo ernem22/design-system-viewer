@@ -21,6 +21,7 @@ const galleryCss = read("./gallery.css");
 const formsCss = read("./components/forms.css");
 const tokenInspectorCss = read("./tokenInspector.css");
 const screensCss = read("./components/screens/screens.css");
+const foundationCss = read("./components/foundation.css");
 const foundationTsx = read("./components/foundation.tsx");
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -91,6 +92,17 @@ function mix(a: string, b: string, pct: number): string {
   const out = A.map((v, i) => Math.round(v * (pct / 100) + B[i] * (1 - pct / 100)));
   return `#${out.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 }
+
+// Gemini 1 (systems/gemini1.json) has a dark hero gradient but a light accent:
+// its --color-text-on-accent is dark, so the #88 token swap put dark text on
+// dark copy. The pre-#88 literal was #fff; --color-neutral-50 is the lightest
+// token in every system (min relative luminance 0.875 across all 40 maps).
+const gemini1 = {
+  heroStart: "#14161d",
+  heroEnd: "#08090c",
+  neutral50: "#f0f2f8",
+  textOnAccent: "#0d0e12",
+};
 
 describe("issue #88 contrast repairs", () => {
   it("pairs surface-inverse with text-inverse so the inverse panel clears 4.5:1", () => {
@@ -186,5 +198,31 @@ describe("issue #88 contrast repairs", () => {
     expect(screensCss).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     expect(screensCss).not.toMatch(/rgb\(255 255 255/);
     expect(screensCss).not.toMatch(/rgb\(0 0 0/);
+  });
+
+  it("keeps hero/on-dark gradient copy light with --color-neutral-50, not --color-text-on-accent", () => {
+    // Regression (57d7a7c): gemini1's on-accent text #0d0e12 on its dark hero
+    // gradient #14161d -> #08090c is 1.07:1 / 1.03:1 — dark-on-dark. The
+    // lightest token is light on that gradient.
+    expect(contrast(gemini1.textOnAccent, gemini1.heroStart)).toBeLessThan(4.5);
+    expect(contrast(gemini1.textOnAccent, gemini1.heroEnd)).toBeLessThan(4.5);
+    expect(contrast(gemini1.neutral50, gemini1.heroStart)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(gemini1.neutral50, gemini1.heroEnd)).toBeGreaterThanOrEqual(4.5);
+
+    for (const [css, selector] of [
+      [foundationCss, ".dsv-gradient-tile--brand"],
+      [foundationCss, ".dsv-gradient-tile--fade"],
+      [foundationCss, ".dsv-gradient-tile--hero"],
+      [foundationCss, ".dsv-media-tile"],
+      [foundationCss, ".dsv-overlay-tile > span"],
+      [screensCss, ".dsv-badge--on-dark"],
+      [screensCss, ".dsv-hero-panel"],
+      [screensCss, ".dsv-hero-panel .dsv-display"],
+      [screensCss, ".dsv-hero-img-cap"],
+    ] as const) {
+      const rule = ruleText(css, selector);
+      expect(rule, selector).toContain("var(--color-neutral-50)");
+      expect(rule, selector).not.toContain("var(--color-text-on-accent)");
+    }
   });
 });
