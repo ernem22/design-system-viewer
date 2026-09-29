@@ -52,6 +52,14 @@
   border-radius: var(--radius-lg); overflow: hidden;
 }
 .cmp-col-head {
+  /* CompareColumn re-scopes every --font-size-* inline, so the global
+     --heading-label alias (--font-size-sm) would resolve to this system's sm
+     and can drop under its base body copy when sm < base (gs5: 13px head over
+     14px copy). Rebind the label role here to the column's own lg step — one
+     step above base in every shipped scale — so the head stays monotonic in
+     each column, not just at :root. Scoped to the head so a nested kanban h4
+     in the column body keeps the role's normal size. */
+  --heading-label: var(--font-size-lg);
   display: flex; align-items: center; gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   font-size: var(--heading-label); font-weight: var(--font-weight-semibold);
