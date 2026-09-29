@@ -143,6 +143,16 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   try{ const t=((JSON.parse(s).result||{}).terminal||{}); process.stdout.write((t.tail||[]).join("\n")); }
   catch(e){}
 });' > "$1"; }
+
+# A dispatch that already COMPLETED is not a stall: its counter is frozen because the worker is
+# done. Measured 2026-09-28 on the coder for #118, whose counter sat at 172.9K with
+# dispatchStatus=completed while the two-reading test called it STALL.
+if [ "$DISPATCH_STATUS" = "completed" ]; then
+  printf '{"verdict":"SETTLED","why":"dispatchStatus=completed","detail":"the worker finished; a frozen counter here is expected, not a stall"}\n'
+  printf 'stall-check: SETTLED - dispatchStatus=completed, so the frozen counter is expected\n' >&2
+  exit 0
+fi
+
 capture "$A"
 echo "stall-check: reading A taken at $(date -u +%H:%M:%SZ); waiting ${INTERVAL}s for reading B" >&2
 sleep "$INTERVAL"
@@ -150,14 +160,40 @@ capture "$B"
 
 # pid presence: is the tree for this worktree still in the sampler's recent samples?
 PID_PRESENT="no"
-TREE_PID="$(grep -h "|$WT$" "$SAMPLER_DIR"/*.csv 2>/dev/null | tail -1 | cut -d, -f3)"
+# The sampler CSV is COMMA-delimited and stores the worktree's NAME, not its full path:
+#   2026-09-29T00:27:03Z,1710,24356,fixer-163b,299.5
+# The first version matched "|$WT$" (a pipe separator and an absolute path), which never matched
+# anything, so the pid always came back empty and EVERY dispatch read as EXITED - measured
+# 2026-09-28 on fixer-163b, which was alive and serving vite preview on :4177 at the time.
+WT_NAME="$(basename "$WT")"
+TREE_PID="$(grep -h ",$WT_NAME," "$SAMPLER_DIR"/*.csv 2>/dev/null | tail -1 | cut -d, -f3)"
 if [ -n "$TREE_PID" ]; then
   RECENT="$(ls -t "$SAMPLER_DIR"/*.csv 2>/dev/null | head -1)"
   if [ -n "$RECENT" ] && tail -40 "$RECENT" | grep -q ",$TREE_PID,"; then PID_PRESENT="yes"; fi
 fi
 
 out="$(decide "$A" "$B" "$PID_PRESENT")"; rc=$?
-report "$(printf '%s' "$out" | cut -d'|' -f1)" "$(printf '%s' "$out" | cut -d'|' -f2)" "$(printf '%s' "$out" | cut -d'|' -f3)"
+VERDICT="$(printf '%s' "$out" | cut -d'|' -f1)"
+# A frozen counter with a tool running is TOOL_ACTIVE, not a stall - and a long tool can leave the
+# TUI's visible tail unchanged for minutes (measured on fixer-163b, running a PowerShell sleep plus
+# an HTTP probe against its own vite preview on :4177). The sampler gives a second, independent
+# signal: the tree's MB, sampled every 15 s, moves while a build or a dev server does work.
+if [ "$VERDICT" = "STALL" ] && [ -n "${TREE_PID:-}" ]; then
+  RECENT_CSV="$(ls -t "$SAMPLER_DIR"/*.csv 2>/dev/null | head -1)"
+  if [ -n "$RECENT_CSV" ]; then
+    MB_FIRST="$(grep -h ",$TREE_PID," "$RECENT_CSV" | tail -8 | head -1 | cut -d, -f5)"
+    MB_LAST="$(grep -h ",$TREE_PID," "$RECENT_CSV" | tail -1 | cut -d, -f5)"
+    if [ -n "$MB_FIRST" ] && [ -n "$MB_LAST" ]; then
+      DELTA="$(node -e "const a=Number(process.argv[1]),b=Number(process.argv[2]);process.stdout.write(String(Math.round(b-a)))" "$MB_FIRST" "$MB_LAST" 2>/dev/null)"
+      if [ -n "$DELTA" ] && [ "${DELTA#-}" -ge 5 ]; then
+        VERDICT="TOOL_ACTIVE"
+        out="TOOL_ACTIVE|counter unchanged but the process tree moved ${DELTA} MB|a build or server is working in this tree"
+        rc=0
+      fi
+    fi
+  fi
+fi
+report "$VERDICT" "$(printf '%s' "$out" | cut -d'|' -f2)" "$(printf '%s' "$out" | cut -d'|' -f3)"
 printf 'stall-check: dispatch=%s task=%s worktree=%s pid=%s present=%s\n' "$DISPATCH" "$TASK" "$WT" "${TREE_PID:-?}" "$PID_PRESENT" >&2
 rm -f "$A" "$B"
 exit $rc
