@@ -112,7 +112,7 @@ sweep_settle() {
   pending="$(printf '%s' "$JSON" | node -e '
 let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   try{ const w=(JSON.parse(s).result||{}).workers||[];
-    for(const x of w){ if(x.dispatchStatus!=="completed" && x.dispatchStatus!=="failed") continue;
+    for(const x of w){ if(x.dispatchStatus!=="completed" && x.dispatchStatus!=="failed" && x.dispatchStatus!=="abandoned") continue;
       if(!x.agentTerminalHandle) continue;
       process.stdout.write(x.dispatchId+"|"+(x.taskId||"")+"|"+x.dispatchStatus+"\n"); }
   }catch(e){}
@@ -226,14 +226,29 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   orca orchestration worker-abandon --dispatch "$DISP" --json >/dev/null 2>&1 \
     || { say "abandon of $DISP failed; leaving it"; return; }
   mkdir -p "$STATE_DIR"; date -u +%Y-%m-%dT%H:%M:%SZ > "$STATE_DIR/$DISP.abandoned-by-us"
-  if ! bash "$HERE/spawn.sh" "$NEW" "$REF" >/dev/null 2>&1; then
+  # A recovered REVIEWER must keep its read-only boundary. spawn.sh --readonly is what writes the
+  # deny-based permission block; omitting it silently hands the replacement the writable default,
+  # which is an authority change, not a preservation of the original worker's policy (CodeRabbit
+  # High on PR #167 - correct, and fixed here rather than argued with).
+  local SPAWN_ARGS=("$NEW" "$REF") SPAWN_OUT SPAWN_RC
+  [ "$ROLE" = "reviewer" ] && SPAWN_ARGS+=("--readonly")
+  SPAWN_OUT="$(bash "$HERE/spawn.sh" "${SPAWN_ARGS[@]}" 2>&1)"; SPAWN_RC=$?
+  if [ "$SPAWN_RC" -ne 0 ]; then
     say "spawn of $NEW failed; $DISP is abandoned and needs a human"
+    printf '# Supervisor: recovery of %s failed at spawn\n\n- dispatch: %s\n- task: %s\n- role: %s\n- ref: %s\n- spawn output: %s\n- at: %s\n\nThe old dispatch was abandoned and the replacement could not be created, so this task now holds\nnothing. Re-dispatch it by hand or close it.\n' \
+      "$DISP" "$DISP" "$TASK" "$ROLE" "$REF" "$(printf '%s' "$SPAWN_OUT" | head -c 400)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      > "$INBOX_DIR/$(date -u +%Y%m%dT%H%M%SZ)-supervise-$TASK-spawn-failed.md"
     return
   fi
+  # Use the path and handle the launcher actually returned instead of reconstructing them from
+  # workstation-specific strings.
   local P H
-  P="$(cd /d/code/design-system-viewer 2>/dev/null && bash "$HERE/handle.sh" "C:/Users/zurza/orca/workspaces/design-system-viewer/$NEW" --agent-only 2>/dev/null | head -1)"
-  H="$P"
-  [ -n "$H" ] || { say "no agent terminal for $NEW yet; retry it by hand with --task $TASK --retry-of $DISP"; return; }
+  P="$(printf '%s' "$SPAWN_OUT" | sed -n 's/^PATH=//p' | head -1)"
+  H="$(printf '%s' "$SPAWN_OUT" | sed -n 's/^HANDLE=//p' | head -1)"
+  if [ -z "$P" ] || [ -z "$H" ]; then
+    say "spawn of $NEW returned no PATH/HANDLE; not dispatching (output: $(printf '%s' "$SPAWN_OUT" | head -c 160))"
+    return
+  fi
   local REPO_ID
   REPO_ID="$(cd /d/code/design-system-viewer 2>/dev/null && bash "$HERE/repo-id.sh" >/dev/null 2>&1; printf '%s' "${REPO_ID:-}")"
   [ -n "$REPO_ID" ] || REPO_ID="$(orca worktree list --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const w=(JSON.parse(s).result||{}).worktrees||[];const x=w.find(y=>String(y.path).indexOf("design-system-viewer")>=0&&String(y.path).split("/").length<8);process.stdout.write(x?(x.repoId||""):"")}catch(e){}})')"

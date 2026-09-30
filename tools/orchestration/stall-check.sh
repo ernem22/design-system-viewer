@@ -69,6 +69,13 @@ decide() {
     echo "TOOL_ACTIVE|counter ${ca:-none} unchanged|new tool or server output appeared, so a tool is running"
     return 0
   fi
+  # An unreadable worker is not a frozen one. Two empty readings - no counter and no output at all -
+  # mean the telemetry is unavailable, and with --act a STALL is authority to abandon a dispatch, so
+  # uncertainty must not satisfy the test (CodeRabbit Medium on PR #167 - correct).
+  if [ -z "$ca" ] && [ -z "$cb" ] && [ "$ha" = "$hb" ]; then
+    echo "UNKNOWN|counter unreadable in both readings|telemetry is unavailable, so this is not evidence of a freeze"
+    return 5
+  fi
   if [ "$ca" = "$cb" ] && [ "$ha" = "$hb" ]; then
     echo "STALL|counter ${ca:-none} unchanged across $INTERVAL s and the tail is identical|no tokens, no tool output, no settlement"
     return 3
