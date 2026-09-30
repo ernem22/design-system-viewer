@@ -243,14 +243,17 @@ dispatch and worktree state and nothing may keep a second copy of it. What may b
 scripted is the *stateless sequencing* of those calls, so a model turn is not
 spent on it:
 
-    tools/orchestration/spawn.sh  <role> [base-branch] [--plan]  → PATH, HANDLE
-    tools/orchestration/reap.sh   <role> [dispatch-id]           → release, close, rm
+    tools/orchestration/spawn.sh  <role> [base-branch] [--readonly]  → PATH, HANDLE
+    tools/orchestration/settle.sh <dispatch-id> [--dry-run] [--kill-ghosts] → release, close, rm
     tools/orchestration/packet.sh <pr> [run-id] [task-id ...]    → the merge packet
     tools/orchestration/watch.sh  [run-id] [max-seconds]         → exit on settlement
     tools/orchestration/attention.sh [run-id]                    → who waits on a human, and on what
 
-`spawn.sh` reads nothing and stores nothing; `reap.sh` asks Orca for the worktree
-rather than caching the path. `packet.sh` prints the packet shape below, with each
+`spawn.sh` reads nothing and stores nothing; `settle.sh` asks Orca for the worktree
+rather than caching the path, and is the only reaper - `reap.sh` was deleted once
+`settle.sh` had replaced every caller (it parsed a text table, and on failure it printed a
+silent `false` while leaving the worktree in place, twice measured).
+`packet.sh` prints the packet shape below, with each
 role's verdict *chain* (`fail -> pass`), so a superseded fail cannot hide and an
 unsuperseded one cannot pass silently. A gate whose verdict cannot be tied to the
 PR's head prints `NOT verified on this head` — that is a re-run, not a merge.
