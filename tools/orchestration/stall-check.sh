@@ -36,12 +36,17 @@ done
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RUN="${WATCH_RUN:-run_4e539259ab29}"
-SAMPLER_DIR="${LOCALAPPDATA:-$HOME}/Temp/dsv-ram"
 
 counter_of() { grep -oE '[0-9.]+K \([0-9]+%\) · \$[0-9.]+' "$1" 2>/dev/null | tail -1; }
 tool_active_of() {
   # A line that looks like a command being run, or a server announcing itself, means the model is
   # not producing tokens because a TOOL is running - which is work, not a freeze.
+  # The strongest form is OpenCode's own spinner + command line, which worker-read exposes:
+  #     ⠹ rg -n "aaa9a0|170, ?169, ?160" systems src
+  #     ⠋ gh pr diff 163 --patch -- app/src/tokens/TokenGroup.css
+  # Measured 2026-09-29 on fixer-163b: this line was present while the counter sat frozen and the
+  # old tail-hash heuristic called it a stall.
+  grep -qE '(^|[[:space:]])[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][[:space:]]+[a-z]' "$1" 2>/dev/null && echo yes && return
   grep -qE '(ready in|Local:|Network:|npm |npx |vite |tsc |vitest |curl |→ Read|→ Write|→ Bash|┃ *\$)' "$1" 2>/dev/null && echo yes || echo no
 }
 tail_hash_of() { grep -vE '^\s*$' "$1" 2>/dev/null | tail -25 | md5sum | cut -d' ' -f1; }
@@ -53,7 +58,7 @@ decide() {
   ha="$(tail_hash_of "$a")"; hb="$(tail_hash_of "$b")"
   ta="$(tool_active_of "$a")"; tb="$(tool_active_of "$b")"
   if [ "$present" = "no" ]; then
-    echo "EXITED|counter '${ca:-none}' -> '${cb:-none}'|the process tree is not in the sampler's recent samples"
+    echo "EXITED|counter '${ca:-none}' -> '${cb:-none}'|Orca reports this dispatch as ${LIVENESS:-unknown} / ${WSTATE:-unknown}, so the worker is gone rather than frozen"
     return 4
   fi
   if [ -n "$ca" ] && [ -n "$cb" ] && [ "$ca" != "$cb" ]; then
@@ -63,6 +68,13 @@ decide() {
   if [ "$tb" = "yes" ] && [ "$ha" != "$hb" ]; then
     echo "TOOL_ACTIVE|counter ${ca:-none} unchanged|new tool or server output appeared, so a tool is running"
     return 0
+  fi
+  # An unreadable worker is not a frozen one. Two empty readings - no counter and no output at all -
+  # mean the telemetry is unavailable, and with --act a STALL is authority to abandon a dispatch, so
+  # uncertainty must not satisfy the test (CodeRabbit Medium on PR #167 - correct).
+  if [ -z "$ca" ] && [ -z "$cb" ] && [ "$ha" = "$hb" ]; then
+    echo "UNKNOWN|counter unreadable in both readings|telemetry is unavailable, so this is not evidence of a freeze"
+    return 5
   fi
   if [ "$ca" = "$cb" ] && [ "$ha" = "$hb" ]; then
     echo "STALL|counter ${ca:-none} unchanged across $INTERVAL s and the tail is identical|no tokens, no tool output, no settlement"
@@ -116,6 +128,8 @@ TASK="$(printf '%s' "$INFO" | cut -d'|' -f1)"
 H="$(printf '%s' "$INFO" | cut -d'|' -f2)"
 DISPATCH_STATUS="$(printf '%s' "$INFO" | cut -d'|' -f3)"
 PROJ="$(printf '%s' "$INFO" | cut -d'|' -f4)/$(printf '%s' "$INFO" | cut -d'|' -f5)"
+# Orca's own liveness verdict for this dispatch: live / unverifiable / ...
+LIVENESS="$(printf '%s' "$INFO" | cut -d'|' -f4)"
 WT="$(orca terminal list --json 2>/dev/null | node -e '
 let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   const want=process.argv[1];
@@ -138,9 +152,12 @@ if [ -z "$H" ] || [ ! -d "${WT:-/nonexistent}" ]; then
 fi
 
 A="$(mktemp "${TMPDIR:-/tmp}/stallA.XXXXXX")"; B="$(mktemp "${TMPDIR:-/tmp}/stallB.XXXXXX")"
-capture() { orca terminal read --terminal "$H" --limit "$LIMIT" --json 2>/dev/null | node -e '
+capture() { orca orchestration worker-read --dispatch "$DISPATCH" --source auto --limit "$LIMIT" --json 2>/dev/null | node -e '
 let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
-  try{ const t=((JSON.parse(s).result||{}).terminal||{}); process.stdout.write((t.tail||[]).join("\n")); }
+  // worker-read prefers the provider transcript and falls back to the terminal screen, so this is
+  // one call for both sources and it names the source it used. Measured 2026-09-29: for a live
+  // OpenCode worker it returns result.terminal.tail with the running tool line visible.
+  try{ const r=JSON.parse(s).result||{}; const t=(r.terminal||{}); process.stdout.write((t.tail||[]).join("\n")); }
   catch(e){}
 });' > "$1"; }
 
@@ -158,42 +175,34 @@ echo "stall-check: reading A taken at $(date -u +%H:%M:%SZ); waiting ${INTERVAL}
 sleep "$INTERVAL"
 capture "$B"
 
-# pid presence: is the tree for this worktree still in the sampler's recent samples?
+# Is the worker alive? Ask Orca, not a CSV. The sampler pid search is gone entirely: it read a
+# comma-delimited file as pipe-delimited and reported EVERY dispatch as EXITED (measured 2026-09-29
+# on fixer-163b), and it needed a second process to be alive before it could say anything at all.
 PID_PRESENT="no"
-# The sampler CSV is COMMA-delimited and stores the worktree's NAME, not its full path:
-#   2026-09-29T00:27:03Z,1710,24356,fixer-163b,299.5
-# The first version matched "|$WT$" (a pipe separator and an absolute path), which never matched
-# anything, so the pid always came back empty and EVERY dispatch read as EXITED - measured
-# 2026-09-28 on fixer-163b, which was alive and serving vite preview on :4177 at the time.
-WT_NAME="$(basename "$WT")"
-TREE_PID="$(grep -h ",$WT_NAME," "$SAMPLER_DIR"/*.csv 2>/dev/null | tail -1 | cut -d, -f3)"
-if [ -n "$TREE_PID" ]; then
-  RECENT="$(ls -t "$SAMPLER_DIR"/*.csv 2>/dev/null | head -1)"
-  if [ -n "$RECENT" ] && tail -40 "$RECENT" | grep -q ",$TREE_PID,"; then PID_PRESENT="yes"; fi
-fi
+case "${LIVENESS:-}" in
+  live) PID_PRESENT="yes" ;;
+  *)
+    # Orca cannot say it is live, so ask worker-show what happened to the dispatch. Only a terminal
+    # state counts as gone; an ambiguous liveness must never be read as EXITED.
+    WSTATE="$(orca orchestration worker-show --dispatch "$DISPATCH" --json 2>/dev/null | node -e '
+let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+  try{ const r=JSON.parse(s).result||{}; process.stdout.write(((r.worker||{}).state)||""); }catch(e){}
+});')"
+    case "$WSTATE" in
+      abandoned|failed|completed|released) PID_PRESENT="no" ;;
+      *) PID_PRESENT="yes" ;;
+    esac
+    printf 'stall-check: liveness=%s worker.state=%s -> present=%s\n' "${LIVENESS:-unknown}" "${WSTATE:-unknown}" "$PID_PRESENT" >&2
+    ;;
+esac
 
 out="$(decide "$A" "$B" "$PID_PRESENT")"; rc=$?
 VERDICT="$(printf '%s' "$out" | cut -d'|' -f1)"
-# A frozen counter with a tool running is TOOL_ACTIVE, not a stall - and a long tool can leave the
-# TUI's visible tail unchanged for minutes (measured on fixer-163b, running a PowerShell sleep plus
-# an HTTP probe against its own vite preview on :4177). The sampler gives a second, independent
-# signal: the tree's MB, sampled every 15 s, moves while a build or a dev server does work.
-if [ "$VERDICT" = "STALL" ] && [ -n "${TREE_PID:-}" ]; then
-  RECENT_CSV="$(ls -t "$SAMPLER_DIR"/*.csv 2>/dev/null | head -1)"
-  if [ -n "$RECENT_CSV" ]; then
-    MB_FIRST="$(grep -h ",$TREE_PID," "$RECENT_CSV" | tail -8 | head -1 | cut -d, -f5)"
-    MB_LAST="$(grep -h ",$TREE_PID," "$RECENT_CSV" | tail -1 | cut -d, -f5)"
-    if [ -n "$MB_FIRST" ] && [ -n "$MB_LAST" ]; then
-      DELTA="$(node -e "const a=Number(process.argv[1]),b=Number(process.argv[2]);process.stdout.write(String(Math.round(b-a)))" "$MB_FIRST" "$MB_LAST" 2>/dev/null)"
-      if [ -n "$DELTA" ] && [ "${DELTA#-}" -ge 5 ]; then
-        VERDICT="TOOL_ACTIVE"
-        out="TOOL_ACTIVE|counter unchanged but the process tree moved ${DELTA} MB|a build or server is working in this tree"
-        rc=0
-      fi
-    fi
-  fi
-fi
+# The MB-movement heuristic that used to live here is gone: it needed the sampler CSV (the same file
+# whose delimiter bug caused the false EXITED verdicts) and it only worked when a build happened to
+# grow the tree. worker-read exposes OpenCode's own running-tool line instead, and decide() reads it
+# through tool_active_of().
 report "$VERDICT" "$(printf '%s' "$out" | cut -d'|' -f2)" "$(printf '%s' "$out" | cut -d'|' -f3)"
-printf 'stall-check: dispatch=%s task=%s worktree=%s pid=%s present=%s\n' "$DISPATCH" "$TASK" "$WT" "${TREE_PID:-?}" "$PID_PRESENT" >&2
+printf 'stall-check: dispatch=%s task=%s worktree=%s liveness=%s present=%s\n' "$DISPATCH" "$TASK" "$WT" "${LIVENESS:-unknown}" "$PID_PRESENT" >&2
 rm -f "$A" "$B"
 exit $rc

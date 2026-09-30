@@ -2,7 +2,7 @@
 # Stateless spawn: worktree + model pin + terminal for one worker.
 # Holds no state of its own; the path is written only so reap.sh can find it.
 #
-#   spawn.sh <role-slug> [base-branch] [--plan] [--worktree-only]
+#   spawn.sh <role-slug> [base-branch] [--plan|--readonly] [--worktree-only]
 #
 # Prints: PATH=<worktree path>  ROLE=<role-slug>
 # Exit 0 only when the worktree, the opencode.json pin and the terminal exist.
@@ -15,10 +15,18 @@ set -euo pipefail
 ROLE=""
 BASE=""
 PLAN=""
+READONLY=""
 WORKTREE_ONLY=""
 for arg in "$@"; do
   case "$arg" in
     --plan) PLAN="--plan" ;;
+    # --readonly: the same deny-based read-only config as --plan, but WITHOUT OpenCode's plan mode.
+    # Plan mode is a UI mode: the agent finishes its review and then asks a human to toggle it off
+    # before it may post anything, and nothing on the coordinator side can send that toggle.
+    # Measured 2026-09-28 on reviewer-162e: "the review is complete and the verdict is ready" while
+    # it sat unable to post. The permission block below is what actually enforces read-only, so plan
+    # mode was never needed for it.
+    --readonly) READONLY="--readonly" ;;
     --worktree-only) WORKTREE_ONLY="1" ;;
     -*)
       echo "spawn.sh: unknown flag $arg (usage: spawn.sh <role> [base-branch] [--plan] [--worktree-only])" >&2
@@ -47,6 +55,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/repo-id.sh"
 CMD="opencode"
 [ "$PLAN" = "--plan" ] && CMD="opencode --agent plan"
+# --readonly deliberately leaves CMD as plain `opencode`: the agent must be able to run the allowed
+# commands (gh, git log, curl) to deliver its verdict.
 
 mkdir -p "$S/worktrees"
 TMP="${LOCALAPPDATA}/Temp/terminals_$$.json"
@@ -96,7 +106,7 @@ P=$(printf '%s' "$RAW" | node -e \
 #     lease-pair allows sit before the positional force and `+refspec` denies. A lease pair
 #     that also carries a plain `--force`, or a `+refspec`, still hits a later deny — the
 #     allow only decides when nothing below it matches.
-if [ "$PLAN" = "--plan" ]; then
+if [ "$PLAN" = "--plan" ] || [ "$READONLY" = "--readonly" ]; then
   # A Reviewer is read-only by contract; enforce it here instead of trusting prose.
   printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "opencode-go/deepseek-v4.1-flash",\n  "permission": {\n    "external_directory": "deny",\n    "edit": "deny",\n    "write": "deny",\n    "*": "allow",\n    "bash": { "*": "deny", "orca *": "allow", "gh *": "allow", "curl *": "allow", "git log *": "allow", "git show *": "allow", "git diff *": "allow", "ls *": "allow", "cat *": "allow", "grep *": "allow", "rg *": "allow", "head *": "allow", "tail *": "allow", "wc *": "allow" }\n  }\n}\n' > "$P/opencode.json"
 else
