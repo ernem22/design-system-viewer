@@ -201,10 +201,12 @@
   resize: none;
 }
 
-/* Bottom bar: identity, the error if any, the write. */
+/* Bottom bar: identity, the error if any, the write. Wraps so a full-width
+   collision prompt (#125) gets its own row instead of clipping the choices. */
 .app-import-foot {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--color-border-subtle);
@@ -213,6 +215,55 @@
 
 .app-import-name {
   flex: 0 1 320px;
+}
+
+/* Write modes (#125): new system / merge into / clone from. */
+.app-import-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+}
+
+.app-import-mode .tok-btn[aria-pressed="true"] {
+  color: var(--color-text);
+  background: var(--color-accent-subtle);
+  border-color: var(--color-accent-border);
+}
+
+.app-import-target {
+  flex: 0 1 180px;
+}
+
+/* The collision prompt takes a full row so rename/merge/replace/cancel never
+   clip, and reads as a statement ("X already exists") not an error. */
+.app-import-collision {
+  display: flex;
+  align-items: center;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.app-import-collision b {
+  color: var(--color-text);
+}
+
+.app-import-collision code {
+  font-family: var(--font-mono);
+  color: var(--color-text);
+}
+
+/* Merge-mode review: added / overridden / unchanged (#125). */
+.app-import-review {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 0 auto;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
 }
 
 .app-import-error {

@@ -34,8 +34,8 @@ function Harness() {
   return null;
 }
 
-async function mount(list: DesignSystem[]): Promise<void> {
-  localStorage.setItem("dsv.app.systems", JSON.stringify(list));
+async function mount(list?: DesignSystem[]): Promise<void> {
+  if (list) localStorage.setItem("dsv.app.systems", JSON.stringify(list));
   const { createRoot } = await import("react-dom/client");
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -43,6 +43,15 @@ async function mount(list: DesignSystem[]): Promise<void> {
   await act(async () => {
     root!.render(<Harness />);
   });
+}
+
+async function remount(): Promise<void> {
+  act(() => root?.unmount());
+  root = null;
+  host?.remove();
+  host = null;
+  current = null;
+  await mount();
 }
 
 beforeEach(() => {
@@ -130,6 +139,16 @@ describe("source survives a reload", () => {
     await mount([{ ...BASE, groups: [], source: SOURCE }]);
     expect(current!.systems[0].source).toEqual(SOURCE);
     expect(current!.systems[0].groups.length).toBeGreaterThan(0);
+  });
+
+  it("writes source, then reads it back after a reload", async () => {
+    await mount([BASE]);
+    await act(async () => {
+      current!.addSystem("Aurora", "--color-text: #000000;", SOURCE);
+    });
+    await remount();
+    const added = current!.systems.find((s) => s.slug === "aurora-2")!;
+    expect(added.source).toEqual(SOURCE);
   });
 });
 

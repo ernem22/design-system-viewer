@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { REFERENCE, templateCss } from "../../../src/core/schema.js";
+import { slugify } from "../../../src/core/parse.js";
 import type { AppTab } from "../shell/Shell.tsx";
 import type { PushToast } from "../lib/toasts.ts";
 import { Icon } from "../lib/icons.tsx";
@@ -11,9 +12,16 @@ import { fetchCss, readCssFile } from "../lib/cssImport.ts";
 import {
   detectImportFormat,
   detectPrefixes,
+  mergePreview,
   readSystemJson,
   stripPrefix,
 } from "../lib/systemImport.ts";
+import {
+  nextFreeSlug,
+  type DesignSystem,
+  type SourceDescriptor,
+  type SourceProvenance,
+} from "./store.ts";
 import { AFTER_SAVE_TABS, readAfterSave, writeAfterSave } from "./afterSave.ts";
 import { SchemaFill } from "./SchemaFill.tsx";
 // Dialog primitives (.tok-dialog*) + shared add-dialog language live with
@@ -30,6 +38,25 @@ interface SourceStatus {
   kind: string;
   detail: string;
   bytes: number;
+}
+
+/** How Save writes: a brand-new system, a merge into a chosen one, or a new
+    system seeded from a chosen one (the legacy copy's capability, in place). */
+type WriteMode = "new" | "merge" | "clone";
+
+const WRITE_MODES: [WriteMode, string][] = [
+  ["new", "New system"],
+  ["merge", "Merge into"],
+  ["clone", "Clone from"],
+];
+
+/** A pending slug collision: the name the user typed, the system that already
+    holds the slug, and the text/name to write once a choice is made. */
+interface Collision {
+  slug: string;
+  existingName: string;
+  name: string;
+  css: string;
 }
 
 function formatBytes(n: number): string {
@@ -77,6 +104,9 @@ export function AddSystemDialog({
   initialCss,
   onOpenChange,
   onAdd,
+  onMerge,
+  onReplace,
+  systems,
   onToast,
   onSaved,
 }: {
@@ -84,7 +114,13 @@ export function AddSystemDialog({
   /** Pre-filled CSS (a dropped file); read each time the dialog opens. */
   initialCss?: string;
   onOpenChange: (open: boolean) => void;
-  onAdd: (name: string, css: string) => void;
+  onAdd: (name: string, css: string, source?: SourceProvenance) => void;
+  /** Merge the imported block into an existing system's slug. */
+  onMerge?: (slug: string, css: string, source?: SourceProvenance) => void;
+  /** Overwrite an existing system in place (the collision "replace" choice). */
+  onReplace?: (slug: string, name: string, css: string, source?: SourceProvenance) => void;
+  /** The systems a merge/clone target and a slug collision come from. */
+  systems?: DesignSystem[];
   onToast: PushToast;
   onSaved: (tab: AppTab) => void;
 }) {
@@ -99,6 +135,10 @@ export function AddSystemDialog({
   const [busy, setBusy] = useState(false);
   const [afterSave, setAfterSave] = useState<AppTab>(readAfterSave);
   const [strippedPrefixes, setStrippedPrefixes] = useState<string[]>([]);
+  const [mode, setMode] = useState<WriteMode>("new");
+  const [target, setTarget] = useState("");
+  const [collision, setCollision] = useState<Collision | null>(null);
+  const [source, setSource] = useState<SourceDescriptor | null>(null);
   const cssFileRef = useRef<HTMLInputElement>(null);
   const jsonFileRef = useRef<HTMLInputElement>(null);
   const urlRef = useRef<HTMLInputElement>(null);
@@ -140,6 +180,10 @@ export function AddSystemDialog({
     setStrippedPrefixes([]);
     setAfterSave(readAfterSave());
     setBusy(false);
+    setMode("new");
+    setTarget("");
+    setCollision(null);
+    setSource(initialCss ? { kind: "drop" } : null);
     // A close (or a re-seed) supersedes anything still in flight: abort it so
     // its handler cannot settle on a buffer that is no longer ours.
     return () => {
@@ -154,10 +198,13 @@ export function AddSystemDialog({
   );
   const tokenCount = countTokens(css);
 
-  /** One entry point for every source: the text, and where it came from. */
-  const load = (text: string, from: SourceStatus, importedName?: string) => {
+  /** One entry point for every source: the text, and where it came from.
+      `from` is the human status line; `origin` is the structured provenance
+      that gets written onto the system at Save (issue #125). */
+  const load = (text: string, from: SourceStatus, importedName?: string, origin?: SourceDescriptor) => {
     setCss(text);
     setStatus(from);
+    if (origin) setSource(origin);
     if (importedName) setName((current) => (current.trim() ? current : importedName));
   };
 
@@ -166,6 +213,7 @@ export function AddSystemDialog({
   const applyText = (text: string) => {
     cancelImport();
     setError(null);
+    setCollision(null);
     if (detectImportFormat(text) === "system-json") {
       try {
         const imported = readSystemJson(text);
@@ -173,6 +221,7 @@ export function AddSystemDialog({
           imported.css,
           { kind: "JSON export", detail: imported.name, bytes: imported.css.length },
           imported.name,
+          { kind: "json" },
         );
         return;
       } catch (e) {
@@ -182,6 +231,7 @@ export function AddSystemDialog({
       }
     }
     setCss(text);
+    setSource({ kind: "paste" });
     setStatus({ kind: "Pasted text", detail: detectImportFormat(text) === "css" ? "CSS" : "unrecognised", bytes: text.length });
   };
 
@@ -189,6 +239,7 @@ export function AddSystemDialog({
       in-flight import so the import's late result cannot land on top of it. */
   const editCss = (next: string) => {
     cancelImport();
+    setCollision(null);
     setCss(next);
   };
 
@@ -200,6 +251,7 @@ export function AddSystemDialog({
         imported.css,
         { kind: "JSON export", detail: imported.name, bytes: imported.css.length },
         imported.name,
+        { kind: "json" },
       );
       setJsonOpen(false);
       setJsonDraft("");
@@ -231,7 +283,10 @@ export function AddSystemDialog({
     try {
       const text = await untilAborted(readCssFile(file), request.controller.signal);
       if (!isCurrentImport(request)) return;
-      load(text, { kind: "Uploaded file", detail: file.name, bytes: file.size });
+      load(text, { kind: "Uploaded file", detail: file.name, bytes: file.size }, undefined, {
+        kind: "file",
+        filename: file.name,
+      });
       onToast(`Loaded ${file.name}`, "ok");
     } catch (e) {
       if (!isCurrentImport(request)) return;
@@ -255,7 +310,10 @@ export function AddSystemDialog({
     try {
       const text = await untilAborted(fetchCss(target), request.controller.signal);
       if (!isCurrentImport(request)) return;
-      load(text, { kind: "Fetched URL", detail: target, bytes: text.length });
+      load(text, { kind: "Fetched URL", detail: target, bytes: text.length }, undefined, {
+        kind: "url",
+        url: target,
+      });
       setUrlOpen(false);
       onToast("CSS fetched", "ok");
     } catch (e) {
@@ -272,22 +330,103 @@ export function AddSystemDialog({
     }
   };
 
+  const targetSystem = systems?.find((s) => s.slug === target) ?? null;
+  const renameSlug = collision
+    ? nextFreeSlug(collision.slug, (systems ?? []).map((s) => s.slug))
+    : "";
+  const review = mode === "merge" && targetSystem ? mergePreview(targetSystem.css, css) : null;
+
+  /** Stamp the captured descriptor with the write time; a clone with no import
+      source is recorded as a clone of the chosen system. */
+  const stampSource = (base: SourceDescriptor | "clone" | null): SourceProvenance | undefined => {
+    if (base === null) return undefined;
+    if (base === "clone") return { kind: "clone", importedAt: new Date().toISOString() };
+    return { ...base, importedAt: new Date().toISOString() };
+  };
+
+  const finish = () => {
+    onOpenChange(false);
+    onSaved(afterSave);
+  };
+
+  const fail = (e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    setError(msg);
+    onToast(msg, "err");
+  };
+
   const save = () => {
-    if (!tokenCount) {
+    const isClone = mode === "clone";
+    const seedCss = isClone ? targetSystem?.css : undefined;
+    if (!tokenCount && !seedCss) {
       setError("Nothing to save — the system has no `--token: value;` line yet.");
       return;
     }
-    try {
-      onAdd(name.trim() || "Untitled", css);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(msg);
-      onToast(msg, "err");
+    setError(null);
+
+    if (mode === "merge") {
+      if (!onMerge || !targetSystem) {
+        setError("Choose a system to merge into.");
+        return;
+      }
+      try {
+        onMerge(targetSystem.slug, css, stampSource(source));
+      } catch (e) {
+        fail(e);
+        return;
+      }
+      onToast(`Merged into ${targetSystem.name}`, "ok");
+      finish();
       return;
     }
-    onToast("System added", "ok");
-    onOpenChange(false);
-    onSaved(afterSave);
+
+    const finalName = name.trim() || "Untitled";
+    const finalCss = seedCss ? `${seedCss}\n\n${css}` : css;
+    // A collision is a choice, never an exception: stash the write and let the
+    // user pick rename / merge / replace / cancel in the footer.
+    const clash = systems?.find((s) => s.slug === slugify(finalName));
+    if (clash) {
+      setCollision({ slug: clash.slug, existingName: clash.name, name: finalName, css: finalCss });
+      return;
+    }
+    try {
+      onAdd(finalName, finalCss, stampSource(isClone ? source ?? "clone" : source));
+    } catch (e) {
+      fail(e);
+      return;
+    }
+    onToast(isClone ? "System cloned" : "System added", "ok");
+    finish();
+  };
+
+  /** Resolve a stashed slug collision. Rename goes back through onAdd (the
+      store suffixes `-2`); merge/replace target the colliding slug. */
+  const chooseCollision = (choice: "rename" | "merge" | "replace" | "cancel") => {
+    if (!collision) return;
+    if (choice === "cancel") {
+      setCollision(null);
+      return;
+    }
+    const origin = stampSource(mode === "clone" ? source ?? "clone" : source);
+    try {
+      if (choice === "rename") onAdd(collision.name, collision.css, origin);
+      else if (choice === "merge") {
+        if (!onMerge) return;
+        onMerge(collision.slug, collision.css, origin);
+      } else {
+        if (!onReplace) return;
+        onReplace(collision.slug, collision.name, collision.css, origin);
+      }
+    } catch (e) {
+      fail(e);
+      return;
+    }
+    setCollision(null);
+    onToast(
+      choice === "rename" ? "System added" : choice === "merge" ? "Merged into system" : "System replaced",
+      "ok",
+    );
+    finish();
   };
 
   const copyTemplate = () => {
@@ -356,8 +495,11 @@ export function AddSystemDialog({
                 type="button"
                 className="tok-btn"
                 onClick={() => {
+                  cancelImport();
+                  setCollision(null);
                   setCss(templateCss());
                   setError(null);
+                  setSource({ kind: "template" });
                 }}
                 title={`Insert the ${FULL_TEMPLATE_COUNT} schema names, values empty`}
               >
@@ -498,6 +640,46 @@ export function AddSystemDialog({
 
           {/* One line of chrome: identity, the error if any, and the write. */}
           <footer className="app-import-foot">
+            {systems && systems.length > 0 && (
+              <div className="app-import-mode" role="group" aria-label="Write mode">
+                {WRITE_MODES.map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className="tok-btn"
+                    aria-pressed={mode === id}
+                    onClick={() => {
+                      setMode(id);
+                      setTarget("");
+                      setCollision(null);
+                      setError(null);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {mode !== "new" && systems && systems.length > 0 && (
+              <select
+                className="tok-input app-import-target"
+                value={target}
+                aria-label={mode === "merge" ? "System to merge into" : "System to clone from"}
+                onChange={(e) => {
+                  setTarget(e.target.value);
+                  setError(null);
+                }}
+              >
+                <option value="">
+                  {mode === "merge" ? "Merge into…" : "Clone from…"}
+                </option>
+                {systems.map((s) => (
+                  <option key={s.slug} value={s.slug}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <input
               className="tok-input app-import-name"
               value={name}
@@ -506,15 +688,43 @@ export function AddSystemDialog({
               aria-label="System name"
               onChange={(e) => setName(e.target.value)}
             />
-            {error && (
+            {collision ? (
+              <div className="app-import-collision" role="alert">
+                <span>
+                  <b>{collision.existingName}</b> already exists — <code>{collision.slug}</code> is taken.
+                </span>
+                <button type="button" className="tok-btn" onClick={() => chooseCollision("rename")}>
+                  Rename to “{renameSlug}”
+                </button>
+                {onMerge && (
+                  <button type="button" className="tok-btn" onClick={() => chooseCollision("merge")}>
+                    Merge into it
+                  </button>
+                )}
+                {onReplace && (
+                  <button type="button" className="tok-btn" onClick={() => chooseCollision("replace")}>
+                    Replace it
+                  </button>
+                )}
+                <button type="button" className="tok-btn" onClick={() => chooseCollision("cancel")}>
+                  Cancel
+                </button>
+              </div>
+            ) : review ? (
+              <p className="app-import-review" role="status">
+                <span>Added {review.added}</span>
+                <span>Overridden {review.overridden}</span>
+                <span>Unchanged {review.unchanged}</span>
+              </p>
+            ) : error ? (
               <p className="app-import-error" role="alert">
                 {error}
               </p>
-            )}
+            ) : null}
             <div className="app-import-write">
               <Dialog.Close className="tok-btn">Cancel</Dialog.Close>
               <button type="button" className="tok-btn tok-btn-primary" onClick={save}>
-                Save system
+                {mode === "merge" ? "Merge system" : mode === "clone" ? "Clone system" : "Save system"}
               </button>
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger className="tok-btn app-import-openin" title="Tab to open after saving">
