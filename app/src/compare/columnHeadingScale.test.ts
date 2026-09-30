@@ -85,23 +85,29 @@ function toPx(value: string, scope: Scope): number {
 }
 
 const headSize = declaration(compareCss, ".cmp-col-head", "font-size");
-// The role the head draws at, rebound locally if the surface scopes one
-// (a plain custom property), else the global :root alias.
-const scopedRole = declarationsFor(compareCss, ".cmp-col-head")
-  .map((body) => /(?:^|;)\s*--heading-label:\s*([^;]+)/.exec(body)?.[1]?.trim())
-  .filter((value): value is string => value !== undefined)[0];
-const roleValue = scopedRole ?? declaration(tokensCss, ":root", "--heading-label");
+// The named role the head draws at. A surface must not rebind it (issue #117),
+// but if one ever did, resolve the local value; else the global :root alias —
+// the read comes from the stylesheet, so a stale override is visible even
+// though happy-dom has no cascade.
+const role = headSize.match(/^var\((--heading-[a-z-]+)\)$/)?.[1];
+const scopedRole = role
+  ? declarationsFor(compareCss, ".cmp-col-head")
+      .map((body) => new RegExp(`(?:^|;)\\s*${role}:\\s*([^;]+)`).exec(body)?.[1]?.trim())
+      .filter((value): value is string => value !== undefined)[0]
+  : undefined;
+const roleValue = scopedRole ?? (role ? declaration(tokensCss, ":root", role) : "");
 
 // Shipped systems whose body step is at or above their sm step — the shapes
 // that invert a label-sized head. gs5 is the reviewer's example.
 const SYSTEMS = ["gs5", "genspark", "gs3", "ds-new3", "perp2"];
 
 describe("scoped column heading scale (issue #117)", () => {
-  it("draws the head from the label role", () => {
-    expect(headSize).toBe("var(--heading-label)");
+  it("draws the head from a named heading role", () => {
+    expect(role, `.cmp-col-head must draw a --heading-* role, got ${headSize}`).toBeDefined();
   });
 
   it("keeps the column head >= the body copy it introduces in every system", () => {
+    expect(roleValue, "the column head role must resolve").not.toBe("");
     const inverted = SYSTEMS.map((slug) => {
       const scope = systemScope(`../../../systems/${slug}.json`);
       return { slug, head: toPx(roleValue, scope), body: toPx("var(--font-size-base)", scope) };

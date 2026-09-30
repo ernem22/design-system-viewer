@@ -80,20 +80,63 @@ const HEADINGS: Array<[selector: string, css: string, role: string]> = [
   [".dsv-empty h4", galleryCss, "--heading-subsection"],
   [".cmp-props-block h3", compareCss, "--heading-label"],
   [".tok-props-block h3", tokensPropsCss, "--heading-label"],
-  [".cmp-col-head", compareCss, "--heading-label"],
   [".dsv-kanban-col h4", screensCss, "--heading-label"],
+  // A Compare column re-scopes --font-size-* inline, so its head names its own
+  // role instead of overriding the shared label alias (issue #117 contrast).
+  [".cmp-col-head", compareCss, "--heading-column"],
 ];
 
+// Every heading role the token layer defines; one role must resolve to one
+// size, so a surface may never redeclare any of them (that is exactly how
+// --heading-label came to mean 18px in Compare and 14px elsewhere).
+const HEADING_ROLES = [
+  "--heading-section",
+  "--heading-subsection",
+  "--heading-label",
+  "--heading-column",
+];
+
+const STYLESHEETS: Array<[name: string, css: string]> = [
+  ["tokens/tokens.css", tokensCss],
+  ["gallery/gallery.css", galleryCss],
+  ["compare/compare.css", compareCss],
+  ["tokens/TokenGroup.css", tokenGroupCss],
+  ["tokens/TokensProps.css", tokensPropsCss],
+  ["gallery/tokenInspector.css", drawerCss],
+  ["shell/Welcome.css", welcomeCss],
+  ["shell/ErrorBoundary.css", errorCss],
+  ["gallery/components/screens/screens.css", screensCss],
+];
+
+function declarationCount(css: string, name: string): number {
+  return (css.match(new RegExp(`${name}\\s*:`, "g")) ?? []).length;
+}
+
 describe("one heading scale by role (issue #117)", () => {
-  it("defines section > subsection > label as aliases of the type scale", () => {
+  it("defines section > subsection/column > label as aliases of the type scale", () => {
     const section = rolePx("--heading-section");
     const subsection = rolePx("--heading-subsection");
     const label = rolePx("--heading-label");
+    const column = rolePx("--heading-column");
     expect(section).toBe(24);
     expect(subsection).toBe(18);
     expect(label).toBe(14);
+    // The column head draws the subsection step: a .cmp-col re-scopes the type
+    // scale, so the label step can fall under the column's own base copy.
+    expect(column).toBe(18);
     expect(section).toBeGreaterThan(subsection);
-    expect(subsection).toBeGreaterThan(label);
+    expect(subsection).toBeGreaterThanOrEqual(column);
+    expect(column).toBeGreaterThan(label);
+  });
+
+  it("declares each heading role once, and no surface redeclares one", () => {
+    for (const role of HEADING_ROLES) {
+      expect(declarationCount(tokensCss, role), `${role} in tokens.css`).toBe(1);
+      for (const [name, css] of STYLESHEETS) {
+        if (name === "tokens/tokens.css") continue;
+        expect(declarationCount(css, role), `${name} must not redeclare ${role}`).toBe(0);
+      }
+    }
   });
 
   it("draws every chrome heading from its role token, not a surface-local size", () => {

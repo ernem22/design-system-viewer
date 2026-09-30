@@ -170,7 +170,12 @@
      introduces — never inverted. */
   --heading-section: var(--font-size-2xl); /* h2 — page/section title       24px */
   --heading-subsection: var(--font-size-lg); /* h3 — block/demo/modal       18px */
-  --heading-label: var(--font-size-sm); /* h3/h4 — panel/column label      14px */
+  --heading-label: var(--font-size-sm); /* h3/h4 — panel label             14px */
+  /* Compare column head. A .cmp-col re-scopes every --font-size-* inline, so
+     the label role can resolve under the column's base copy (gs5: sm 13px over
+     14px); the head is a subsection-level role, named separately so the label
+     role keeps one size everywhere. */
+  --heading-column: var(--font-size-lg); /* Compare column head             18px */
 
   /* Font Weight */
   --font-weight-light: 300;
