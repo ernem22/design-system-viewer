@@ -61,8 +61,8 @@ if ! mkdir "$LOCK" 2>/dev/null; then
   rm -rf "$LOCK" 2>/dev/null || { echo "watch-settlements: cannot clear $LOCK" >&2; exit 2; }
   mkdir "$LOCK" || { echo "watch-settlements: cannot take $LOCK" >&2; exit 2; }
 fi
-echo $$ > "$LOCK/pid"
-printf 'watcher_pid=%s\nwatcher_started=%s\nrun=%s\n' "$$" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$RUN" >> "$LOCK/info"
+echo "$BASHPID" > "$LOCK/pid"
+printf 'watcher_pid=%s\nwatcher_started=%s\nrun=%s\n' "$BASHPID" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$RUN" >> "$LOCK/info"
 # The wait child is tracked so this process can kill it on the way out: a `check --wait`
 # that outlives its watcher holds the run's only waiter slot and blocks every later
 # watcher (measured 2026-09-28, three orphans). Acceptance: a human never cleans a waiter.
@@ -78,7 +78,7 @@ cleanup() {
   # Only remove a lock this process still owns: a dying instance must not delete the lock
   # a successor already took over (measured 2026-09-28 - the new watcher ran lockless
   # because the old one's trap fired after the takeover).
-  if [ "$(cat "$LOCK/pid" 2>/dev/null)" = "$$" ]; then
+  if [ "$(cat "$LOCK/pid" 2>/dev/null)" = "$BASHPID" ]; then
     rm -rf "$LOCK" 2>/dev/null || true
   else
     say "not removing $LOCK: it belongs to another instance now"
@@ -87,15 +87,24 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir -p "$(dirname "$INBOX")" || { echo "watch-settlements: cannot create $(dirname "$INBOX")" >&2; exit 2; }
-say "watching run $RUN, mode=$MODE, inbox=$INBOX, lock=$LOCK (pid $$)"
+say "watching run $RUN, mode=$MODE, inbox=$INBOX, lock=$LOCK (pid $BASHPID)"
 
 FAILS=0
+OUTAGE=0
+POLL=""
 while :; do
   rm -f "$WAIT_OUT" "${WAIT_OUT}.err"
   # stderr goes to its OWN file: merging it into the JSON stream (2>&1) is what made every
   # wait unparseable - measured 2026-09-28 by dumping the raw output, which is one
   # pretty-printed JSON document spanning 53 lines plus whatever stderr had to say.
-  orca orchestration check --run "$RUN" --wait --types "worker_done,escalation,question" --timeout-ms "$TIMEOUT_MS" --json > "$WAIT_OUT" 2>"${WAIT_OUT}.err" &
+  # With POLL set, the run's waiter slot is held by something we must not kill - measured: a
+  # candidate whose parent is orca.exe, i.e. the Orca app's own waiter. Poll the queue WITHOUT
+  # --wait instead of exiting, because exiting leaves the coordinator with no wakes at all.
+  if [ -n "$POLL" ]; then
+    orca orchestration check --run "$RUN" --json > "$WAIT_OUT" 2>"${WAIT_OUT}.err" &
+  else
+    orca orchestration check --run "$RUN" --wait --types "worker_done,escalation,question" --timeout-ms "$TIMEOUT_MS" --json > "$WAIT_OUT" 2>"${WAIT_OUT}.err" &
+  fi
   CHILD_PID=$!
   printf 'child_pid=%s\nchild_started=%s\nchild_cmd=%s\n' "$CHILD_PID" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     "orca orchestration check --run $RUN --wait --types worker_done,escalation,question --timeout-ms $TIMEOUT_MS" > "$LOCK/child"
@@ -165,16 +174,43 @@ while :; do
       fi
       echo "watch-settlements: REFUSED - the run already has an attached waiter." >&2
       echo "  No candidate could be proven to be a leftover of mine, so nothing was killed." >&2
-      exit 5
+      # Do NOT exit. The slot can be held by the Orca app's own waiter, which must never be killed;
+      # exiting here is what leaves the coordinator with no wakes at all. Poll instead.
+      say "falling back to polling every ${POLL_INTERVAL:-30}s (no --wait) until the slot frees"
+      POLL=1
+      sleep "${POLL_INTERVAL:-30}"
+      continue
     fi
     FAILS=$((FAILS + 1))
     say "wait call failed (rc=$RC, consecutive=$FAILS): $(printf '%s' "$OUT" | head -c 160)"
+    # A dead app is not a dead watcher. Measured 2026-09-29: an Orca restart killed this process -
+    # it exited after five failures (25 s) and the coordinator sat idle until a human noticed and
+    # restarted it, which is exactly the manual step this script exists to remove. The delivery queue
+    # and the inbox both survive the outage (measured: 10 settlements across the restart, none lost),
+    # so the right move is to wait for the app to come back and then drain the backlog.
+    case "$OUT" in
+      *runtime_unavailable*|*"Could not connect"*|*"connect to the running Orca app"*)
+        OUTAGE=$((OUTAGE + 1))
+        BACKOFF=$((FAILS * 5)); [ "$BACKOFF" -gt 60 ] && BACKOFF=60
+        say "the Orca runtime is unreachable (outage retry $OUTAGE); backing off ${BACKOFF}s and staying alive"
+        if [ "$MODE" = once ]; then
+          echo "watch-settlements: runtime unreachable (--once, not waiting)" >&2
+          exit 4
+        fi
+        sleep "$BACKOFF"
+        continue
+        ;;
+    esac
     if [ "$MODE" = once ] || [ "$FAILS" -ge 5 ]; then
       echo "watch-settlements: giving up after $FAILS failed wait(s)" >&2
       exit 4
     fi
     sleep $((FAILS * 5))
     continue
+  fi
+  if [ "${OUTAGE:-0}" -gt 0 ]; then
+    say "the Orca runtime is back after $OUTAGE outage retry/retries; draining the backlog"
+    OUTAGE=0
   fi
   FAILS=0
 
