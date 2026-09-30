@@ -95,6 +95,56 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   }catch(e){}
 });')
   [ "$n" -eq 0 ] && say "no live dispatches"
+  # THE SECOND CLOSING PATH. Settling used to depend entirely on the watcher's wake plus a human
+  # running settle.sh - measured 2026-09-30: five finished dispatches sat with live terminals and
+  # worktrees because the wake is an optimisation, not a guarantee (and settle.sh itself was failing
+  # to resolve the worktree, printing DONE while closing nothing). This sweep closes any dispatch
+  # that is done but not yet closed, so nothing stays open longer than one interval even with the
+  # watcher fully down.
+  sweep_settle
+}
+
+# Close dispatches that are finished but still holding a terminal or a worktree.
+sweep_settle() {
+  local W JSON pending
+  JSON="$(workers_json)"
+  [ -n "$JSON" ] || { say "sweep: could not read the worker list"; return; }
+  pending="$(printf '%s' "$JSON" | node -e '
+let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+  try{ const w=(JSON.parse(s).result||{}).workers||[];
+    for(const x of w){ if(x.dispatchStatus!=="completed" && x.dispatchStatus!=="failed") continue;
+      if(!x.agentTerminalHandle) continue;
+      process.stdout.write(x.dispatchId+"|"+(x.taskId||"")+"|"+x.dispatchStatus+"\n"); }
+  }catch(e){}
+});')"
+  local n=0
+  while IFS='|' read -r DISP TASK ST; do
+    [ -n "$DISP" ] || continue
+    local H
+    H="$(printf '%s' "$JSON" | node -e '
+let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+  const want=process.argv[1];
+  try{ const w=(JSON.parse(s).result||{}).workers||[]; const x=w.find(y=>y.dispatchId===want);
+    process.stdout.write(x?(x.agentTerminalHandle||""):""); }catch(e){}
+});' "$DISP")"
+    local ALIVE
+    ALIVE="$(orca terminal list --json 2>/dev/null | node -e '
+let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+  const want=process.argv[1];
+  try{ const t=(JSON.parse(s).result||{}).terminals||[];
+    process.stdout.write(t.some(x=>x.handle===want)?"yes":"no"); }catch(e){ process.stdout.write("no"); }
+});' "$H")"
+    if [ "$ALIVE" = "yes" ]; then
+      n=$((n+1))
+      say "sweep: $DISP ($TASK, $ST) still holds terminal $H - settling"
+      if [ -n "$ACT" ]; then
+        bash "$HERE/settle.sh" "$DISP" 2>&1 | grep -E "worktree removed|DONE|FAILED|REFUSED" | sed 's/^/  sweep:   /' | tee -a "$LOG"
+      else
+        say "sweep:   (dry run; run with --act to close it)"
+      fi
+    fi
+  done <<< "$pending"
+  [ "$n" -eq 0 ] && say "sweep: nothing finished is still holding a terminal"
 }
 
 # Recover one stalled dispatch: abandon it, then retry the SAME task on a fresh worktree.

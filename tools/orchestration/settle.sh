@@ -214,6 +214,27 @@ SRC_HANDLE=""
 [ -n "$SETTLE_ITEM" ] && SRC_HANDLE="$(grep -oE 'term_[0-9a-f]{8}-[0-9a-f-]{27}' "$SETTLE_ITEM" 2>/dev/null | head -1)"
 [ -n "$SRC_HANDLE" ] || SRC_HANDLE="${SETTLE_FROM_HANDLE:-}"
 WT=""
+# FIRST: ask Orca which terminal this dispatch owns. This is the reliable mapping - the worker record
+# carries agentTerminalHandle, and the terminal carries its worktreePath. The two older lookups below
+# both failed on real dispatches (measured 2026-09-30 on reviewer-162g, tester-162 and reviewer-163b):
+# the settlement file is named per dispatch only AFTER this script writes one, and matching the
+# dispatch id against the worktree PATH can never match, because paths are named by role.
+WT="$(orca orchestration worker-list --run "$RUN" --json 2>/dev/null | node -e '
+let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+  const want=process.argv[1];
+  try{ const w=(JSON.parse(s).result||{}).workers||[]; const x=w.find(y=>y.dispatchId===want);
+    process.stdout.write(x?(x.agentTerminalHandle||""):""); }catch(e){}
+});' "$DISPATCH")"
+if [ -n "$WT" ]; then
+  SRC_HANDLE="$WT"
+  WT="$(orca terminal list --json 2>/dev/null | node -e '
+let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+  const want=process.argv[1];
+  try{ const t=(JSON.parse(s).result||{}).terminals||[]; const hit=t.find(x=>x.handle===want);
+    process.stdout.write(hit?(hit.worktreePath||""):""); }catch(e){}
+});' "$SRC_HANDLE")"
+  [ -n "$WT" ] && say "worktree from the dispatch's own terminal $SRC_HANDLE: $WT"
+fi
 if [ -n "$SRC_HANDLE" ]; then
   WT="$(orca terminal list --json 2>/dev/null | node -e '
 let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
