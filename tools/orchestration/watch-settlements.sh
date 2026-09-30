@@ -90,6 +90,7 @@ mkdir -p "$(dirname "$INBOX")" || { echo "watch-settlements: cannot create $(dir
 say "watching run $RUN, mode=$MODE, inbox=$INBOX, lock=$LOCK (pid $$)"
 
 FAILS=0
+OUTAGE=0
 while :; do
   rm -f "$WAIT_OUT" "${WAIT_OUT}.err"
   # stderr goes to its OWN file: merging it into the JSON stream (2>&1) is what made every
@@ -169,12 +170,34 @@ while :; do
     fi
     FAILS=$((FAILS + 1))
     say "wait call failed (rc=$RC, consecutive=$FAILS): $(printf '%s' "$OUT" | head -c 160)"
+    # A dead app is not a dead watcher. Measured 2026-09-29: an Orca restart killed this process -
+    # it exited after five failures (25 s) and the coordinator sat idle until a human noticed and
+    # restarted it, which is exactly the manual step this script exists to remove. The delivery queue
+    # and the inbox both survive the outage (measured: 10 settlements across the restart, none lost),
+    # so the right move is to wait for the app to come back and then drain the backlog.
+    case "$OUT" in
+      *runtime_unavailable*|*"Could not connect"*|*"connect to the running Orca app"*)
+        OUTAGE=$((OUTAGE + 1))
+        BACKOFF=$((FAILS * 5)); [ "$BACKOFF" -gt 60 ] && BACKOFF=60
+        say "the Orca runtime is unreachable (outage retry $OUTAGE); backing off ${BACKOFF}s and staying alive"
+        if [ "$MODE" = once ]; then
+          echo "watch-settlements: runtime unreachable (--once, not waiting)" >&2
+          exit 4
+        fi
+        sleep "$BACKOFF"
+        continue
+        ;;
+    esac
     if [ "$MODE" = once ] || [ "$FAILS" -ge 5 ]; then
       echo "watch-settlements: giving up after $FAILS failed wait(s)" >&2
       exit 4
     fi
     sleep $((FAILS * 5))
     continue
+  fi
+  if [ "${OUTAGE:-0}" -gt 0 ]; then
+    say "the Orca runtime is back after $OUTAGE outage retry/retries; draining the backlog"
+    OUTAGE=0
   fi
   FAILS=0
 
