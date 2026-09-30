@@ -1,6 +1,6 @@
-/* Shared gallery primitives: group heading/layout + raw table, used by
-   TokenGroup.tsx, rows.tsx (RawTable) and SchemaView.tsx alike. Row/demo
-   styles live in rows.css; schema-only styles in SchemaView.css. */
+/* Group heading/layout plus the schema checklist table primitives, used by
+   TokenGroup.tsx and SchemaView.tsx. Row/demo styles live in rows.css;
+   schema-only styles in SchemaView.css. */
 
 .tok-gallery {
   display: flex;
