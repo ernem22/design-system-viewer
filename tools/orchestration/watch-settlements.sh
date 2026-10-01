@@ -33,7 +33,7 @@
 #     quietly (the "self-restart" case).
 set -uo pipefail
 
-MODE="once"; RUN="${WATCH_RUN:-run_4e539259ab29}"; TIMEOUT_MS=60000
+MODE="once"; RUN="${WATCH_RUN:-}"; TIMEOUT_MS=60000
 INBOX="${LOCALAPPDATA:-$HOME}/orca-orchestration/design-system-viewer/inbox/settlements.log"
 LOCK="${LOCALAPPDATA:-$HOME}/Temp/dsv-watch.lock"
 while [ $# -gt 0 ]; do
@@ -48,6 +48,19 @@ while [ $# -gt 0 ]; do
   esac
 done
 say() { printf 'watch-settlements: %s\n' "$*"; }
+
+# Derive the run from Orca when neither --run nor WATCH_RUN is set. The hardcoded fallback this
+# replaces (run_4e539259ab29) was a session constant, and measured 2026-10-01 the coordinator does NOT
+# pass --run - so the constant was silently the run in use, and any re-import or new run would leave
+# this watcher polling a run nobody is working in.
+if [ -z "$RUN" ]; then
+  RUN="$(orca orchestration run-current --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write((((JSON.parse(s).result||{}).run)||{}).id||"")}catch(e){}})')"
+  if [ -z "$RUN" ]; then
+    echo "watch-settlements: no run readable from orca orchestration run-current; pass --run <id>" >&2
+    exit 2
+  fi
+  echo "watch-settlements: run derived from orca orchestration run-current: $RUN" >&2
+fi
 
 # ---- single instance -----------------------------------------------------------------
 pid_alive() { [ -n "${1:-}" ] && powershell.exe -NoProfile -Command "if (Get-Process -Id $1 -ErrorAction SilentlyContinue) { 'yes' }" 2>/dev/null | grep -q yes; }
@@ -92,6 +105,7 @@ say "watching run $RUN, mode=$MODE, inbox=$INBOX, lock=$LOCK (pid $BASHPID)"
 FAILS=0
 OUTAGE=0
 POLL=""
+POLL_ROUNDS=0
 while :; do
   rm -f "$WAIT_OUT" "${WAIT_OUT}.err"
   # stderr goes to its OWN file: merging it into the JSON stream (2>&1) is what made every
@@ -101,7 +115,17 @@ while :; do
   # candidate whose parent is orca.exe, i.e. the Orca app's own waiter. Poll the queue WITHOUT
   # --wait instead of exiting, because exiting leaves the coordinator with no wakes at all.
   if [ -n "$POLL" ]; then
-    orca orchestration check --run "$RUN" --json > "$WAIT_OUT" 2>"${WAIT_OUT}.err" &
+    POLL_ROUNDS=$((POLL_ROUNDS + 1))
+    if [ "$POLL_ROUNDS" -ge "${POLL_RETRY_EVERY:-10}" ]; then
+      # Measured 2026-10-01: POLL was never reset, so a single waiter_exists conflict parked the
+      # watcher in 30s polling for the rest of its life. Every N poll rounds it tries --wait again;
+      # if the slot is still held, the refusal path sets POLL=1 again, so this is self-correcting.
+      say "poll round $POLL_ROUNDS reached; trying --wait again to leave polling mode"
+      POLL=""; POLL_ROUNDS=0
+      orca orchestration check --run "$RUN" --wait --types "worker_done,escalation,question" --timeout-ms "$TIMEOUT_MS" --json > "$WAIT_OUT" 2>"${WAIT_OUT}.err" &
+    else
+      orca orchestration check --run "$RUN" --json > "$WAIT_OUT" 2>"${WAIT_OUT}.err" &
+    fi
   else
     orca orchestration check --run "$RUN" --wait --types "worker_done,escalation,question" --timeout-ms "$TIMEOUT_MS" --json > "$WAIT_OUT" 2>"${WAIT_OUT}.err" &
   fi

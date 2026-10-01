@@ -180,26 +180,18 @@ echo "stall-check: reading A taken at $(date -u +%H:%M:%SZ); waiting ${INTERVAL}
 sleep "$INTERVAL"
 capture "$B"
 
-# Is the worker alive? Ask Orca, not a CSV. The sampler pid search is gone entirely: it read a
-# comma-delimited file as pipe-delimited and reported EVERY dispatch as EXITED (measured 2026-09-29
-# on fixer-163b), and it needed a second process to be alive before it could say anything at all.
-PID_PRESENT="no"
-case "${LIVENESS:-}" in
-  live) PID_PRESENT="yes" ;;
-  *)
-    # Orca cannot say it is live, so ask worker-show what happened to the dispatch. Only a terminal
-    # state counts as gone; an ambiguous liveness must never be read as EXITED.
-    WSTATE="$(orca orchestration worker-show --dispatch "$DISPATCH" --json 2>/dev/null | node -e '
-let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
-  try{ const r=JSON.parse(s).result||{}; process.stdout.write(((r.worker||{}).state)||""); }catch(e){}
-});')"
-    case "$WSTATE" in
-      abandoned|failed|completed|released) PID_PRESENT="no" ;;
-      *) PID_PRESENT="yes" ;;
-    esac
-    printf 'stall-check: liveness=%s worker.state=%s -> present=%s\n' "${LIVENESS:-unknown}" "${WSTATE:-unknown}" "$PID_PRESENT" >&2
-    ;;
-esac
+# Is the worker alive? GROUND TRUTH: does its terminal still exist? A dispatch status of
+# failed/abandoned is NOT liveness evidence - measured 2026-10-01: tester-135's dispatch read
+# `failed` while its TUI was working at 107.1K, and coder-125b did the same the day before, so the
+# status is systematically unreliable. Only a terminal that is GONE proves the worker is gone; if the
+# terminal exists, the counter and the tool line decide (PROGRESSING / TOOL_ACTIVE / STALL).
+PID_PRESENT="yes"
+if [ -z "$H" ] || ! orca terminal list --json 2>/dev/null | grep -q "$H"; then
+  PID_PRESENT="no"
+  printf 'stall-check: terminal %s is not in `terminal list` -> the worker is gone\n' "${H:-none}" >&2
+else
+  printf 'stall-check: terminal %s still exists (dispatch state %s is not liveness evidence)\n' "$H" "${WSTATE:-unknown}" >&2
+fi
 
 out="$(decide "$A" "$B" "$PID_PRESENT")"; rc=$?
 VERDICT="$(printf '%s' "$out" | cut -d'|' -f1)"
