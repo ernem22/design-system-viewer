@@ -71,9 +71,9 @@ mkdir -p "$S/worktrees"
 TMP="${LOCALAPPDATA}/Temp/terminals_$$.json"
 
 RAW=$(orca worktree create --repo "id:$REPO_ID" --name "$ROLE" \
-  --base-branch "$BASE" --setup skip --json 2>&1)
+  --base-branch "$BASE" --setup skip --json 2>/dev/null)
 P=$(printf '%s' "$RAW" | node -e \
-  "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);console.log(j.result.worktree.path||j.result.path)})")
+  "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const i=s.indexOf('{');const j=JSON.parse(i>=0?s.slice(i):s);console.log(j.result.worktree.path||j.result.path)})")
 
 # Model pin AND permission model. The permission block is what stops a worker from
 # stalling on an approval prompt:
