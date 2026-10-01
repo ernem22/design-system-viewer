@@ -9,7 +9,7 @@
 # left behind because nothing owned deleting them. A stalled TUI kept 341 MB and kept
 # sending heartbeats Orca rejected, because nothing listed terminals whose dispatch was gone.
 #
-#   settle.sh <dispatch_id> [--dry-run] [--kill-ghosts]
+#   settle.sh <dispatch_id> [--dry-run] [--kill-ghosts] [--force-remove]
 #
 # Exit 0 only when every step that applies has been done and read back. It refuses - exit 1
 # with the exact commands to run instead - when the dispatch has not settled; an unsettled
@@ -28,6 +28,9 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY=1; shift;;
     --kill-ghosts) KILL_GHOSTS=1; shift;;
+    # --force-remove drops the worktree even when no settlement exists. Off by default: a worktree
+    # with no settlement is the only evidence of what a dispatch actually did.
+    --force-remove) FORCE_REMOVE=1; shift;;
     -*) echo "settle: unknown flag: $1" >&2; exit 2;;
     *) DISPATCH="$1"; shift;;
   esac
@@ -180,6 +183,10 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
         printf 'acked: no (nothing to ack)\ndispatch: %s\ntask: %s\ntask status: %s\nnote: the Task reads %s but no delivery was in the queue and no settlement was in watchd.log; nothing was acked.\n' \
           "$DISPATCH" "$TASK" "$TASK_STATUS" "$TASK_STATUS" > "$NOTE"
         say "no delivery in the queue and none in the log; wrote $NOTE"
+        # No settlement exists, so this dispatch produced nothing we can point at. The worktree is
+        # then the only evidence of what happened (measured 2026-09-30: coder-125's TUI died at
+        # spawn, Orca still marked the dispatch completed, and the sweep removed the worktree).
+        NO_DELIVERY=1
       fi
       ;;
     PARSE_ERROR) die "could not parse the delivery queue" ;;
@@ -209,7 +216,7 @@ fi
 # matches. The settlement does name the source terminal, and that handle maps to a
 # worktree. Measured 2026-09-28 on the throwaway probe.
 WT_JSON="$(orca worktree list --json 2>/dev/null)" || die "could not read the worktree list"
-SETTLE_ITEM="$(ls -t "$INBOX"/*"$DISPATCH"* 2>/dev/null | head -1)"
+SETTLE_ITEM="$(ls -t "$INBOX"/*"$DISPATCH"* 2>/dev/null | grep -v 'task-settled-no-delivery' | head -1)"
 SRC_HANDLE=""
 [ -n "$SETTLE_ITEM" ] && SRC_HANDLE="$(grep -oE 'term_[0-9a-f]{8}-[0-9a-f-]{27}' "$SETTLE_ITEM" 2>/dev/null | head -1)"
 [ -n "$SRC_HANDLE" ] || SRC_HANDLE="${SETTLE_FROM_HANDLE:-}"
@@ -286,10 +293,15 @@ if [ -n "$WT" ]; then
   . "$HERE/repo-id.sh" 2>/dev/null || true
   [ -n "${REPO_ID:-}" ] || die "could not resolve the Orca repo id (see repo-id.sh)"
   run_or_show orca terminal close --worktree "id:$REPO_ID::$WT" --all --json >/dev/null 2>&1
+  if [ -n "${NO_DELIVERY:-}" ] && [ -z "${FORCE_REMOVE:-}" ]; then
+    # Keep it: with no settlement, the worktree is the only record of what the dispatch did.
+    say "KEEPING the worktree as evidence: no settlement exists for $DISPATCH (pass --force-remove to drop it)"
+  else
   run_or_show orca worktree rm --worktree "id:$REPO_ID::$WT" --force --json >/dev/null 2>&1
   if [ -z "$DRY" ]; then
     [ -d "$WT" ] && die "worktree directory still exists after rm: $WT"
     say "worktree removed and verified gone: $WT"
+  fi
   fi
 
   # ---- 6. the local branch, only when a merged PR contains its tip -------------------
