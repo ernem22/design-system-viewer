@@ -90,8 +90,19 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
     const w=(JSON.parse(parts[0]).result||{}).workers||[];
     const titles={};
     try{ for(const t of ((JSON.parse(parts[1]).result||{}).tasks||[])) titles[t.id]=t.task_title||""; }catch(e){}
-    for(const x of w){ if(x.dispatchStatus!=="dispatched") continue;
-      process.stdout.write([x.dispatchId, x.taskId||"", x.agentTerminalHandle||"", titles[x.taskId]||""].join("|")+"\n"); }
+    // A TUI that dies leaves the dispatch failed/abandoned, not dispatched - measured 2026-09-30 on
+    // tester-163, whose death was invisible to a scan that only looked at `dispatched`. Those are
+    // scanned too, so a dead worker is recovered instead of needing a human.
+    const liveTasks=new Set(w.filter(y=>y.dispatchStatus==="dispatched").map(y=>y.taskId));
+    for(const x of w){
+      const st=x.dispatchStatus;
+      const dead=(st==="failed"||st==="abandoned");
+      if(st!=="dispatched" && !dead) continue;
+      if(!x.agentTerminalHandle) continue;
+      // A dead dispatch whose task already has a LIVE dispatch is a duplicate of work in flight.
+      if(dead && liveTasks.has(x.taskId)) continue;
+      process.stdout.write([x.dispatchId, x.taskId||"", x.agentTerminalHandle||"", (titles[x.taskId]||"")+" ["+st+"]"].join("|")+"\n");
+    }
   }catch(e){}
 });')
   [ "$n" -eq 0 ] && say "no live dispatches"
@@ -222,9 +233,24 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
     [ -n "$PRBR" ] && [ "$ROLE" = "fixer" ] && REF="$PRBR"
   fi
   NEW="$ROLE-$(date -u +%H%M%S)"
-  say "recovering $DISP: abandon -> spawn $NEW from $REF -> worker-start --retry-of"
-  orca orchestration worker-abandon --dispatch "$DISP" --json >/dev/null 2>&1 \
-    || { say "abandon of $DISP failed; leaving it"; return; }
+  say "recovering $DISP: fence if needed -> spawn $NEW from $REF -> worker-start --retry-of"
+  # A dispatch that already reads failed/abandoned is fenced: abandoning it again fails and would stop
+  # the recovery before it starts (tester-163's TUI died and left the dispatch abandoned, so this
+  # call has to be conditional or the whole recovery is dead on arrival).
+  local WST
+  WST="$(orca orchestration worker-show --dispatch "$DISP" --json 2>/dev/null | node -e '
+let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+  try{ const r=JSON.parse(s).result||{}; process.stdout.write(((r.worker||{}).state)||""); }catch(e){}
+});')"
+  case "$WST" in
+    failed|abandoned|released)
+      say "  $DISP already reads $WST; skipping the abandon"
+      ;;
+    *)
+      orca orchestration worker-abandon --dispatch "$DISP" --json >/dev/null 2>&1 \
+        || { say "abandon of $DISP failed; leaving it"; return; }
+      ;;
+  esac
   mkdir -p "$STATE_DIR"; date -u +%Y-%m-%dT%H:%M:%SZ > "$STATE_DIR/$DISP.abandoned-by-us"
   # A recovered REVIEWER must keep its read-only boundary. spawn.sh --readonly is what writes the
   # deny-based permission block; omitting it silently hands the replacement the writable default,
@@ -249,6 +275,25 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
     say "spawn of $NEW returned no PATH/HANDLE; not dispatching (output: $(printf '%s' "$SPAWN_OUT" | head -c 160))"
     return
   fi
+  # Wait for the terminal to register its agent and settle, exactly as start.sh does. Without this the
+  # worker-start lands on a terminal whose TUI is not up yet and fails with agent_unconfigured -
+  # measured on the first live --act run, where the recovery got as far as worker-start and stopped
+  # there (tester-163).
+  local A i
+  for i in $(seq 1 15); do
+    A="$(orca terminal list --json 2>/dev/null | node -e '
+let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+  const want=process.argv[1];
+  try{ const t=(JSON.parse(s).result||{}).terminals||[]; const x=t.find(y=>y.handle===want);
+    process.stdout.write(x?(x.agentIdentity||""):""); }catch(e){}
+});' "$H")"
+    [ "$A" = "opencode" ] && break
+    sleep 5
+  done
+  if [ "$A" != "opencode" ]; then
+    say "  terminal $H has no opencode agent after ~75s; the recovery is incomplete"
+  fi
+  orca terminal wait --terminal "$H" --for tui-idle --timeout-ms 90000 --json >/dev/null 2>&1
   local REPO_ID
   REPO_ID="$(cd /d/code/design-system-viewer 2>/dev/null && bash "$HERE/repo-id.sh" >/dev/null 2>&1; printf '%s' "${REPO_ID:-}")"
   [ -n "$REPO_ID" ] || REPO_ID="$(orca worktree list --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const w=(JSON.parse(s).result||{}).worktrees||[];const x=w.find(y=>String(y.path).indexOf("design-system-viewer")>=0&&String(y.path).split("/").length<8);process.stdout.write(x?(x.repoId||""):"")}catch(e){}})')"
