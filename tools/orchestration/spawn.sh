@@ -43,8 +43,17 @@ done
 # successful spawn. It cost a Tester dispatch (a Coder had named its own branch
 # `coder/88-gallery-wcag-tokens` and the guessed `ernem22/coder-88` did not exist), so
 # the base is verified before anything is created.
-git rev-parse --verify --quiet "$BASE^{commit}" >/dev/null \
-  || { echo "spawn.sh: base ref '$BASE' does not exist — git fetch, or read the PR's headRefName" >&2; exit 3; }
+if ! git rev-parse --verify --quiet "$BASE^{commit}" >/dev/null; then
+  # Only a REMOTE ref may exist for this branch: measured 2026-09-30, the local ref for an open PR's
+  # branch had been cleaned up while the PR was still open, so spawn.sh refused a base that was
+  # perfectly fetchable. Fetch the tracking ref rather than stopping.
+  if git fetch --quiet origin "$BASE:$BASE" 2>/dev/null && git rev-parse --verify --quiet "$BASE^{commit}" >/dev/null; then
+    echo "spawn.sh: no local ref for '$BASE'; fetched it from origin" >&2
+  else
+    echo "spawn.sh: base ref '$BASE' does not exist — git fetch, or read the PR's headRefName" >&2
+    exit 3
+  fi
+fi
 
 S="${LOCALAPPDATA}/orca-orchestration/design-system-viewer"
 # The Orca repo id is machine state, not a constant: re-importing the folder mints a
