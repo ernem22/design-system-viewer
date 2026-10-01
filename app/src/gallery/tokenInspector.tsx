@@ -15,6 +15,7 @@ import {
   clearSwapsIn,
   clearValueEdit,
   demoId,
+  getReturnFocus,
   kindOf,
   openScope,
   scopeStyleFor,
@@ -356,26 +357,39 @@ function ScopePanelBody({
     Popover) listens in the capture phase and calls `preventDefault`, a stacked
     overlay consumes the key first and this handler bails on `defaultPrevented`,
     so the panel never closes out from under an overlay that owns the keyboard.
+
+    The listener is scoped to the docked panel actually being the open surface:
+    `active` (Preview tab active and the props panel expanded, passed by App) is
+    false whenever another tab owns the keyboard — Shell force-mounts every
+    tab's props content, so an ungated document listener would answer Escape on
+    the Tokens tab and silently drop the Preview selection. Non-Escape chords,
+    and a token-filter Escape that preventDefaults, are left alone.
+
     Closing reuses the same `selectScope(null)` the "Close panel" button calls,
-    and restores focus to whatever had it when the panel opened, since
-    de-selecting unmounts the control focus would otherwise fall back to
-    <body> from. The mobile variant already lives inside a Radix Dialog and
-    gets both behaviours there, so it is skipped. */
-function useDockedEscapeToClose(inDialog: boolean, selected: InspectorScope | null): void {
+    and restores focus to the element that opened the panel (`getReturnFocus`,
+    captured by `openScope` before the selection change), since de-selecting
+    unmounts the control focus would otherwise fall back to <body> from. The
+    mobile variant already lives inside a Radix Dialog and gets both behaviours
+    there, so it is skipped. */
+function useDockedEscapeToClose(
+  inDialog: boolean,
+  selected: InspectorScope | null,
+  active: boolean,
+): void {
   useEffect(() => {
-    if (inDialog || !selected) return;
-    const returnTo = document.activeElement;
+    if (inDialog || !selected || !active) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
       event.preventDefault();
+      const returnTo = getReturnFocus();
       selectScope(null);
-      if (returnTo instanceof HTMLElement && returnTo.isConnected) {
+      if (returnTo?.isConnected) {
         returnTo.focus({ preventScroll: true });
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [inDialog, selected]);
+  }, [inDialog, selected, active]);
 }
 
 /** Docked right-panel content and mobile dialog body: the selected scope's
@@ -385,12 +399,17 @@ function useDockedEscapeToClose(inDialog: boolean, selected: InspectorScope | nu
 export function ScopePanel({
   valueOf,
   inDialog = false,
+  active = true,
 }: {
   valueOf: (token: string) => string;
   inDialog?: boolean;
+  /** Whether this docked panel is the open surface (its tab active and the
+      props panel expanded). App supplies the live state; the panel defaults to
+      on so a directly-mounted test behaves like the open Preview panel. */
+  active?: boolean;
 }) {
   const { selected, swaps, valueEdits } = useInspector();
-  useDockedEscapeToClose(inDialog, selected);
+  useDockedEscapeToClose(inDialog, selected, active);
   const valueEditCount = Object.keys(valueEdits).length;
   if (!selected) {
     const totalSwaps = Object.values(swaps).reduce((n, demo) => n + Object.keys(demo).length, 0);
@@ -490,7 +509,7 @@ export function SectionScopeTrigger({
       className={`dsv-token-drawer-trigger${hasEdits ? " has-edits" : ""}${isActive ? " is-active" : ""}`}
       title={`${tokens.length} tokens used here — click to inspect or edit`}
       aria-pressed={isActive}
-      onClick={() => openScope({ id, title, tokens })}
+      onClick={(event) => openScope({ id, title, tokens }, event.currentTarget)}
     >
       <Icon name="sliders" size={13} />
       {tokens.length}

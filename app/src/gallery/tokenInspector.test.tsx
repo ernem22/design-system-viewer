@@ -42,12 +42,13 @@ const system = {
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 
-/** The docked panel plus the badge that opens it — the real entry point. */
-function Docked() {
+/** The docked panel plus the badge that opens it — the real entry point.
+    `active` mirrors App's "this panel is the open surface" state. */
+function Docked({ active = true }: { active?: boolean } = {}) {
   return (
     <>
       <SectionScopeTrigger id="demo" title="Demo" tokens={[TOKEN]} />
-      <PreviewProps system={system} />
+      <PreviewProps system={system} active={active} />
     </>
   );
 }
@@ -111,12 +112,12 @@ describe("docked inspector Escape dismissal (#119)", () => {
   it("closes the docked inspector on Escape and returns focus to the badge", async () => {
     await mount(<Docked />);
     const badge = document.querySelector<HTMLButtonElement>(".dsv-token-drawer-trigger")!;
+    // The badge is clicked without first focusing it, so the pre-open element
+    // can't be an artefact of the test: the fix must record the opener itself.
     await act(async () => {
-      badge.focus();
       badge.click();
     });
     expect(getInspectorState().selected).not.toBeNull();
-    expect(document.activeElement).toBe(badge);
 
     // Opening does not steal focus; a keyboard user may then Tab into the
     // panel's own controls before dismissing it.
@@ -129,8 +130,26 @@ describe("docked inspector Escape dismissal (#119)", () => {
     // On the parent commit this fails: the panel stays selected (open).
     expect(getInspectorState().selected).toBeNull();
     // And focus is back on the element that opened it, not the removed control
-    // and not <body>.
+    // and not <body>. On the parent commit the effect read activeElement after
+    // the selection change, so (without the old badge.focus()) focus landed on
+    // <body> — this assertion is what catches that wrong restore.
     expect(document.activeElement).toBe(badge);
+  });
+
+  it("ignores Escape while the docked inspector is not the active surface", async () => {
+    // Tokens tab: Shell force-mounts the Preview props panel, but it is not the
+    // open surface, so its document Escape listener must not even be installed.
+    await mount(<Docked active={false} />);
+    const badge = document.querySelector<HTMLButtonElement>(".dsv-token-drawer-trigger")!;
+    await act(async () => {
+      badge.click();
+    });
+    expect(getInspectorState().selected).not.toBeNull();
+
+    await escape();
+
+    // On the parent commit the global listener closed the hidden panel.
+    expect(getInspectorState().selected).not.toBeNull();
   });
 
   it("leaves the docked inspector open while a stacked modal owns Escape", async () => {

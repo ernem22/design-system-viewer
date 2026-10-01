@@ -319,7 +319,7 @@ function App() {
           syncSection={sectionSyncArmed && tab === "preview"}
         />
       ),
-      propsPanel: <PreviewProps system={active} dark={darkOn} />,
+      propsPanel: <PreviewProps system={active} dark={darkOn} active={tab === "preview" && propsOpen} />,
     },
     {
       id: "compare",
