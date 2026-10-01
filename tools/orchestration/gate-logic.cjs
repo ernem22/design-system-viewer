@@ -73,6 +73,13 @@ function parseVerdict(body) {
   if (!['reviewer', 'tester'].includes(fields.role)) {
     return { ok: false, reason: `a verdict block has an unknown role: ${fields.role}`, commit: fields.commit || commitish };
   }
+  // A FAIL must say what is wrong, for EITHER role. Measured twice: PR #135's reviewer fail and PR
+  // #163's tester fail both carried `status: fail` with no `reason:` line, and neither could be acted
+  // on - a Fixer has nothing to fix, so a whole cycle was spent on a verdict that names nothing. A
+  // reason-less fail is unparseable, exactly like a broken fence, and it must not read as a real fail.
+  if ((fields.status || '').toLowerCase() === 'fail' && !String(fields.reason || '').trim()) {
+    return { ok: false, reason: 'a fail verdict has no `reason:` line, so nothing can be fixed: unparseable rather than a real fail', commit: fields.commit || commitish };
+  }
   return { ok: true, fields };
 }
 

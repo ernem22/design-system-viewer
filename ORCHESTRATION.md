@@ -1051,7 +1051,7 @@ Reviewer:
 
 ```
 status: pass | fail
-reason: <short reason, only if fail>
+reason: <REQUIRED if fail: what is wrong, with file:line>
 fix_required: <short actionable instruction, only if fail>
 ```
 
@@ -1062,12 +1062,21 @@ status: pass | fail
 observed: <what actually happened, one line, as it was observed>
 before: <the same assertion against the base commit, or: not-run (<reason>)>
 evidence: <the URL / DOM state / console result the observation came from>
+reason: <REQUIRED if fail: what is wrong, with file:line>
 fix_required: <short actionable instruction, only if fail>
 ```
 
 A Tester `pass` with no `observed:` and no `before:` line is not a pass — it is
 an unverifiable claim, the same class as a missing `worker_done`, and it goes
 back to the Tester rather than forward to a merge.
+
+**A `fail` with no `reason:` is not a fail — it is unparseable.** It applies to
+both roles, and it is not decoration: a fail that names nothing cannot be acted
+on, because the Fixer has nothing to fix, so the cycle is spent on a verdict that
+says only "no". Measured twice in one week — PR #135's reviewer fail and PR
+#163's tester fail both carried `status: fail` with no reason, and both cost a
+whole dispatch before anyone could act. The gate rejects such a block the same
+way it rejects a broken fence: it does not count as a verdict at all.
 
 Failure:
 

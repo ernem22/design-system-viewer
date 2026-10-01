@@ -158,6 +158,18 @@ const cases = [
     ],
     expect: 'success', // the forged malformed block is ignored, and the real reviewer approves
   },
+  {
+    name: '17. a fail verdict with no reason is unparseable, not a fail',
+    // Both roles, measured: PR #135's reviewer fail and PR #163's tester fail carried status: fail
+    // with no reason line, and a Fixer could not be dispatched against either.
+    comments: [
+      { body: `\`\`\`dsv-verdict\nstatus: pass\nrole: reviewer\ncommit: ${HEAD.slice(0, 7)}\nscope_ok: yes\n\`\`\``, at: at(1) },
+      { body: `\`\`dsv-verdict\nstatus: pass\nrole: tester\ncommit: ${HEAD.slice(0, 7)}\nobserved: x\nbefore: y\nbuild: z\n\`\`\``, at: at(2) },
+      { body: `\`\`dsv-verdict\nstatus: fail\nrole: tester\ncommit: ${HEAD.slice(0, 7)}\nobserved: x\nbefore: y\nbuild: z\n\`\`\``, at: at(3) },
+    ],
+    expect: 'pending', // the gate does not count it as a verdict at all, so the PR simply has no tester verdict yet - which blocks the merge
+  },
+
 ];
 
 let bad = 0;
