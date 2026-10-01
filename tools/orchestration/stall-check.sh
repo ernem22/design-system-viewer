@@ -46,16 +46,19 @@ tool_active_of() {
   #     ⠋ gh pr diff 163 --patch -- app/src/tokens/TokenGroup.css
   # Measured 2026-09-29 on fixer-163b: this line was present while the counter sat frozen and the
   # old tail-hash heuristic called it a stall.
-  grep -qE '(^|[[:space:]])[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][[:space:]]+[a-z]' "$1" 2>/dev/null && echo yes && return
-  grep -qE '(ready in|Local:|Network:|npm |npx |vite |tsc |vitest |curl |→ Read|→ Write|→ Bash|┃ *\$)' "$1" 2>/dev/null && echo yes || echo no
+  # ONLY a real running-tool line counts. The broader patterns that used to live here ('ready in',
+  # 'npm ', a shell prompt) persist in the tail AFTER the tool finished, so they read a finished tool
+  # as activity forever - and the spinner animates while a worker is frozen, so a tail-hash change is
+  # not activity either. Measured 2026-09-30 on tester-163: a frozen counter (76.0K for ~30 minutes)
+  # with an animating spinner and no real tool line was reported as TOOL_ACTIVE.
+  grep -qE '(^|[[:space:]])[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][[:space:]]+[a-z]' "$1" 2>/dev/null && echo yes || echo no
 }
 tail_hash_of() { grep -vE '^\s*$' "$1" 2>/dev/null | tail -25 | md5sum | cut -d' ' -f1; }
 
 decide() {
   local a="$1" b="$2" present="$3"
-  local ca cb ha hb ta tb
+  local ca cb ta tb
   ca="$(counter_of "$a")"; cb="$(counter_of "$b")"
-  ha="$(tail_hash_of "$a")"; hb="$(tail_hash_of "$b")"
   ta="$(tool_active_of "$a")"; tb="$(tool_active_of "$b")"
   if [ "$present" = "no" ]; then
     echo "EXITED|counter '${ca:-none}' -> '${cb:-none}'|Orca reports this dispatch as ${LIVENESS:-unknown} / ${WSTATE:-unknown}, so the worker is gone rather than frozen"
@@ -65,19 +68,21 @@ decide() {
     echo "PROGRESSING|counter $ca -> $cb|the model is producing tokens"
     return 0
   fi
-  if [ "$tb" = "yes" ] && [ "$ha" != "$hb" ]; then
-    echo "TOOL_ACTIVE|counter ${ca:-none} unchanged|new tool or server output appeared, so a tool is running"
+  # A REAL tool line is activity. The tail changing on its own is not: the spinner animates while a
+  # worker is frozen, which is exactly how a stall hid from this test (tester-163).
+  if [ "$ta" = "yes" ] || [ "$tb" = "yes" ]; then
+    echo "TOOL_ACTIVE|counter ${ca:-none} unchanged|a real running-tool line is present, so a tool is working"
     return 0
   fi
   # An unreadable worker is not a frozen one. Two empty readings - no counter and no output at all -
   # mean the telemetry is unavailable, and with --act a STALL is authority to abandon a dispatch, so
   # uncertainty must not satisfy the test (CodeRabbit Medium on PR #167 - correct).
-  if [ -z "$ca" ] && [ -z "$cb" ] && [ "$ha" = "$hb" ]; then
+  if [ -z "$ca" ] && [ -z "$cb" ]; then
     echo "UNKNOWN|counter unreadable in both readings|telemetry is unavailable, so this is not evidence of a freeze"
     return 5
   fi
-  if [ "$ca" = "$cb" ] && [ "$ha" = "$hb" ]; then
-    echo "STALL|counter ${ca:-none} unchanged across $INTERVAL s and the tail is identical|no tokens, no tool output, no settlement"
+  if [ "$ca" = "$cb" ]; then
+    echo "STALL|counter ${ca:-none} unchanged across $INTERVAL s and no running-tool line|no tokens, no tool, no settlement"
     return 3
   fi
   echo "PROGRESSING|counter '${ca:-none}' -> '${cb:-none}'|output changed between the readings"
