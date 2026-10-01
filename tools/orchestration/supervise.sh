@@ -48,6 +48,7 @@ BASE="${SUPERVISE_BASE:-origin/refactor/full-react-migration}"
 INBOX_DIR="${INBOX_DIR:-${LOCALAPPDATA:-$HOME}/orca-orchestration/design-system-viewer/inbox}"
 LOG="${SUPERVISE_LOG:-${LOCALAPPDATA:-$HOME}/Temp/supervise.log}"
 STATE_DIR="${SUPERVISE_STATE:-${LOCALAPPDATA:-$HOME}/Temp/supervise-state}"
+SEEN_FILE="$STATE_DIR/seen-dispatches"
 RECOVERIES=0
 
 say() { printf '%s supervise: %s\n' "$(date -u +%H:%M:%SZ)" "$*" | tee -a "$LOG"; }
@@ -64,6 +65,10 @@ cycle() {
   [ -n "$JSON" ] || { say "could not read the worker list; skipping this cycle"; return; }
   while IFS='|' read -r DISP TASK TERM TITLE; do
     [ -n "$DISP" ] || continue
+    # SEEN-SET: a dispatch is considered once. Measured 2026-10-01: the scan picked up 31 historical
+    # failed dispatches and re-examined every one on every pass, writing an inbox item for each
+    # refusal. The set is only written when --act is on, so a dry run cannot poison it.
+    if [ -f "$SEEN_FILE" ] && grep -qx "$DISP" "$SEEN_FILE" 2>/dev/null; then continue; fi
     n=$((n+1))
     local V
     V="$(bash "$HERE/stall-check.sh" "$DISP" --interval "$READ_GAP" --json 2>/dev/null \
@@ -80,6 +85,9 @@ cycle() {
             "$V" "$([ -n "$ACT" ] && echo 'recovered it (abandon + retry)' || echo 'only reported it (run with --act to recover)')"
         } > "$INBOX_DIR/$(date -u +%Y%m%dT%H%M%SZ)-supervise-$DISP-$V.md"
         [ -n "$ACT" ] && recover "$DISP" "$TASK" "$TITLE" "$V"
+        # Considered once: with --act on, this dispatch is done with (recovered, refused, or left for
+        # a human) and must not be re-examined on the next pass.
+        [ -n "$ACT" ] && { mkdir -p "$STATE_DIR"; echo "$DISP" >> "$SEEN_FILE"; }
         ;;
       *) say "$DISP ($TITLE) -> $V (could not decide; leaving it alone)" ;;
     esac
