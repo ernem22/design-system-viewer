@@ -103,6 +103,14 @@ case "$STATE" in abandoned|revoked) SETTLED="";; esac
 
 if [ -z "$SETTLED" ]; then
   echo "settle: REFUSED - $DISPATCH has not settled (task=$TASK_STATUS, state=$STATE)." >&2
+  if [ -n "${FORCE_REMOVE:-}" ]; then
+    # --force-remove means a deliberate, recorded removal: the caller (supervise.sh's recovery) has
+    # already written the reason to the durable inbox, so the refusal to fence an unsettled dispatch
+    # must not block the removal. Measured 2026-10-01: without this, every recovery of a dead worker
+    # fell through to the blunt rm -rf and settle.sh's own sequence never ran - the careful path was
+    # structurally unreachable for exactly the case it was called for.
+    echo "settle: --force-remove given, so the refusal is bypassed; the dispatch stays fenced as it is" >&2
+  else
   # Before telling the operator to fence it, ask whether it is actually still working. Orca's
   # projection is not evidence (measured: it read "unverifiable" while two Fixers sat frozen for
   # 1.5-2 hours); two readings of the terminal's own counter are.
@@ -130,7 +138,8 @@ if [ -z "$SETTLED" ]; then
   echo "      --terminal <fresh agent handle> --worktree \"id:<repo>::<fresh path>\" \\" >&2
   echo "      --run $RUN --from ${FROM:-<coordinator handle>}" >&2
   echo "  (--task and --spec are mutually exclusive; the Task already carries its spec)" >&2
-  exit 1
+  if [ -z "${FORCE_REMOVE:-}" ]; then exit 1; fi
+  fi
 fi
 
 # ---- 3. the settlement into the durable inbox, THEN ack ------------------------------
@@ -274,9 +283,9 @@ esac
 # worktree was already gone was never released and the script still printed DONE. The
 # release is now unconditional, and an unconfirmed one is fatal instead of a log line.
 if [ -z "$DRY" ]; then
-  REL="$(orca orchestration worker-release --dispatch "$DISPATCH" --json 2>&1 | node -e '
+  REL="$(orca orchestration worker-release --dispatch "$DISPATCH" --json 2>/dev/null | node -e '
 let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
-  try{ const j=JSON.parse(s); process.stdout.write(j.ok?((j.result&&j.result.state)||"released"):("ERR:"+((j.error&&j.error.code)||"?"))); }
+  try{ const i=s.indexOf("{"); const j=JSON.parse(i>=0?s.slice(i):s); process.stdout.write(j.ok?((j.result&&j.result.state)||"released"):("ERR:"+((j.error&&j.error.code)||"?"))); }
   catch(e){ process.stdout.write("UNPARSED"); }
 });')"
   say "release -> $REL"
