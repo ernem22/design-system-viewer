@@ -167,6 +167,33 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
 recover() {
   local DISP="$1" TASK="$2" TITLE="$3" VERDICT="$4"
   mkdir -p "$STATE_DIR"
+  # CLOSE THE OLD WORKER FIRST. Measured 2026-10-01: the recovery spawned a new worktree+TUI per
+  # attempt and left the old one running, so six duplicate testers drained a 7.5 GB machine to 34 MB,
+  # bash could not fork, and the watcher stopped working. The recovery was producing a worse problem
+  # than the one it fixed - a self-reinforcing collapse. Never leave both alive: close the old
+  # terminal, then remove its worktree (force: the reason is recorded in the inbox note above, which
+  # is the evidence this removal would otherwise destroy), and only then spawn the replacement.
+  local OLD_H OLD_WT
+  OLD_H="$(orca orchestration worker-list --run "$RUN" --json 2>/dev/null | node -e '
+let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+  const want=process.argv[1];
+  try{ const w=(JSON.parse(s).result||{}).workers||[]; const x=w.find(y=>y.dispatchId===want);
+    process.stdout.write(x?(x.agentTerminalHandle||""):""); }catch(e){}
+});' "$DISP")"
+  if [ -n "$OLD_H" ]; then
+    OLD_WT="$(orca terminal list --json 2>/dev/null | node -e '
+let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+  const want=process.argv[1];
+  try{ const t=(JSON.parse(s).result||{}).terminals||[]; const x=t.find(y=>y.handle===want);
+    process.stdout.write(x?(x.worktreePath||""):""); }catch(e){}
+});' "$OLD_H")"
+    say "  closing the old worker first: terminal $OLD_H ${OLD_WT:+worktree $OLD_WT}"
+    orca terminal close --terminal "$OLD_H" --json >/dev/null 2>&1
+    if [ -n "$OLD_WT" ] && [ -d "$OLD_WT" ]; then
+      bash "$HERE/settle.sh" "$DISP" --force-remove >/dev/null 2>&1 || rm -rf "$OLD_WT" 2>/dev/null
+      git worktree prune >/dev/null 2>&1
+    fi
+  fi
   # WHO stopped it? Before retrying anything that reads as stopped/exited, find out whether OUR OWN
   # abandon caused it. Orca's guide (stablyai/orca#23713, open) says its recovery table retries ANY
   # stopped attempt without checking who stopped it - following that blindly would retry workers we
