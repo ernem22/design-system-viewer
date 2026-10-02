@@ -85,7 +85,8 @@ printf 'role=%s\nhandle=\nstate=starting\ndispatch=\ncreated_at=%s\n' "$ROLE" "$
 # worktree is 'dirty', `git worktree remove` refuses, and a settle that printed DONE
 # leaves the directory on disk - which is exactly what happened to two probe worktrees.
 # info/exclude is per-worktree and untracked, so it never reaches the repo.
-GD="$(git -C "$P" rev-parse --git-dir 2>/dev/null || true)"
+GD="$(git -C "$P" rev-parse --git-common-dir 2>/dev/null || true)"
+case "$GD" in /*|[A-Za-z]:*) ;; *) [ -n "$GD" ] && GD="$P/$GD" ;; esac
 if [ -n "$GD" ]; then
   mkdir -p "$GD/info" 2>/dev/null || true
   for PAT in .dsv-worker opencode.json; do
