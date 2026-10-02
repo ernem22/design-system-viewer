@@ -49,13 +49,60 @@ def orca(*args):
         raw = (cp.stdout or b"").decode("utf-8", errors="replace")
         i = raw.find("{")
         return json.loads(raw[i:]) if i >= 0 else {}
-    except Exception:
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError):
         return {}
 
 
+def git_worktree_rows():
+    """Worktrees git knows about but Orca does not list.
+
+    A worktree made with `git worktree add` is on disk, in nobody's list, and would otherwise
+    be invisible to the pass entirely. It is reported like any other unmarked worktree:
+    unmanaged, never touched, only named."""
+    seen, out = set(), []
+    # orca() directly, not worktree_rows(): that one calls back into here, and the union would
+    # recurse until the pass died - which is how this line read the first time.
+    _o = (orca("worktree", "list", "--json").get("result") or {}).get("worktrees") or []
+    bases = [WS_ROOT, "D:/code/design-system-viewer"] + [r.get("path") for r in _o]
+    for base in bases:
+        if not base:
+            continue
+        try:
+            cp = subprocess.run(["git", "-C", base, "worktree", "list", "--porcelain"],
+                                capture_output=True, timeout=60, stdin=subprocess.DEVNULL)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if cp.returncode != 0:
+            continue
+        for line in (cp.stdout or b"").decode("utf-8", "replace").splitlines():
+            if not line.startswith("worktree "):
+                continue
+            p = line[len("worktree "):].strip()
+            if p and p not in seen:
+                seen.add(p)
+                out.append({"path": p, "name": os.path.basename(p.replace("\\", "/").rstrip("/")),
+                            "gitOnly": True})
+        if out:
+            break
+    return out
+
+
 def worktree_rows():
+    """The union of Orca's list and git's. Orca is authoritative for the ones it manages;
+    git catches the rest, so nothing on disk can hide from the pass."""
     j = orca("worktree", "list", "--json")
-    return (j.get("result") or {}).get("worktrees") or []
+    rows = list((j.get("result") or {}).get("worktrees") or [])
+    have = set()
+    for r in rows:
+        for key in ("path", "worktreePath"):
+            v = r.get(key)
+            if v:
+                have.add(v.replace("\\", "/").rstrip("/").lower())
+    for g in git_worktree_rows():
+        p = (g.get("path") or "").replace("\\", "/").rstrip("/")
+        if p.lower() not in have:
+            rows.append(g)
+    return rows
 
 
 def terminal_rows():
@@ -82,7 +129,7 @@ def age_s(stamp):
     """Seconds since an ISO stamp we wrote, or a big number when it cannot be read."""
     try:
         t = calendar.timegm(time.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ"))
-    except Exception:
+    except (ValueError, TypeError):
         return 1 << 30
     return max(0.0, time.time() - t)
 
