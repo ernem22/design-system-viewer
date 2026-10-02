@@ -91,6 +91,22 @@ say "when settle.sh refused (no settlement) - RAM and evidence are separate deci
 
 [ -n "$KEEP" ] || say "(scratch left at $SCRATCH)"
 
+# ---------------- (e) a worker held in wait-capacity is untouched ----------------
+say ""
+say "=== (e) worker held in wait-capacity ==="
+say "start.sh writes the marker before it waits, and worker-start - which promotes the marker"
+say "to state=dispatched - runs only AFTER wait-capacity returns. So the whole wait is inside"
+say "the starting window, and reconcile must show no actions for such a worktree."
+STARTERS="$(plan | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{
+const p=JSON.parse(s);const st=(p.managed||[]).filter(m=>m.starting_recent);
+process.stdout.write(st.length?st.map(m=>m.worktree+" actions="+(m.actions.join(",")||"-")).join(" | "):"none")}catch(e){process.stdout.write("?")}});')"
+say "  managed worktrees protected as starting: $STARTERS"
+case "$STARTERS" in
+  none) say "  no worktree is mid-start right now - case (e) not observable this run (see (a)/(b) notes)" ;;
+  *actions=-) pass "a starting worktree is protected and gained no action" ;;
+  *) fail "a starting worktree gained actions: $STARTERS" ;;
+esac
+
 say ""
 if [ "$FAILS" -eq 0 ]; then
   say "ALL OBSERVABLE CASES PASS (a/b need a worker; see above)"
