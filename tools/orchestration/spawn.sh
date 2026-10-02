@@ -150,7 +150,23 @@ if [ -n "$WORKTREE_ONLY" ]; then
   exit 0
 fi
 
-orca terminal create --worktree "id:$REPO_ID::$P" --title "$ROLE" --command "$CMD" --json >/dev/null
+# The JSON body is the only place a failure says WHY. `>/dev/null` threw it away, so every
+# failure - wrong repo id, a title or worktree Orca would not accept - surfaced only as the
+# 75-second "the agent terminal never registered" timeout below, with no cause on the log.
+# Capture it and print it verbatim when the call fails, and also when it exits 0 carrying an
+# error object: `orca worktree create` above returns exactly that shape (it is why an empty
+# PATH used to read as a successful spawn), so exit status alone is not the failure signal.
+TERM_JSON="$(orca terminal create --worktree "id:$REPO_ID::$P" --title "$ROLE" --command "$CMD" --json 2>&1)" || {
+  echo "spawn.sh: orca terminal create failed for $ROLE ($P) - raw output:" >&2
+  printf '%s\n' "$TERM_JSON" >&2
+  exit 4
+}
+case "$TERM_JSON" in
+  *'"error"'*|*'"ok":false'*)
+    echo "spawn.sh: orca terminal create reported an error for $ROLE ($P) - raw output:" >&2
+    printf '%s\n' "$TERM_JSON" >&2
+    exit 4 ;;
+esac
 
 sleep 6
 
