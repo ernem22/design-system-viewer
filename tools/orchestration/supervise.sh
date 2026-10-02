@@ -29,11 +29,13 @@
 # the title, so a recovery lands on the same PR instead of opening a new one.
 set -uo pipefail
 
-INTERVAL=120; ACT=""; RUN=""; MAX_REC=3; ONCE=""; READ_GAP="${SUPERVISE_READ_GAP:-20}"
+INTERVAL=120; ACT="" RECONCILE=1; RUN=""; MAX_REC=3; ONCE=""; READ_GAP="${SUPERVISE_READ_GAP:-20}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --interval) INTERVAL="${2:?}"; shift 2;;
     --act) ACT=1; shift;;
+  --reconcile) RECONCILE=1; shift;;
+  --no-reconcile) RECONCILE=""; shift;;
     --once) ONCE=1; shift;;
     --max-recoveries) MAX_REC="${2:?}"; shift 2;;
     --run) RUN="${2:?}"; shift 2;;
@@ -51,7 +53,7 @@ fi
 BASE="${SUPERVISE_BASE:-origin/refactor/full-react-migration}"
 INBOX_DIR="${INBOX_DIR:-${LOCALAPPDATA:-$HOME}/orca-orchestration/design-system-viewer/inbox}"
 LOG="${SUPERVISE_LOG:-${LOCALAPPDATA:-$HOME}/Temp/supervise.log}"
-STATE_DIR="${SUPERVISE_STATE:-${LOCALAPPDATA:-$HOME}/Temp/supervise-state}"
+STATE_DIR="${SUPERVISE_STATE:-${LOCALAPPDATA:-$HOME}/orca-orchestration/design-system-viewer/state}"
 SEEN_FILE="$STATE_DIR/seen-dispatches"
 NOTED_FILE="$STATE_DIR/noted-dispatches"
 RECOVERIES=0
@@ -136,52 +138,38 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   # to resolve the worktree, printing DONE while closing nothing). This sweep closes any dispatch
   # that is done but not yet closed, so nothing stays open longer than one interval even with the
   # watcher fully down.
-  sweep_settle
-  sweep_orphan_trees
+
+
+# RECONCILE. The per-dispatch sweeps that used to live here hunted for one dispatch's
+# worktree, terminal and processes, and every miss needed another patch. This starts from what
+# is MANAGED (a worktree carrying .dsv-worker), compares against what is LIVE, and acts on the
+# difference. It is independent of --act: its first three cycles are dry runs that print the
+# plan, after which it executes.
+reconcile_cycle() {
+  [ -n "$RECONCILE" ] || return 0
+  mkdir -p "$STATE_DIR"
+  local EXEC OUT
+  # Gating is an explicit file, not a cycle count: a restart must never re-arm execution, and
+  # execution must not arrive on a timer. The file is created only after the probe passes a-e.
+  EXEC=""
+  if [ -f "$STATE_DIR/reconcile.enabled" ]; then EXEC="--execute"; fi
+  PLAN="$(python "$HERE_NATIVE/lib/reconcile.py" --run "$RUN" $EXEC --json 2>/dev/null || true)"
+  if [ -z "$PLAN" ]; then say "reconcile: could not build a plan"; return; fi
+  OUT="$(printf '%s' "$PLAN" | node -e '
+  let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const p=JSON.parse(s);
+  const L=[];L.push("managed="+p.managed.length+" unmanaged="+p.unmanaged.length+" live="+p.live_handles.length+" invariant="+(p.invariant_ok?"OK":"VIOLATED"));
+  p.managed.filter(m=>!m.live).forEach(m=>L.push("  "+m.worktree+" -> "+(m.actions.join(",")||"-")+(m.dispatch?" ("+m.dispatch+")":"")));
+  (p.violations||[]).forEach(v=>L.push("  VIOLATION "+v));
+  (p.backfill||[]).forEach(b=>L.push("  BACKFILL candidate "+b.worktree+" ("+b.dispatch+")"));
+  (p.executed||[]).forEach(e=>L.push("  acted "+JSON.stringify(e)));
+  process.stdout.write(L.join("\n"))}catch(e){process.stdout.write("unparseable")}});')"
+  printf '%s\n' "$OUT" | while IFS= read -r line; do say "reconcile[$N]: $line"; done
+  if [ -z "$EXEC" ]; then say "reconcile[$N]: DRY RUN (cycles 1-3) - nothing was changed"; fi
+}
+reconcile_cycle
 }
 
 # Close dispatches that are finished but still holding a terminal or a worktree.
-sweep_settle() {
-  local W JSON pending
-  JSON="$(workers_json)"
-  [ -n "$JSON" ] || { say "sweep: could not read the worker list"; return; }
-  pending="$(printf '%s' "$JSON" | node -e '
-let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
-  try{ const w=(JSON.parse(s).result||{}).workers||[];
-    for(const x of w){ if(x.dispatchStatus!=="completed" && x.dispatchStatus!=="failed" && x.dispatchStatus!=="abandoned") continue;
-      if(!x.agentTerminalHandle) continue;
-      process.stdout.write(x.dispatchId+"|"+(x.taskId||"")+"|"+x.dispatchStatus+"\n"); }
-  }catch(e){}
-});')"
-  local n=0
-  while IFS='|' read -r DISP TASK ST; do
-    [ -n "$DISP" ] || continue
-    local H
-    H="$(printf '%s' "$JSON" | node -e '
-let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
-  const want=process.argv[1];
-  try{ const w=(JSON.parse(s).result||{}).workers||[]; const x=w.find(y=>y.dispatchId===want);
-    process.stdout.write(x?(x.agentTerminalHandle||""):""); }catch(e){}
-});' "$DISP")"
-    local ALIVE
-    ALIVE="$(orca terminal list --json 2>/dev/null | node -e '
-let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
-  const want=process.argv[1];
-  try{ const t=(JSON.parse(s).result||{}).terminals||[];
-    process.stdout.write(t.some(x=>x.handle===want)?"yes":"no"); }catch(e){ process.stdout.write("no"); }
-});' "$H")"
-    if [ "$ALIVE" = "yes" ]; then
-      n=$((n+1))
-      say "sweep: $DISP ($TASK, $ST) still holds terminal $H - settling"
-      if [ -n "$ACT" ]; then
-        bash "$HERE/settle.sh" "$DISP" 2>&1 | grep -E "worktree removed|DONE|FAILED|REFUSED" | sed 's/^/  sweep:   /' | tee -a "$LOG"
-      else
-        say "sweep:   (dry run; run with --act to close it)"
-      fi
-    fi
-  done <<< "$pending"
-  [ "$n" -eq 0 ] && say "sweep: nothing finished is still holding a terminal"
-}
 
 # ---- orphaned opencode trees: identity is a worktree that is GONE from disk -------------
 # Every tree lib/opencode_trees.py can resolve carries the worktree of the worker that owns
@@ -194,40 +182,6 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
 # own opencode session launched from an editor - killing it would be exactly the mistake this
 # rule exists to prevent. Nothing is ever killed by name: only pids from a resolved tree whose
 # worktree is provably gone.
-sweep_orphan_trees() {
-  local J N ROWS
-  J="$(python "$HERE_NATIVE/lib/opencode_trees.py" --orphans --json 2>/dev/null || true)"
-  [ -n "$J" ] || { say "orphans: could not read the opencode tree list"; return; }
-  N="$(printf '%s' "$J" | node -e '
-  let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{
-  process.stdout.write(String((JSON.parse(s).roots||[]).length))}catch(e){process.stdout.write("?")}});')"
-  if [ "$N" = "0" ]; then say "orphans: none"; return; fi
-  ROWS="$(printf '%s' "$J" | node -e '
-  let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const r=JSON.parse(s).roots||[];
-  process.stdout.write(r.map(x=>[x.root_pid,x.worktree,x.mb,(x.pids||[]).join("+")].join("|")).join("\n"))}catch(e){}});')"
-  say "orphans: $N opencode tree(s) whose worktree is gone"
-  printf '%s\n' "$ROWS" | while IFS='|' read -r P WT MB PIDS; do
-    [ -n "$P" ] || continue
-    say "  orphan pid=$P worktree=$WT (${MB} MB, pids $PIDS)"
-    if [ -z "${ACT:-}" ]; then
-      say "    (dry run; --act would kill this tree)"
-      continue
-    fi
-    taskkill -T -F -PID "$P" >/dev/null 2>&1 || true
-    for Q in $(printf '%s' "$PIDS" | tr "+" " "); do
-      taskkill -F -PID "$Q" >/dev/null 2>&1 || true
-    done
-    if [ "$(powershell.exe -NoProfile -NonInteractive -Command "if (Get-Process -Id $P -ErrorAction SilentlyContinue) { 'yes' } else { 'no' }" 2>/dev/null | tr -d '\r')" = "yes" ]; then
-      say "    KILL FAILED for pid=$P - still alive; recording it"
-      mkdir -p "$INBOX_DIR"
-      printf '%s\n' "orphan tree pid=$P worktree=$WT survived the kill (${MB} MB)" >> "$INBOX_DIR/orphan-kills.log"
-    else
-      say "    killed and verified gone: pid=$P (${MB} MB released)"
-      mkdir -p "$INBOX_DIR"
-      printf '%s %s pid=%s worktree=%s mb=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" killed "$P" "$WT" "$MB" >> "$INBOX_DIR/orphan-kills.log"
-    fi
-  done
-}
 
 # Recover one stalled dispatch: abandon it, then retry the SAME task on a fresh worktree.
 # Capped per TASK, not per run: at most two automatic retries, then it stops and writes an inbox item

@@ -75,6 +75,25 @@ RAW=$(orca worktree create --repo "id:$REPO_ID" --name "$ROLE" \
 P=$(printf '%s' "$RAW" | node -e \
   "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const i=s.indexOf('{');const j=JSON.parse(i>=0?s.slice(i):s);console.log(j.result.worktree.path||j.result.path)})")
 
+# Ownership marker: reconcile.py treats a worktree as MANAGED only when this file exists, so
+# everything the pipeline did not create - the owner's own opencode, the coordinator, houndshark,
+# the root checkout - stays invisible to it. Written here because this is the one moment the
+# worktree path and the role are both known. `dispatch` is filled in once the handle is.
+printf 'role=%s\nhandle=\nstate=starting\ndispatch=\ncreated_at=%s\n' "$ROLE" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$P/.dsv-worker" 2>/dev/null || true
+
+# The marker and Orca's per-worktree config are untracked by design. Without this the
+# worktree is 'dirty', `git worktree remove` refuses, and a settle that printed DONE
+# leaves the directory on disk - which is exactly what happened to two probe worktrees.
+# info/exclude is per-worktree and untracked, so it never reaches the repo.
+GD="$(git -C "$P" rev-parse --git-common-dir 2>/dev/null || true)"
+case "$GD" in /*|[A-Za-z]:*) ;; *) [ -n "$GD" ] && GD="$P/$GD" ;; esac
+if [ -n "$GD" ]; then
+  mkdir -p "$GD/info" 2>/dev/null || true
+  for PAT in .dsv-worker opencode.json; do
+    grep -qxF "$PAT" "$GD/info/exclude" 2>/dev/null || printf '%s\n' "$PAT" >> "$GD/info/exclude"
+  done
+fi
+
 # Model pin AND permission model. The permission block is what stops a worker from
 # stalling on an approval prompt:
 #   * external_directory: deny — a worker may not touch anything outside its own
@@ -131,7 +150,23 @@ if [ -n "$WORKTREE_ONLY" ]; then
   exit 0
 fi
 
-orca terminal create --worktree "id:$REPO_ID::$P" --title "$ROLE" --command "$CMD" --json >/dev/null
+# The JSON body is the only place a failure says WHY. `>/dev/null` threw it away, so every
+# failure - wrong repo id, a title or worktree Orca would not accept - surfaced only as the
+# 75-second "the agent terminal never registered" timeout below, with no cause on the log.
+# Capture it and print it verbatim when the call fails, and also when it exits 0 carrying an
+# error object: `orca worktree create` above returns exactly that shape (it is why an empty
+# PATH used to read as a successful spawn), so exit status alone is not the failure signal.
+TERM_JSON="$(orca terminal create --worktree "id:$REPO_ID::$P" --title "$ROLE" --command "$CMD" --json 2>&1)" || {
+  echo "spawn.sh: orca terminal create failed for $ROLE ($P) - raw output:" >&2
+  printf '%s\n' "$TERM_JSON" >&2
+  exit 4
+}
+case "$TERM_JSON" in
+  *'"error"'*|*'"ok":false'*)
+    echo "spawn.sh: orca terminal create reported an error for $ROLE ($P) - raw output:" >&2
+    printf '%s\n' "$TERM_JSON" >&2
+    exit 4 ;;
+esac
 
 sleep 6
 
@@ -149,6 +184,9 @@ for _ in $(seq 1 25); do
   sleep 3
 done
 [ -z "$H" ] && { echo "NO_TERMINAL_HANDLE for $ROLE (path $P) — the agent terminal never registered; inspect: orca terminal list" >&2; exit 2; }
+
+# dispatch without guessing from names.
+printf 'role=%s\nhandle=%s\nstate=starting\ndispatch=\ncreated_at=%s\n' "$ROLE" "${H:-}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$P/.dsv-worker" 2>/dev/null || true
 
 echo "PATH=$P"
 echo "HANDLE=$H"
