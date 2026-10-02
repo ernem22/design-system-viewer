@@ -35,7 +35,19 @@ while [ $# -gt 0 ]; do
 done
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-RUN="${WATCH_RUN:-run_4e539259ab29}"
+# Derive the run from Orca instead of carrying a session constant (same fix as settle.sh and
+# watch-settlements.sh, which already did this). The old fallback was a leftover from the
+# session that created it: every copy of it would dispatch and fence in a run that may not be
+# the current one.
+if [ -n "${WATCH_RUN:-}" ]; then
+  RUN="$WATCH_RUN"
+else
+  RUN="$(orca orchestration run-current --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write((((JSON.parse(s).result||{}).run)||{}).id||"")}catch(e){}})' )"
+  if [ -z "$RUN" ]; then
+    echo "could not read the current run (orca orchestration run-current); pass WATCH_RUN=<id>" >&2
+    exit 2
+  fi
+fi
 
 counter_of() { grep -oE '[0-9.]+K \([0-9]+%\) · \$[0-9.]+' "$1" 2>/dev/null | tail -1; }
 tool_active_of() {
