@@ -75,6 +75,12 @@ RAW=$(orca worktree create --repo "id:$REPO_ID" --name "$ROLE" \
 P=$(printf '%s' "$RAW" | node -e \
   "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const i=s.indexOf('{');const j=JSON.parse(i>=0?s.slice(i):s);console.log(j.result.worktree.path||j.result.path)})")
 
+# Ownership marker: reconcile.py treats a worktree as MANAGED only when this file exists, so
+# everything the pipeline did not create - the owner's own opencode, the coordinator, houndshark,
+# the root checkout - stays invisible to it. Written here because this is the one moment the
+# worktree path and the role are both known. `dispatch` is filled in once the handle is.
+printf 'role=%s\ntask=%s\ndispatch=%s\ncreated_at=%s\n' "$ROLE" "${TASK:-}" "" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$P/.dsv-worker" 2>/dev/null || true
+
 # Model pin AND permission model. The permission block is what stops a worker from
 # stalling on an approval prompt:
 #   * external_directory: deny — a worker may not touch anything outside its own
@@ -149,6 +155,10 @@ for _ in $(seq 1 25); do
   sleep 3
 done
 [ -z "$H" ] && { echo "NO_TERMINAL_HANDLE for $ROLE (path $P) — the agent terminal never registered; inspect: orca terminal list" >&2; exit 2; }
+
+# The handle is known now: record it in the marker, so reconcile can tie the worktree to a
+# dispatch without guessing from names.
+printf 'role=%s\ntask=%s\ndispatch=%s\ncreated_at=%s\n' "$ROLE" "${TASK:-}" "${H:-}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$P/.dsv-worker" 2>/dev/null || true
 
 echo "PATH=$P"
 echo "HANDLE=$H"
