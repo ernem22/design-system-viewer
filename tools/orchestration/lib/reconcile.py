@@ -80,7 +80,7 @@ STARTING_GRACE_S = 30 * 60
 def age_s(stamp):
     """Seconds since an ISO stamp we wrote, or a big number when it cannot be read."""
     try:
-        t = time.mktime(time.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ")) - time.timezone
+        t = calendar.timegm(time.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ"))
     except Exception:
         return 1 << 30
     return max(0.0, time.time() - t)
@@ -134,7 +134,7 @@ def node_procs_in(wt_path, procs):
     return out
 
 
-def build(run, execute, backfill):
+def build(run, execute, backfill, only=()):
     trees = ot.snapshot()
     procs = ot.processes()
     wts = worktree_rows()
@@ -183,6 +183,11 @@ def build(run, execute, backfill):
             continue
         managed.append({"worktree": n, "path": path, "marker": mk, "row": w})
 
+    if only:
+        # A targeted pass sees only the named worktrees: everything else is left out of the
+        # plan entirely, so it cannot be acted on by accident.
+        managed = [m for m in managed if m["worktree"] in only]
+
     out = {"ok": True, "run": run, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            "managed": [], "unmanaged": unmanaged, "backfill": backfill_candidates,
            "violations": [], "live_handles": sorted(live_handles)}
@@ -227,11 +232,22 @@ def build(run, execute, backfill):
                 rec["actions"].append("kill_procs")
             if terms_here:
                 rec["actions"].append("close_terminals")
-            rec["actions"].append("settle")
+            # settle.sh needs a dispatch id. Without one there is nothing to settle with, and
+            # the worktree is kept: the processes still die, the evidence stays.
+            if disp:
+                rec["actions"].append("settle")
+            else:
+                rec["actions"].append("keep(no-dispatch)")
             # The processes die either way; only the worktree decision differs, and that one
             # belongs to settle.sh (it refuses when there is no settlement or merged PR).
             rec["keep_worktree"] = True
         out["managed"].append(rec)
+
+    # Every managed worktree that is not live and has no dispatch: killed processes, kept
+# worktree. Named here so the daily report cannot let them accumulate unnoticed.
+    out["no_dispatch"] = sorted(m["worktree"] for m in out["managed"]
+                                if not m["live"] and not m["dispatch"])
+
 
     # INVARIANT: every opencode tree in a managed worktree belongs to a live dispatch, and no
     # process is left in a managed worktree that is not live.
@@ -303,12 +319,18 @@ def _alive(pid):
 
 
 def main(argv):
-    run, as_json, execute, backfill = "", False, False, False
+    run, as_json, execute, backfill, only = "", False, False, False, []
     i = 1
     while i < len(argv):
         a = argv[i]
         if a == "--run" and i + 1 < len(argv):
             run = argv[i + 1]
+            i += 2
+            continue
+        if a == "--only" and i + 1 < len(argv):
+            # A targeted pass. Used to break a deadlock on capacity that the full pass
+            # would itself free, and to prove one path against real data.
+            only = [x for x in argv[i + 1].split(",") if x]
             i += 2
             continue
         if a == "--json":
@@ -322,16 +344,17 @@ def main(argv):
             return 2
         i += 1
     try:
-        plan = build(run, execute, backfill)
+        plan = build(run, execute, backfill, only)
     except Exception as exc:
         print("reconcile: could not read the process table: %r" % (exc,), file=sys.stderr)
         return 2
     if as_json:
         print(json.dumps(plan, ensure_ascii=False))
     else:
-        print("reconcile %s  managed=%d unmanaged=%d live=%d invariant=%s"
+        print("reconcile %s  managed=%d unmanaged=%d live=%d invariant=%s no_dispatch=%s"
               % (plan["at"], len(plan["managed"]), len(plan["unmanaged"]),
-                 len(plan["live_handles"]), "OK" if plan["invariant_ok"] else "VIOLATED"))
+                 len(plan["live_handles"]), "OK" if plan["invariant_ok"] else "VIOLATED",
+          ",".join(plan.get("no_dispatch") or []) or "-"))
         for m in plan["managed"]:
             print("  %-24s live=%-5s actions=%s" % (m["worktree"], m["live"],
                                                     ",".join(m["actions"]) or "-"))
