@@ -227,7 +227,18 @@ def build(run, execute, backfill, only=()):
             if proof:
                 backfill_candidates.append({"worktree": n, "path": path, "dispatch": proof})
             if name_of(path) in by_name_term or local_procs_in(n, trees):
-                unmanaged.append({"worktree": n, "path": path, "reason": "no marker"})
+                # Every unmarked worktree is reported, not just the ones holding a terminal or an
+                # opencode tree. A preview started as `cd <wt>/app && npx vite preview` names no path,
+                # so filtering on "has a terminal" made a whole class of leak invisible. Reported only:
+                # reconcile never acts on an unmarked worktree.
+                try:
+                    _terms = list(by_name_term.get(n) or []) if hasattr(by_name_term, "get") else []
+                except (TypeError, AttributeError):
+                    _terms = []
+                unmanaged.append({"worktree": n, "path": path, "reason": "no marker",
+                                  "terminals": _terms,
+                                  "opencode_roots": [t["pid"] for t in local_procs_in(n, trees)],
+                                  "other_procs": node_procs_in(path, procs)})
             continue
         managed.append({"worktree": n, "path": path, "marker": mk, "row": w})
 
