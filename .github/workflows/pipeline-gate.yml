@@ -120,6 +120,11 @@ jobs:
                       await github.rest.issues.removeLabel({ owner, repo, issue_number: prNumber, name: label }).catch(() => {});
                     }
                   }
+                  // Defensive: this block sits ABOVE the fail-closed wrapper below, so a
+                  // throw here would end the run before the gate ever evaluates, and no
+                  // pipeline/verdict status would be written for this event — the PR would
+                  // just keep whatever status it already had. The label calls above already
+                  // swallow their failures; the acknowledgement comment gets the same care.
                   await github.rest.issues.createComment({
                     owner, repo, issue_number: prNumber,
                     body: verb === 'hold'
@@ -127,6 +132,8 @@ jobs:
                       : verb === 'rework'
                         ? 'Pipeline: **rework requested** (`rework`). The next Fixer dispatch picks up this comment thread verbatim.'
                         : 'Pipeline: **resumed**. The gate re-evaluates on the next verdict.',
+                  }).catch((e) => {
+                    core.info(`/${verb}: could not post the acknowledgement comment (${e && e.message})`);
                   });
                 }
               }
