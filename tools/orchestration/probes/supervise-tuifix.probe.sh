@@ -32,6 +32,13 @@ cat > "$SCRATCH/bin/orca" <<'SHIM'
 #!/usr/bin/env bash
 W="${PROBE_WT:-}"
 case "$1 $2" in
+  # stall-check.sh derives the run from Orca (the RUN fallback fix), so a shim that does not
+  # answer this exits 2 before it ever reads a screen - which is indistinguishable, in
+  # supervise.sh's output, from the UNKNOWN the probe exists to catch. Measured 2026-10-02:
+  # without this case the probe reported "could not decide" for a dead TUI that the code below
+  # handles correctly.
+  "orchestration run-current")
+    printf '{"ok":true,"result":{"run":{"id":"run_probe","status":"active"}}}\n'; exit 0;;
   "orchestration worker-list")
     printf '{"ok":true,"result":{"workers":[{"dispatchId":"ctx_probe","taskId":"task_probe","state":"ready","dispatchStatus":"dispatched","projection":{"liveness":{"verdict":"unverifiable","reason":"stale_status"}},"agentTerminalHandle":"term_probe"}]}}\n'; exit 0;;
   "orchestration task-list")
