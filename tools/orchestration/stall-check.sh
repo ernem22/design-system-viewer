@@ -66,6 +66,18 @@ tool_active_of() {
   grep -qE '(^|[[:space:]])[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][[:space:]]+[a-z]' "$1" 2>/dev/null && echo yes || echo no
 }
 tail_hash_of() { grep -vE '^\s*$' "$1" 2>/dev/null | tail -25 | md5sum | cut -d' ' -f1; }
+# A shell prompt AT COLUMN 0 means the TUI is gone. The process that owned the screen ended, and
+# the shell that started it drew its prompt back over the dead frame; worker-read's tail keeps the
+# dead frame's rows, so the prompt sits at column 0 (outside the '┃' gutter every live TUI row
+# carries) with no counter anywhere. Measured 2026-10-02 on probe-role999 (its TUI killed on
+# purpose, terminal and worktree left alive):
+#     PS C:\Users\zurza\orca\workspaces\design-system-viewer\probe-role999>
+# while its live sibling probe-sandbox showed the same text indented behind the gutter, WITH its
+# counter. The gutter is the discriminator: an indentation-or-gutter-prefixed prompt is TUI content
+# (a worker can print anything), a column-0 prompt is the shell.
+prompt_of() {
+  grep -qE '^(PS )?[A-Za-z]:[\\/][^|]*>[[:space:]]*$|^[A-Za-z0-9_.-]+@[A-Za-z0-9_.-]+[[:space:]][^|]*[$#][[:space:]]*$' "$1" 2>/dev/null && echo yes || echo no
+}
 
 decide() {
   local a="$1" b="$2" present="$3"
@@ -90,6 +102,16 @@ decide() {
   # mean the telemetry is unavailable, and with --act a STALL is authority to abandon a dispatch, so
   # uncertainty must not satisfy the test (CodeRabbit Medium on PR #167 - correct).
   if [ -z "$ca" ] && [ -z "$cb" ]; then
+    # ...but a DEAD TUI is readable in exactly the same way: no counter at all. That is what kept
+    # supervise.sh's recovery from firing on the one case it was written for - measured 2026-10-02,
+    # probe-role999 said "could not decide; leaving it alone" with its TUI killed and its terminal
+    # alive. The shell prompt the process left behind is the difference, and it is a fact about the
+    # screen, not a guess. This branch is reachable ONLY when no counter was read in either reading,
+    # so a worker whose telemetry works is never affected by it.
+    if [ "$(prompt_of "$a")" = "yes" ] || [ "$(prompt_of "$b")" = "yes" ]; then
+      echo "EXITED|no counter, and a shell prompt is drawn at column 0|the TUI is gone: the shell that started it has its prompt back over the frame, so this worker is finished or killed, not stalled"
+      return 4
+    fi
     echo "UNKNOWN|counter unreadable in both readings|telemetry is unavailable, so this is not evidence of a freeze"
     return 5
   fi
