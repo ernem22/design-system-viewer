@@ -161,7 +161,7 @@ def marker_text(role, handle="", state="dispatched", dispatch="", created_at=Non
 
 STATE_DIR = (os.environ.get("SUPERVISE_STATE")
              or os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"),
-                            "Temp", "supervise-state"))
+                             "orca-orchestration", "design-system-viewer", "state"))
 
 
 def ignored_rows():

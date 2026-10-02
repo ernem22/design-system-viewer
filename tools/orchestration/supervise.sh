@@ -53,7 +53,7 @@ fi
 BASE="${SUPERVISE_BASE:-origin/refactor/full-react-migration}"
 INBOX_DIR="${INBOX_DIR:-${LOCALAPPDATA:-$HOME}/orca-orchestration/design-system-viewer/inbox}"
 LOG="${SUPERVISE_LOG:-${LOCALAPPDATA:-$HOME}/Temp/supervise.log}"
-STATE_DIR="${SUPERVISE_STATE:-${LOCALAPPDATA:-$HOME}/Temp/supervise-state}"
+STATE_DIR="${SUPERVISE_STATE:-${LOCALAPPDATA:-$HOME}/orca-orchestration/design-system-viewer/state}"
 SEEN_FILE="$STATE_DIR/seen-dispatches"
 NOTED_FILE="$STATE_DIR/noted-dispatches"
 RECOVERIES=0
