@@ -165,10 +165,13 @@ def local_procs_in(name, trees):
 
 
 def node_procs_in(wt_path, procs):
-    """vite/node/bash whose command line names this worktree and that are NOT opencode.
+    """vite/node/bash whose COMMAND LINE names this worktree and that are NOT opencode.
 
-    A preview started as `(cd <wt>/app && npx vite preview)` names no path, so its command
-    line is not usable; its cwd is, which is why cwd is checked too.
+    The check is the command line and only the command line. This used to claim cwd was
+    checked too; it is not, so a preview started as `(cd <wt>/app && npx vite preview)`
+    names no path and is invisible here. Reading another process's cwd needs a PEB read,
+    and serve.sh owns previews, so this says what it does instead of what it should.
+    To be seen, a process must carry the worktree path in its command line.
     """
     want = wt_path.replace("\\", "/").rstrip("/").lower()
     out = []
@@ -226,19 +229,15 @@ def build(run, execute, backfill, only=()):
                         proof = ww.get("dispatchId") or ""
             if proof:
                 backfill_candidates.append({"worktree": n, "path": path, "dispatch": proof})
-            if name_of(path) in by_name_term or local_procs_in(n, trees):
-                # Every unmarked worktree is reported, not just the ones holding a terminal or an
-                # opencode tree. A preview started as `cd <wt>/app && npx vite preview` names no path,
-                # so filtering on "has a terminal" made a whole class of leak invisible. Reported only:
-                # reconcile never acts on an unmarked worktree.
-                try:
-                    _terms = list(by_name_term.get(n) or []) if hasattr(by_name_term, "get") else []
-                except (TypeError, AttributeError):
-                    _terms = []
-                unmanaged.append({"worktree": n, "path": path, "reason": "no marker",
-                                  "terminals": _terms,
-                                  "opencode_roots": [t["pid"] for t in local_procs_in(n, trees)],
-                                  "other_procs": node_procs_in(path, procs)})
+            # Every unmarked worktree is reported, not just the ones holding a terminal or an
+            # opencode tree. A preview started as `cd <wt>/app && npx vite preview` names no path,
+            # so filtering on "has a terminal" made a whole class of leak invisible. Reported only:
+            # reconcile never acts on an unmarked worktree.
+            _terms = list(by_name_term.get(n) or [])
+            unmanaged.append({"worktree": n, "path": path, "reason": "no marker",
+                              "terminals": _terms,
+                              "opencode_roots": [t.get("root_pid") or t.get("pid") for t in local_procs_in(n, trees)],
+                              "other_procs": node_procs_in(path, procs)})
             continue
         managed.append({"worktree": n, "path": path, "marker": mk, "row": w})
 
@@ -250,6 +249,16 @@ def build(run, execute, backfill, only=()):
     out = {"ok": True, "run": run, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            "managed": [], "unmanaged": unmanaged, "backfill": backfill_candidates,
            "violations": [], "live_handles": sorted(live_handles)}
+    # An unmarked worktree holding a process is a leak outside the marker system: named as
+    # a violation so it can never be silent, and never killed - reconcile does not act on
+    # worktrees it does not own.
+    for u in unmanaged:
+        _held = (list(u.get("terminals") or []) + list(u.get("opencode_roots") or [])
+                 + list(u.get("other_procs") or []))
+        if _held:
+            out["violations"].append(
+                "unmarked worktree %s holds %d process(es) and is not managed"
+                % (u["worktree"], len(_held)))
 
     for m in managed:
         n, path = m["worktree"], m["path"]
