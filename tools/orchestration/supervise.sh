@@ -285,10 +285,19 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
     process.stdout.write(x?(x.worktreePath||""):""); }catch(e){}
 });' "$OLD_H")"
     say "  closing the old worker first: terminal $OLD_H ${OLD_WT:+worktree $OLD_WT}"
-    orca terminal close --terminal "$OLD_H" --json >/dev/null 2>&1
+    # settle.sh FIRST, not the blunt close: its own worktree resolution needs the terminal
+    # still registered (worker-list -> agentTerminalHandle -> terminal list -> worktreePath),
+    # and it closes the terminal itself as part of its own sequence. Closing the terminal here
+    # first makes settle.sh fall through to the raw rm -rf every single time, so the careful
+    # path never actually runs at this call site. Blunt close only if settle.sh itself fails.
     if [ -n "$OLD_WT" ] && [ -d "$OLD_WT" ]; then
-      bash "$HERE/settle.sh" "$DISP" --force-remove >/dev/null 2>&1 || rm -rf "$OLD_WT" 2>/dev/null
+      if ! bash "$HERE/settle.sh" "$DISP" --force-remove >/dev/null 2>&1; then
+        orca terminal close --terminal "$OLD_H" --json >/dev/null 2>&1
+        rm -rf "$OLD_WT" 2>/dev/null
+      fi
       git worktree prune >/dev/null 2>&1
+    else
+      orca terminal close --terminal "$OLD_H" --json >/dev/null 2>&1
     fi
   fi
   local SPAWN_ARGS=("$NEW" "$REF") SPAWN_OUT SPAWN_RC
@@ -334,8 +343,8 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   [ -n "$REPO_ID" ] || REPO_ID="$(orca worktree list --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const w=(JSON.parse(s).result||{}).worktrees||[];const x=w.find(y=>String(y.path).indexOf("design-system-viewer")>=0&&String(y.path).split("/").length<8);process.stdout.write(x?(x.repoId||""):"")}catch(e){}})')"
   local OUT
   OUT="$(orca orchestration worker-start --task "$TASK" --retry-of "$DISP" --terminal "$H" \
-        --worktree "id:$REPO_ID::C:/Users/zurza/orca/workspaces/design-system-viewer/$NEW" \
-        --run "$RUN" --from "${ORCA_TERMINAL_HANDLE:-}" --json 2>&1)"
+        --worktree "id:$REPO_ID::$P" \
+        --run "$RUN" --from "${ORCA_TERMINAL_HANDLE:-}" --json 2>/dev/null)"
   if printf '%s' "$OUT" | grep -q '"ok": *true'; then
     RECOVERIES=$((RECOVERIES+1))
     mkdir -p "$STATE_DIR"; echo "$((COUNT+1))" > "$COUNT_FILE"

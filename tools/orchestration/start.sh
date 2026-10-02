@@ -30,7 +30,19 @@ while [ $# -gt 0 ]; do
 done
 [ "${#POS[@]}" -ge 3 ] || { echo "usage: start.sh <worktree-path> <spec-file> <task-title> [--retry-of <dispatch>] [--min <mb>]" >&2; exit 2; }
 P="${POS[0]}"; SPEC="${POS[1]}"; TITLE="${POS[2]}"
-RUN="${WATCH_RUN:-run_4e539259ab29}"
+# Derive the run from Orca instead of carrying a session constant (same fix as settle.sh and
+# watch-settlements.sh, which already did this). The old fallback was a leftover from the
+# session that created it: every copy of it would dispatch and fence in a run that may not be
+# the current one.
+if [ -n "${WATCH_RUN:-}" ]; then
+  RUN="$WATCH_RUN"
+else
+  RUN="$(orca orchestration run-current --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write((((JSON.parse(s).result||{}).run)||{}).id||"")}catch(e){}})' )"
+  if [ -z "$RUN" ]; then
+    echo "could not read the current run (orca orchestration run-current); pass WATCH_RUN=<id>" >&2
+    exit 2
+  fi
+fi
 # Both are overridable so the capacity gate can be probed with a fake reading and a short timeout.
 CAPACITY_JS="${CAPACITY_JS:-D:/code/orca-supervisor/src/capacity.js}"
 CAP_TIMEOUT="${WATCH_CAP_TIMEOUT:-900}"
@@ -85,10 +97,10 @@ RETRY_ARG=()
 
 orca orchestration worker-start --spec "$(cat "$SPEC")" --task-title "$TITLE" \
   --terminal "$H" --worktree "id:$REPO_ID::$P" --run "$RUN" --from "$FROM" \
-  ${RETRY_ARG[@]+"${RETRY_ARG[@]}"} --json 2>&1 \
+  ${RETRY_ARG[@]+"${RETRY_ARG[@]}"} --json 2>/dev/null \
   | node -e "
 let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
-  try{ const j=JSON.parse(s);
+  try{ const i=s.indexOf('{'); const j=JSON.parse(i>=0?s.slice(i):s);
     if(j.ok){ console.log('STARTED task='+(j.result&&j.result.taskId)+' dispatch='+(j.result&&j.result.dispatchId)); }
     else { console.log('FAILED '+(j.error&&j.error.code)+' '+(j.error&&j.error.message||'').slice(0,120)); process.exit(3); }
   }catch(e){ console.log('UNPARSED '+s.slice(0,160)); process.exit(4); }
