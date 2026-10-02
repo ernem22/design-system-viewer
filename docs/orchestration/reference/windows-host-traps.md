@@ -138,3 +138,36 @@ MSYS `du` on a big tree can exceed the tool timeout and print nothing.
 
 **Works:** PowerShell, e.g.
 `Get-ChildItem -Recurse -File | Measure-Object Length -Sum`.
+
+## 13. A `C:\...` path on PATH is split at the drive colon
+
+`PATH="C:\Users\x\bin:$PATH"` puts a two-piece entry on PATH (`C` and `\Users\x\bin`), so a
+shimmed binary there is never found. Worse, the failure is silent when the caller has a fallback:
+a probe that shims `orca` this way ran the REAL CLI and reported on the wrong system.
+
+**Evidence:** `probes/settle-preview.probe.sh` answered "no dispatch ctx_probe in run run_probe"
+— settle.sh had called the real `orca`, which knew no such dispatch.
+
+**Works:** `cygpath -u` for anything that goes on PATH or is read by a bash builtin; the native
+`C:/...` form for anything a Windows process must read (a node script reading a file).
+
+## 14. `grep` reads a leading dash as an option, and `[...]` as a character class
+
+`grep -q '-> EXITED'` fails with "unknown option -- >", and `grep -q '[dispatched]'` matches any
+single character from that set instead of the literal text — so an assertion can pass or fail for
+a reason that has nothing to do with what it is checking.
+
+**Works:** `grep -q -- '-> EXITED'` for a leading dash, `grep -qF` for literal text (this also
+removes every regex-escape question).
+
+## 15. Never edit a script that a running bash is reading
+
+bash re-reads a loop body as it iterates, so editing a long-running script in place can make the
+running instance execute garbage. `supervise.sh` and `watch-settlements.sh` run for hours from
+the root checkout — the same path a coordinator edits.
+
+**Measured 2026-10-02:** three `supervise.sh` instances were live in the root worktree while its
+`supervise.sh` was edited.
+
+**Works:** commit the fix on a branch, and leave the root worktree on the branch the long-running
+watchers were started from.
