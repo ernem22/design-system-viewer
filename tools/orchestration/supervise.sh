@@ -148,13 +148,11 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
 reconcile_cycle() {
   [ -n "$RECONCILE" ] || return 0
   mkdir -p "$STATE_DIR"
-  local N PLAN EXEC OUT
-  N="$(cat "$STATE_DIR/reconcile-cycles" 2>/dev/null || printf 0)"
-  case "$N" in ""|*[!0-9]*) N=0;; esac
-  N=$((N+1))
-  printf '%s' "$N" > "$STATE_DIR/reconcile-cycles"
+  local EXEC OUT
+  # Gating is an explicit file, not a cycle count: a restart must never re-arm execution, and
+  # execution must not arrive on a timer. The file is created only after the probe passes a-e.
   EXEC=""
-  if [ "$N" -gt 3 ]; then EXEC="--execute"; fi
+  if [ -f "$STATE_DIR/reconcile.enabled" ]; then EXEC="--execute"; fi
   PLAN="$(python "$HERE_NATIVE/lib/reconcile.py" --run "$RUN" $EXEC --json 2>/dev/null || true)"
   if [ -z "$PLAN" ]; then say "reconcile: could not build a plan"; return; fi
   OUT="$(printf '%s' "$PLAN" | node -e '

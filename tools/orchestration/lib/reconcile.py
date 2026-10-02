@@ -71,6 +71,21 @@ def name_of(path):
     return ot.worktree_of(path) or os.path.basename((path or "").replace("\\", "/").rstrip("/"))
 
 
+# How long a marker may say state=starting before the worktree stops being protected.
+# start.sh waits up to 240 s for capacity, so this is generous by two orders of magnitude
+# on purpose: a false negative here kills a worker that was only slow to start.
+STARTING_GRACE_S = 30 * 60
+
+
+def age_s(stamp):
+    """Seconds since an ISO stamp we wrote, or a big number when it cannot be read."""
+    try:
+        t = time.mktime(time.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ")) - time.timezone
+    except Exception:
+        return 1 << 30
+    return max(0.0, time.time() - t)
+
+
 def read_marker(wt_path):
     p = os.path.join(wt_path, MARKER)
     if not os.path.isfile(p):
@@ -88,9 +103,12 @@ def read_marker(wt_path):
     return out
 
 
-def marker_text(role, task, dispatch):
-    return ("role=%s\ntask=%s\ndispatch=%s\ncreated_at=%s\n"
-            % (role, task, dispatch, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())))
+def marker_text(role, handle="", state="dispatched", dispatch="", created_at=None):
+    """The marker spawn.sh and start.sh write. start.sh is the only writer that knows the
+    dispatch id, which is why spawn.sh leaves that field empty and says state=starting."""
+    return ("role=%s\nhandle=%s\nstate=%s\ndispatch=%s\ncreated_at=%s\n"
+            % (role, handle, state, dispatch,
+               created_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())))
 
 
 def local_procs_in(name, trees):
@@ -171,17 +189,39 @@ def build(run, execute, backfill):
 
     for m in managed:
         n, path = m["worktree"], m["path"]
-        live = n in live_dispatch_by_name
+        mk = m["marker"]
+        state = (mk.get("state") or "").strip().lower()
+        # spawn.sh creates the worktree and writes the marker the moment it exists; start.sh
+        # then waits for the TUI and for capacity (measured up to 240 s) before worker-start
+        # creates the dispatch. In that window the worktree is managed and has no dispatch, so
+        # an executing pass would kill its opencode and close its terminal. While the marker
+        # says starting and is young, the worktree is protected. Once it is old, start.sh is
+        # gone - it died, or capacity timed out - and the worktree is not live like any other.
+        starting_recent = (state == "starting"
+                           and age_s(mk.get("created_at")) < STARTING_GRACE_S)
+        # The dispatch is the marker's own field first, then the dispatch that names this
+        # worktree's terminal. spawn.sh cannot know the dispatch id, so a marker that start.sh
+        # never promoted has none - and then there is nothing to hand to settle.sh.
+        disp = (mk.get("dispatch") or "").strip() or live_dispatch_by_name.get(n, "")
+        if not disp:
+            h = (mk.get("handle") or "").strip()
+            if h:
+                for w in workers:
+                    if w.get("agentTerminalHandle") == h:
+                        disp = w.get("dispatchId") or ""
+                        break
+        live = (n in live_dispatch_by_name) or starting_recent
         local = local_procs_in(n, trees)
         extra = node_procs_in(path, procs)
         terms_here = [t for t in by_name_term.get(n, [])]
         rec = {
             "worktree": n, "path": path, "live": live,
-            "dispatch": live_dispatch_by_name.get(n, m["marker"].get("dispatch", "")),
+            "dispatch": disp,
             "opencode_roots": local, "other_procs": extra,
             "terminals": [t.get("handle") for t in terms_here],
             "actions": [],
         }
+        rec["starting_recent"] = starting_recent
         if not live:
             if local or extra:
                 rec["actions"].append("kill_procs")
@@ -202,12 +242,12 @@ def build(run, execute, backfill):
         mine = [m for m in out["managed"] if m["worktree"] == n]
         if not mine:
             continue  # unmanaged: not this pass's business
-        if not mine[0]["live"]:
+        if not mine[0]["live"] and not mine[0].get("starting_recent"):
             out["violations"].append(
                 "managed worktree %s is NOT live but still has opencode root %s (%s MB)"
                 % (n, t["root_pid"], t["mb"]))
     for m in out["managed"]:
-        if not m["live"] and (m["opencode_roots"] or m["other_procs"] or m["terminals"]):
+        if (not m["live"] and not m.get("starting_recent") and (m["opencode_roots"] or m["other_procs"] or m["terminals"])):
             out["violations"].append(
                 "non-live managed worktree %s holds %d opencode root(s), %d other process(es), %d terminal(s)"
                 % (m["worktree"], len(m["opencode_roots"]), len(m["other_procs"]), len(m["terminals"])))

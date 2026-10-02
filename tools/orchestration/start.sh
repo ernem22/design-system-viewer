@@ -120,7 +120,7 @@ else
   echo "start.sh: the spec names no port; nothing to verify (the previews above are reported, not assumed)" >&2
 fi
 
-orca orchestration worker-start --spec "$(cat "$SPEC")" --task-title "$TITLE" \
+START_OUT="$(orca orchestration worker-start --spec "$(cat "$SPEC")" --task-title "$TITLE" \
   --terminal "$H" --worktree "id:$REPO_ID::$P" --run "$RUN" --from "$FROM" \
   ${RETRY_ARG[@]+"${RETRY_ARG[@]}"} --json 2>/dev/null \
   | node -e "
@@ -130,3 +130,22 @@ let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
     else { console.log('FAILED '+(j.error&&j.error.code)+' '+(j.error&&j.error.message||'').slice(0,120)); process.exit(3); }
   }catch(e){ console.log('UNPARSED '+s.slice(0,160)); process.exit(4); }
 });"
+)"
+RC=$?
+printf '%s\n' "$START_OUT"
+[ "$RC" -eq 0 ] || exit "$RC"
+
+# state=starting -> dispatched. Until this runs the worktree is managed but has no
+# dispatch, and an executing reconcile pass must leave it alone: start.sh can wait up to
+# 240 s for capacity between creating the worktree and this dispatch. spawn.sh cannot
+# write this, it never learns the dispatch id.
+DISPID="$(printf '%s' "$START_OUT" | sed -n 's/.*dispatch=\([^ ]*\).*/\1/p' | head -1)"
+MK="$P/.dsv-worker"
+if [ -n "$DISPID" ] && [ -f "$MK" ]; then
+  MR="$(sed -n 's/^role=//p' "$MK" | head -1)"
+  MH="$(sed -n 's/^handle=//p' "$MK" | head -1)"
+  MC="$(sed -n 's/^created_at=//p' "$MK" | head -1)"
+  printf 'role=%s\nhandle=%s\nstate=dispatched\ndispatch=%s\ncreated_at=%s\n' \
+    "$MR" "$MH" "$DISPID" "$MC" > "$MK" 2>/dev/null || true
+  echo "start.sh: marker promoted to state=dispatched dispatch=$DISPID" >&2
+fi
