@@ -13,11 +13,18 @@ set -uo pipefail
 P="${1:?usage: handle.sh <worktree-path> [--agent-only]}"
 AGENT_ONLY="${2:-}"
 TMP="${LOCALAPPDATA}/Temp/handles_$$.json"
-orca terminal list --json > "$TMP" 2>&1
+# stderr must NOT be merged in. Every `orca` invocation on this host writes a crashpad
+# registration banner to stderr (`[MMDD/HHMMSS.ms:ERROR:...registration_protocol_win.cc:108]
+# CreateFile: ...`), and `2>&1` put it in front of the JSON. JSON.parse then threw, the catch
+# below took its own exit-path, and this script printed nothing while still exiting 0 - so
+# spawn.sh waited its full 75 s and reported "the agent terminal never registered" for a
+# terminal that had in fact registered seconds earlier. Measured 2026-10-03 on probe-ab:
+# `orca terminal list --json` banner lines on stdout 0/0/0, on stderr 1/1/1.
+orca terminal list --json > "$TMP" 2>/dev/null
 
 node -e "
 const fs=require('fs');
-let j; try{ j=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); }catch(e){ process.exit(0); }
+let j; try{ const raw=fs.readFileSync(process.argv[1],'utf8'); const i=raw.indexOf('{'); j=JSON.parse(i>=0?raw.slice(i):raw); }catch(e){ process.exit(0); }
 const want=process.argv[2].replace(/\\\\/g,'/').replace(/\/+\$/,'');
 const agentOnly=process.argv[3]==='--agent-only';
 const list=(j.result&&(j.result.terminals||j.result.items))||[];
