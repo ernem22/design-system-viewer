@@ -95,6 +95,31 @@ fi
 RETRY_ARG=()
 [ -n "$RETRY_OF" ] && RETRY_ARG=(--retry-of "$RETRY_OF")
 
+# ---- the ports this host is serving, before anything is dispatched onto them ----------
+# CAPACITY IS NOT THE ONLY PRE-DISPATCH TRUTH. Measured 2026-10-02: a preview process from an
+# already-removed worktree still held its port and answered nothing while `curl` read the socket as
+# "up"; three Testers were dispatched into that state in one night and burned a whole phase each.
+# Nothing on this path had ever looked at a port. The sweep reports what is serving and stops only
+# a preview whose named path is GONE from disk - nothing can be testing a worktree that does not
+# exist; a preview for a live worktree belongs to another worker and is left alone.
+bash "$HERE/serve.sh" --orphans --kill 2>&1 | sed 's/^/start.sh: port: /' >&2
+
+# If the spec pins a port, VERIFY it instead of trusting it: a port that answers 404 is worse than
+# a port that is down, because curl reads both as "up". Measured 2026-10-02: 9 of the 60 specs in
+# the inbox name a port (4173, 4472, ...), so this is a live check for those and inert for the ones
+# that only say "on its own port".
+SPEC_PORT="$(grep -oiE 'ports?[: ]+[0-9]{4,5}' "$SPEC" 2>/dev/null | grep -oE '[0-9]{4,5}' | head -1)"
+if [ -n "$SPEC_PORT" ]; then
+  if bash "$HERE/serve.sh" --wait "$SPEC_PORT" 2>&1 | sed 's/^/start.sh: port: /' >&2; then
+    :
+  else
+    echo "start.sh: NOT dispatching '$TITLE' - the spec names port $SPEC_PORT and it is not serving (see above)." >&2
+    exit 1
+  fi
+else
+  echo "start.sh: the spec names no port; nothing to verify (the previews above are reported, not assumed)" >&2
+fi
+
 orca orchestration worker-start --spec "$(cat "$SPEC")" --task-title "$TITLE" \
   --terminal "$H" --worktree "id:$REPO_ID::$P" --run "$RUN" --from "$FROM" \
   ${RETRY_ARG[@]+"${RETRY_ARG[@]}"} --json 2>/dev/null \
