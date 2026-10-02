@@ -8,6 +8,10 @@
 #
 #   supervise.sh [--interval 120] [--act] [--run <id>] [--max-recoveries 3] [--once]
 #
+# SUPERVISE_READ_GAP overrides the gap between the two readings (default 20s) so a probe can run a
+# whole scan in seconds; SUPERVISE_STATE / SUPERVISE_LOG / INBOX_DIR override its state, log and
+# inbox, which is how a probe keeps its notes out of the durable inbox.
+#
 # Every cycle, for each dispatch whose dispatchStatus is `dispatched`:
 #   1. resolve its agent terminal and worktree,
 #   2. take two counter readings a short interval apart, plus the sampler's pid record,
@@ -25,7 +29,7 @@
 # the title, so a recovery lands on the same PR instead of opening a new one.
 set -uo pipefail
 
-INTERVAL=120; ACT=""; RUN=""; MAX_REC=3; ONCE=""; READ_GAP=20
+INTERVAL=120; ACT=""; RUN=""; MAX_REC=3; ONCE=""; READ_GAP="${SUPERVISE_READ_GAP:-20}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --interval) INTERVAL="${2:?}"; shift 2;;
@@ -49,6 +53,7 @@ INBOX_DIR="${INBOX_DIR:-${LOCALAPPDATA:-$HOME}/orca-orchestration/design-system-
 LOG="${SUPERVISE_LOG:-${LOCALAPPDATA:-$HOME}/Temp/supervise.log}"
 STATE_DIR="${SUPERVISE_STATE:-${LOCALAPPDATA:-$HOME}/Temp/supervise-state}"
 SEEN_FILE="$STATE_DIR/seen-dispatches"
+NOTED_FILE="$STATE_DIR/noted-dispatches"
 RECOVERIES=0
 
 say() { printf '%s supervise: %s\n' "$(date -u +%H:%M:%SZ)" "$*" | tee -a "$LOG"; }
@@ -77,13 +82,24 @@ cycle() {
       PROGRESSING|TOOL_ACTIVE|SETTLED) say "$DISP ($TITLE) -> $V" ;;
       STALL|EXITED)
         say "$DISP ($TITLE) -> $V  *** needs recovery"
-        {
-          printf '# Supervisor: %s on %s\n\n' "$V" "$DISP"
-          printf -- '- task: %s\n- title: %s\n- verdict: %s\n- at: %s\n- run: %s\n' \
-            "$TASK" "$TITLE" "$V" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$RUN"
-          printf '\nThe worker is not producing: %s. The supervisor %s.\n' \
-            "$V" "$([ -n "$ACT" ] && echo 'recovered it (abandon + retry)' || echo 'only reported it (run with --act to recover)')"
-        } > "$INBOX_DIR/$(date -u +%Y%m%dT%H%M%SZ)-supervise-$DISP-$V.md"
+        # ONCE PER (dispatch, verdict), whether or not --act is on. Measured 2026-10-02: 2760 notes
+        # in the inbox naming only 41 distinct dispatches - up to 91 copies of the same one - because
+        # the seen-set below is written only with --act, so a dry run re-filed the identical report
+        # on every pass, forever, and the inbox stopped answering "is anything new?". The seen-set
+        # still governs ACTIONS and stays --act-only; this one governs the REPORT, so a verdict that
+        # CHANGES (STALL -> EXITED) is still filed, and a repeat of the same one is not.
+        if [ -f "$NOTED_FILE" ] && grep -qx "$DISP|$V" "$NOTED_FILE" 2>/dev/null; then
+          say "  already reported as $V - not filing it again"
+        else
+          mkdir -p "$STATE_DIR"; echo "$DISP|$V" >> "$NOTED_FILE"
+          {
+            printf '# Supervisor: %s on %s\n\n' "$V" "$DISP"
+            printf -- '- task: %s\n- title: %s\n- verdict: %s\n- at: %s\n- run: %s\n' \
+              "$TASK" "$TITLE" "$V" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$RUN"
+            printf '\nThe worker is not producing: %s. The supervisor %s.\n' \
+              "$V" "$([ -n "$ACT" ] && echo 'recovered it (abandon + retry)' || echo 'only reported it (run with --act to recover)')"
+          } > "$INBOX_DIR/$(date -u +%Y%m%dT%H%M%SZ)-supervise-$DISP-$V.md"
+        fi
         [ -n "$ACT" ] && recover "$DISP" "$TASK" "$TITLE" "$V"
         # Considered once: with --act on, this dispatch is done with (recovered, refused, or left for
         # a human) and must not be re-examined on the next pass.

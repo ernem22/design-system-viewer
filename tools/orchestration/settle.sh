@@ -298,6 +298,17 @@ else
   say "DRY-RUN would release $DISPATCH"
 fi
 
+# ---- 5b. stop the preview this worktree was served by --------------------------------
+# A preview is started by the coordinator, OUTSIDE Orca's worktree lifecycle, so worker-release
+# does not stop it: the process keeps the port and the RAM after the worktree is gone. Measured
+# 2026-10-02 on this host: 4 preview servers resident, one of them still bound to its port while
+# the directory it named no longer existed on disk. Settling is the moment that becomes permanent,
+# so the stop belongs HERE - after the release confirmed and before the next dispatch can land on
+# a port nothing is really serving.
+if [ -z "$DRY" ] && [ -n "$WT" ]; then
+  bash "$HERE/serve.sh" --stop-worktree "$WT" 2>&1 | sed 's/^/settle: /'
+fi
+
 if [ -n "$WT" ]; then
   . "$HERE/repo-id.sh" 2>/dev/null || true
   [ -n "${REPO_ID:-}" ] || die "could not resolve the Orca repo id (see repo-id.sh)"
@@ -334,6 +345,17 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
       fi
     fi
   fi
+fi
+
+# ---- 6b. nothing this dispatch served may survive it ----------------------------------
+# The worktree removal above is what turns a preview into an orphan, and a preview started as
+# `(cd <wt>/app && npx vite preview --port N)` names no path in its command line, so 5b's
+# --stop-worktree cannot see it - nor can 5b run at all when Orca no longer reports the worktree
+# (the settle that happens after a crash, which is exactly when a preview is left behind). This
+# sweep is unconditional and matches a server-shaped node process whose named path is GONE from
+# disk, so a preview for a worktree that still exists (another worker's) is never a candidate.
+if [ -z "$DRY" ]; then
+  bash "$HERE/serve.sh" --orphans --kill 2>&1 | sed 's/^/settle: /'
 fi
 
 # ---- 7. ghost terminals: a terminal whose dispatch is gone ---------------------------
