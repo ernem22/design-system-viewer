@@ -81,6 +81,18 @@ P=$(printf '%s' "$RAW" | node -e \
 # worktree path and the role are both known. `dispatch` is filled in once the handle is.
 printf 'role=%s\nhandle=\nstate=starting\ndispatch=\ncreated_at=%s\n' "$ROLE" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$P/.dsv-worker" 2>/dev/null || true
 
+# The marker and Orca's per-worktree config are untracked by design. Without this the
+# worktree is 'dirty', `git worktree remove` refuses, and a settle that printed DONE
+# leaves the directory on disk - which is exactly what happened to two probe worktrees.
+# info/exclude is per-worktree and untracked, so it never reaches the repo.
+GD="$(git -C "$P" rev-parse --git-dir 2>/dev/null || true)"
+if [ -n "$GD" ]; then
+  mkdir -p "$GD/info" 2>/dev/null || true
+  for PAT in .dsv-worker opencode.json; do
+    grep -qxF "$PAT" "$GD/info/exclude" 2>/dev/null || printf '%s\n' "$PAT" >> "$GD/info/exclude"
+  done
+fi
+
 # Model pin AND permission model. The permission block is what stops a worker from
 # stalling on an approval prompt:
 #   * external_directory: deny — a worker may not touch anything outside its own

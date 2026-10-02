@@ -33,6 +33,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 import opencode_trees as ot  # noqa: E402
+import calendar  # age_s: UTC stamps must be read as UTC, not as local time
 
 WS_ROOT = ot.WS_ROOT
 MARKER = ".dsv-worker"
