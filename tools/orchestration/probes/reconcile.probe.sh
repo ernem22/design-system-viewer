@@ -80,21 +80,25 @@ WTC="$ROOT/probe-unmarked"
 rmworktree "$WTC"
 if mkworktree "$WTC"; then
   CPID=""
-  ( cd "$WTC" && node -e 'setInterval(function(){}, 1000)' >/dev/null 2>&1 & echo $! > "$SCRATCH/c.pid" )
-  sleep 2
-  CPID="$(cat "$SCRATCH/c.pid" 2>/dev/null || true)"
+  printf 'setInterval(function(){},1000);\n' > "$WTC/probe-dummy.js"
+  # The path must be IN the command line: node_procs_in reads the command line and not cwd, so a
+  # `cd <wt> && node -e ...` dummy would be invisible to the very check this case tests.
+  powershell.exe -NoProfile -Command "\$p = Start-Process node -ArgumentList '$WTC/probe-dummy.js' -PassThru -WindowStyle Hidden; \$p.Id | Out-File -Encoding ascii '$SCRATCH/c.pid'" >/dev/null 2>&1
+  sleep 3
+  CPID="$(cat "$SCRATCH/c.pid" 2>/dev/null | tr -d '\r' || true)"
   PF="$SCRATCH/plan-c.json"; plan > "$PF"
   UNM="$(jget "$PF" '" ".join(u["worktree"] for u in (d.get("unmanaged") or []))')"
   MAN="$(jget "$PF" '" ".join(m["worktree"] for m in (d.get("managed") or []))')"
   say "  dummy pid=$CPID  unmanaged=[$UNM]  managed=[$MAN]"
+  ALIVE_C="$(powershell.exe -NoProfile -Command "if (Get-Process -Id $CPID -ErrorAction SilentlyContinue) {'yes'} else {'no'}" 2>/dev/null | tr -d '\r')"
   if printf '%s' "$MAN" | grep -q probe-unmarked; then
     setv c FAIL "an unmarked worktree was taken into the managed set"
-  elif printf '%s' "$UNM" | grep -q probe-unmarked && kill -0 "$CPID" 2>/dev/null; then
+  elif printf '%s' "$UNM" | grep -q probe-unmarked && [ "$ALIVE_C" = "yes" ]; then
     setv c PASS "unmarked worktree stayed unmanaged and its live process was not touched"
   else
-    setv c FAIL "unmarked worktree missing from the unmanaged list, or its process was killed"
+    setv c FAIL "unmarked worktree missing from the unmanaged list (alive=$ALIVE_C), or its process was killed"
   fi
-  kill "$CPID" 2>/dev/null || true
+  taskkill -F -PID "$CPID" >/dev/null 2>&1 || kill "$CPID" 2>/dev/null || true
   sleep 1
   rmworktree "$WTC"
   if [ -d "$WTC" ]; then setv c FAIL "fixture (c) was not removed at the end"; else say "  fixture (c) removed: yes"; fi
@@ -134,7 +138,11 @@ WTE="$ROOT/probe-reconcile"
 rmworktree "$WTE"
 SPAWN_OUT="$(bash "$HERE/spawn.sh" probe-reconcile --worktree-only 2>&1)"; SPAWN_RC=$?
 say "  spawn.sh rc=$SPAWN_RC: $(printf '%s' "$SPAWN_OUT" | tail -2 | tr '\n' ' ')"
-if [ -f "$WTE/.dsv-worker" ]; then
+# spawn.sh names the directory it made on a PATH= line, and it suffixes the name when one is taken
+# (probe-reconcile-2). Reading it back is the only way to follow the fixture that actually exists.
+WTE="$(printf '%s' "$SPAWN_OUT" | sed -n 's/^PATH=//p' | head -1 | tr -d '\r')"
+say "  worktree: $WTE"
+if [ -n "$WTE" ] && [ -f "$WTE/.dsv-worker" ]; then
   say "  marker: $(tr '\n' ' ' < "$WTE/.dsv-worker")"
   # start.sh waits in wait-capacity before worker-start promotes the marker, so a floor above the
   # host's memory holds it there - which is exactly the window that used to be killed.
@@ -149,9 +157,16 @@ if [ -f "$WTE/.dsv-worker" ]; then
   else
     setv e FAIL "starting=$E_START actions=[$E_ACT] (expected protected, no action)"
   fi
-  kill "$(cat "$SCRATCH/e.pid" 2>/dev/null)" 2>/dev/null || true
-  sleep 1
-  rmworktree "$WTE"
+  taskkill -F -PID "$(cat "$SCRATCH/e.pid" 2>/dev/null | tr -d '\r')" >/dev/null 2>&1 || kill "$(cat "$SCRATCH/e.pid" 2>/dev/null)" 2>/dev/null || true
+  # The killed start.sh's children can hold the directory for a moment after it dies, so a single
+  # attempt judges the fixture before the filesystem has let go of it. Retry before calling it.
+  for _try in 1 2 3 4 5; do
+    sleep 2
+    rmworktree "$WTE"
+    rm -rf "$WTE" 2>/dev/null
+    [ -d "$WTE" ] || break
+  done
+  git -C "$REPO" worktree prune >/dev/null 2>&1
   if [ -d "$WTE" ]; then setv e FAIL "fixture (e) was not removed at the end"; else say "  fixture (e) removed: yes"; fi
 else
   say "  spawn.sh did not leave a marked worktree"; setv e NOT_EXERCISED "spawn.sh produced no marker"
