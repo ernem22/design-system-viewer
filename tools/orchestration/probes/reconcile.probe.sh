@@ -17,6 +17,9 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")/.." && { pwd -W 2>/dev/null || pwd; })"
+# Same state directory as supervise.sh and reconcile.py: next to inbox/, not in Temp, which
+# Storage Sense can wipe.
+STATE_DIR="${SUPERVISE_STATE:-${LOCALAPPDATA:-$HOME}/orca-orchestration/design-system-viewer/state}"
 LIB="$HERE/lib"
 RUN="${PROBE_RUN:-run_4e539259ab29}"
 ROOT="${PROBE_ROOT:-C:/Users/zurza/orca/workspaces/design-system-viewer}"
@@ -136,7 +139,7 @@ say ""
 say "=== (e) start.sh held in wait-capacity (forced high floor) ==="
 WTE="$ROOT/probe-reconcile"
 rmworktree "$WTE"
-SPAWN_OUT="$(bash "$HERE/spawn.sh" probe-reconcile --worktree-only 2>&1)"; SPAWN_RC=$?
+SPAWN_OUT="$(bash "$HERE/spawn.sh" probe-reconcile 2>&1)"; SPAWN_RC=$?
 say "  spawn.sh rc=$SPAWN_RC: $(printf '%s' "$SPAWN_OUT" | tail -2 | tr '\n' ' ')"
 # spawn.sh names the directory it made on a PATH= line, and it suffixes the name when one is taken
 # (probe-reconcile-2). Reading it back is the only way to follow the fixture that actually exists.
@@ -146,7 +149,13 @@ if [ -n "$WTE" ] && [ -f "$WTE/.dsv-worker" ]; then
   say "  marker: $(tr '\n' ' ' < "$WTE/.dsv-worker")"
   # start.sh waits in wait-capacity before worker-start promotes the marker, so a floor above the
   # host's memory holds it there - which is exactly the window that used to be killed.
-  ( cd "$HERE" && MIN_MB=999999 CAP_TIMEOUT=5 bash start.sh probe-reconcile >"$SCRATCH/e-start.log" 2>&1 & echo $! > "$SCRATCH/e.pid" )
+# start.sh takes <worktree-path> <spec-file> <task-title>. Passing the name alone exits on its
+# usage check, so the fixture never reached wait-capacity and (e) was measuring a recent
+# state=starting marker - the same thing (d) measures - not a worker sitting in the gate.
+printf '# probe-ab (throwaway)\n\nDo nothing. Do not read files, do not run commands, do not commit.\nReply with the single word READY and stop.\n' > "$STATE_DIR/probe-ab.spec.md"
+SPEC="$STATE_DIR/probe-ab.spec.md"
+say "spec: $SPEC"
+( cd "$HERE" && MIN_MB=999999 CAP_TIMEOUT=5 bash start.sh "$WTE" "$SPEC" "probe-reconcile (e) throwaway" >"$SCRATCH/e-start.log" 2>&1 & echo $! > "$SCRATCH/e.pid" )
   sleep 6
   PF="$SCRATCH/plan-e.json"; plan > "$PF"
   E_ACT="$(jget "$PF" '",".join(next((m.get("actions") or [] for m in (d.get("managed") or []) if m["worktree"]=="probe-reconcile"), []))')"
