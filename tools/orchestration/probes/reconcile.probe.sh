@@ -149,13 +149,19 @@ if [ -n "$WTE" ] && [ -f "$WTE/.dsv-worker" ]; then
   say "  marker: $(tr '\n' ' ' < "$WTE/.dsv-worker")"
   # start.sh waits in wait-capacity before worker-start promotes the marker, so a floor above the
   # host's memory holds it there - which is exactly the window that used to be killed.
-# start.sh takes <worktree-path> <spec-file> <task-title>. Passing the name alone exits on its
-# usage check, so the fixture never reached wait-capacity and (e) was measuring a recent
-# state=starting marker - the same thing (d) measures - not a worker sitting in the gate.
-printf '# probe-ab (throwaway)\n\nDo nothing. Do not read files, do not run commands, do not commit.\nReply with the single word READY and stop.\n' > "$STATE_DIR/probe-ab.spec.md"
-SPEC="$STATE_DIR/probe-ab.spec.md"
-say "spec: $SPEC"
-( cd "$HERE" && MIN_MB=999999 CAP_TIMEOUT=5 bash start.sh "$WTE" "$SPEC" "probe-reconcile (e) throwaway" >"$SCRATCH/e-start.log" 2>&1 & echo $! > "$SCRATCH/e.pid" )
+  # start.sh takes <worktree-path> <spec-file> <task-title>. Passing the name alone exits on its
+  # usage check, so the fixture never reached wait-capacity and (e) was measuring a recent
+  # state=starting marker - the same thing (d) measures - not a worker sitting in the gate.
+  # The floor and the timeout must use start.sh's OWN variable names. `MIN_MB=` and `CAP_TIMEOUT=`
+  # are ignored: start.sh reads ${WATCH_MIN_MB:-600} and ${WATCH_CAP_TIMEOUT:-900}, so the gate
+  # PROCEEDed at the normal 600 MB floor, worker-start ran, and the marker was promoted to
+  # state=dispatched before the plan. Measured 2026-10-03: e-start.log shows
+  # "wait-capacity: available_mb=797 min=600 ... PROCEED" and "STARTED task=... dispatch=ctx_8e3b11973d2f"
+  # with the fixture asking for a 999999 MB floor, and the plan read starting_recent=false.
+  printf '# probe-ab (throwaway)\n\nYour only action: run this exact command and wait for it to return.\n\n    sleep 420\n\nDo not read files, do not run any other command, do not commit. When it returns, reply with\nthe single word READY and stop.\n' > "$STATE_DIR/probe-ab.spec.md"
+  SPEC="$STATE_DIR/probe-ab.spec.md"
+  say "spec: $SPEC"
+  ( cd "$HERE" && WATCH_MIN_MB=999999 WATCH_CAP_TIMEOUT=5 bash start.sh "$WTE" "$SPEC" "probe-reconcile (e) throwaway" >"$SCRATCH/e-start.log" 2>&1 & echo $! > "$SCRATCH/e.pid" )
   sleep 6
   PF="$SCRATCH/plan-e.json"; plan > "$PF"
   E_ACT="$(jget "$PF" '",".join(next((m.get("actions") or [] for m in (d.get("managed") or []) if m["worktree"]=="probe-reconcile"), []))')"
@@ -184,6 +190,21 @@ fi
 # ---------------- (a)/(b): need a real dispatch ----------------
 say ""
 say "=== (a)/(b) ==="
+# (a)/(b) cannot happen in this process: they need a real dispatch and a real TUI. They are
+# driven end to end by probes/reconcile-ab.sh, which writes one machine-written verdict line to
+# state/reconcile-probe.result. Read that file rather than restating NOT_EXERCISED - the merge
+# condition is the five-verdict line and it has to come out of one command to be quotable. A
+# missing file leaves both NOT_EXERCISED: this probe never invents a verdict it did not measure.
+AB_RESULT="$STATE_DIR/reconcile-probe.result"
+if [ -f "$AB_RESULT" ]; then
+  AB_A="$(sed -n 's/.*\ba=\([A-Z_]*\).*/\1/p' "$AB_RESULT" | head -1)"
+  AB_B="$(sed -n 's/.*\bb=\([A-Z_]*\).*/\1/p' "$AB_RESULT" | head -1)"
+  AB_AT="$(date -r "$AB_RESULT" -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || printf '?')"
+  [ -n "$AB_A" ] && setv a "$AB_A" "from reconcile-ab.sh, result written $AB_AT"
+  [ -n "$AB_B" ] && setv b "$AB_B" "from reconcile-ab.sh, result written $AB_AT"
+else
+  say "  no $AB_RESULT - run probes/reconcile-ab.sh first; (a)/(b) stay NOT_EXERCISED"
+fi
 say "  a=$V_a ($NOTE_a)"
 say "  b=$V_b ($NOTE_b)"
 say "  on record from real data this session: tester-163f/tester-172805 had live trees 33192/29848"

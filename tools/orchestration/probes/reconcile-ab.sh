@@ -46,7 +46,11 @@ if [ ! -f "$W/.dsv-worker" ]; then say "no marker - nothing to exercise"; finish
 # ---- dispatch -----------------------------------------------------------------------------
 # start.sh takes <worktree-path> <spec-file> <task-title>; the spec is throwaway and the worker
 # is told to do nothing. This run only needs a real dispatch id to exist and then to be abandoned.
-printf '# probe-ab (throwaway)\n\nDo nothing. Do not read files, do not run commands, do not commit.\nReply with the single word READY and stop.\n' > "$STATE_DIR/probe-ab.spec.md"
+# The spec must HOLD the worker, not just occupy it: measured 2026-10-03, a "reply READY and stop"
+# spec settled the dispatch in well under the 20 s the (a) observation used to wait, so (a) planned
+# against a finished dispatch and read live=False. The single blocking command keeps the dispatch
+# live across the observation and the abandon.
+printf '# probe-ab (throwaway)\n\nYour only action: run this exact command and wait for it to return.\n\n    sleep 420\n\nDo not read files, do not run any other command, do not commit. When it returns, reply with\nthe single word READY and stop.\n' > "$STATE_DIR/probe-ab.spec.md"
 SPEC="$STATE_DIR/probe-ab.spec.md"
 say "spec: $SPEC"
 bash "$HERE/start.sh" "$W" "$SPEC" "probe-ab (a/b) throwaway" >>"$LOG" 2>&1 &
@@ -67,7 +71,7 @@ plan_json() { python "$HERE/lib/reconcile.py" --run "$RUN" --json 2>/dev/null; }
 
 # ---- (a) while dispatched -----------------------------------------------------------------
 if [ -n "$DISP" ]; then
-  sleep 20
+  sleep 8
   P="$(plan_json)"
   A_ACT="$(printf '%s' "$P" | python -c "
 import json,sys
