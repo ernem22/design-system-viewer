@@ -159,6 +159,34 @@ def marker_text(role, handle="", state="dispatched", dispatch="", created_at=Non
                created_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())))
 
 
+STATE_DIR = (os.environ.get("SUPERVISE_STATE")
+             or os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"),
+                            "Temp", "supervise-state"))
+
+
+def ignored_rows():
+    """Paths the operator has declared out of scope, with a reason. Keyed by normalised path.
+
+    The Orca workspace root always holds the coordinator's own terminal, so it tripped the
+    unmarked-worktree invariant on every pass, and an alarm that is always on is an alarm
+    nobody reads. One line per path: "<path>  <reason>". Blank lines and # comments are
+    skipped. An ignored path is reported as ignored - never as a violation, never acted on."""
+    out = {}
+    try:
+        with open(os.path.join(STATE_DIR, "reconcile-ignore"), "r", encoding="utf-8",
+                  errors="replace") as f:
+            for line in f:
+                s = line.strip()
+                if not s or s.startswith("#"):
+                    continue
+                parts = s.split(None, 1)
+                out[parts[0].replace("\\", "/").rstrip("/").lower()] = (
+                    parts[1].strip() if len(parts) > 1 else "no reason given")
+    except OSError:
+        return {}
+    return out
+
+
 def local_procs_in(name, trees):
     """opencode trees already resolved to this worktree."""
     return [t for t in trees if t["worktree"] == name]
@@ -211,7 +239,8 @@ def build(run, execute, backfill, only=()):
                 if any(x.get("handle") == h for x in ts):
                     live_dispatch_by_name[n] = w.get("dispatchId")
 
-    managed, unmanaged, backfill_candidates = [], [], []
+    managed, unmanaged, backfill_candidates, ignored = [], [], [], []
+    ign = ignored_rows()
     for w in wts:
         path = w.get("path") or ""
         if not path:
@@ -229,6 +258,13 @@ def build(run, execute, backfill, only=()):
                         proof = ww.get("dispatchId") or ""
             if proof:
                 backfill_candidates.append({"worktree": n, "path": path, "dispatch": proof})
+            # An ignored path is out of scope by the operator's own decision: named as ignored with
+            # the reason on the line, never a violation. The reason travels with the entry so a pass
+            # a year from now can still say why it is silent.
+            _key = path.replace("\\", "/").rstrip("/").lower()
+            if _key in ign:
+                ignored.append({"worktree": n, "path": path, "reason": ign[_key]})
+                continue
             # Every unmarked worktree is reported, not just the ones holding a terminal or an
             # opencode tree. A preview started as `cd <wt>/app && npx vite preview` names no path,
             # so filtering on "has a terminal" made a whole class of leak invisible. Reported only:
@@ -248,7 +284,7 @@ def build(run, execute, backfill, only=()):
 
     out = {"ok": True, "run": run, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            "managed": [], "unmanaged": unmanaged, "backfill": backfill_candidates,
-           "violations": [], "live_handles": sorted(live_handles)}
+           "violations": [], "ignored": ignored, "live_handles": sorted(live_handles)}
     # An unmarked worktree holding a process is a leak outside the marker system: named as
     # a violation so it can never be silent, and never killed - reconcile does not act on
     # worktrees it does not own.
@@ -419,9 +455,10 @@ def main(argv):
     if as_json:
         print(json.dumps(plan, ensure_ascii=False))
     else:
-        print("reconcile %s  managed=%d unmanaged=%d live=%d invariant=%s no_dispatch=%s"
+        print("reconcile %s  managed=%d unmanaged=%d live=%d invariant=%s ignored=%d no_dispatch=%s"
               % (plan["at"], len(plan["managed"]), len(plan["unmanaged"]),
                  len(plan["live_handles"]), "OK" if plan["invariant_ok"] else "VIOLATED",
+                 len(plan.get("ignored") or []),
           ",".join(plan.get("no_dispatch") or []) or "-"))
         for m in plan["managed"]:
             print("  %-24s live=%-5s actions=%s" % (m["worktree"], m["live"],
