@@ -309,10 +309,40 @@ if [ -z "$DRY" ] && [ -n "$WT" ]; then
   bash "$HERE/serve.sh" --stop-worktree "$WT" 2>&1 | sed 's/^/settle: /'
 fi
 
+# ---- 5a. record the worker's own process tree BEFORE anything closes it -------------
+# opencode's command line never names its worktree: the path is only recoverable from the
+# terminal's shell-integration script, which Orca passes as -EncodedCommand. Once the
+# terminal is gone there is no way to prove which processes were this worker's, so the
+# record has to be taken here. Identity is the worktree, resolved by lib/opencode_trees.py
+# - the same code sampler.py uses - and only pids from a tree whose worktree == $WT are
+# ever killed.
+TREE_ROOTS=""; TREE_PIDS=""; TREE_MB=0
+if [ -z "$DRY" ] && [ -n "$WT" ]; then
+  TREE_JSON="$(python "$HERE_NATIVE/lib/opencode_trees.py" --worktree "$WT" --json 2>/dev/null || true)"
+  if [ -n "$TREE_JSON" ]; then
+    TREE_ROOTS="$(printf '%s' "$TREE_JSON" | node -e '
+    let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const r=JSON.parse(s).roots||[];
+    process.stdout.write(r.map(x=>x.root_pid).join(" "))}catch(e){}});')"
+    TREE_PIDS="$(printf '%s' "$TREE_JSON" | node -e '
+    let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const r=JSON.parse(s).roots||[];
+    const p=[];r.forEach(x=>(x.pids||[]).forEach(y=>p.push(y)));process.stdout.write(p.join(" "))}catch(e){}});')"
+    TREE_MB="$(printf '%s' "$TREE_JSON" | node -e '
+    let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const r=JSON.parse(s).roots||[];
+    process.stdout.write(String(Math.round(r.reduce((a,x)=>a+(x.mb||0),0))))}catch(e){process.stdout.write("0")}});')"
+  fi
+  say "worker tree for $WT: roots [${TREE_ROOTS:-none}] pids [${TREE_PIDS:-none}] ~${TREE_MB} MB"
+fi
+
 if [ -n "$WT" ]; then
   . "$HERE/repo-id.sh" 2>/dev/null || true
   [ -n "${REPO_ID:-}" ] || die "could not resolve the Orca repo id (see repo-id.sh)"
-  run_or_show orca terminal close --worktree "id:$REPO_ID::$WT" --all --json >/dev/null 2>&1
+  CLOSE_OUT="$(run_or_show orca terminal close --worktree "id:$REPO_ID::$WT" --all --json 2>/dev/null | node -e '
+  let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s.slice(s.indexOf("{")));
+  process.stdout.write(j.ok?"closed":("ERR:"+((j.error&&j.error.code)||"?")))}catch(e){process.stdout.write("UNPARSED")}});')"
+  # This result used to be discarded, so a close that did nothing looked exactly like one
+  # that worked. Measured 2026-10-02: settle.sh printed DONE while the worker's opencode
+  # tree was still resident.
+  say "terminal close -> ${CLOSE_OUT:-none}"
   if [ -n "${NO_DELIVERY:-}" ] && [ -z "${FORCE_REMOVE:-}" ]; then
     # Keep it: with no settlement, the worktree is the only record of what the dispatch did.
     say "KEEPING the worktree as evidence: no settlement exists for $DISPATCH (pass --force-remove to drop it)"
@@ -356,6 +386,35 @@ fi
 # disk, so a preview for a worktree that still exists (another worker's) is never a candidate.
 if [ -z "$DRY" ]; then
   bash "$HERE/serve.sh" --orphans --kill 2>&1 | sed 's/^/settle: /'
+fi
+
+# ---- 6c. the worker's own tree must be gone before DONE --------------------------------
+# A settled worker whose opencode/bun/node tree is still resident is the leak that collapsed
+# this machine on 2026-10-01 (RAM 34 MB, bash could not fork, the watcher died). The tree was
+# recorded in 5a; here it is killed and PROVEN dead, and settle dies rather than print DONE if
+# anything from it is still alive. Never by name: only pids from the recorded tree.
+pid_alive() { [ "$(powershell.exe -NoProfile -NonInteractive -Command "if (Get-Process -Id $1 -ErrorAction SilentlyContinue) { 'yes' } else { 'no' }" 2>/dev/null | tr -d '\r')" = "yes" ]; }
+if [ -z "$DRY" ] && [ -n "$TREE_PIDS" ]; then
+  for R in $TREE_ROOTS; do
+    if pid_alive "$R"; then
+      say "  root $R survived the close; killing its tree (/T)"
+      taskkill -T -F -PID "$R" >/dev/null 2>&1 || true
+    fi
+  done
+  for P in $TREE_PIDS; do
+    if pid_alive "$P"; then
+      say "  pid $P survived the tree kill; killing it"
+      taskkill -F -PID "$P" >/dev/null 2>&1 || true
+    fi
+  done
+  SURVIVORS=""
+  for P in $TREE_PIDS; do
+    pid_alive "$P" && SURVIVORS="$SURVIVORS $P"
+  done
+  if [ -n "$SURVIVORS" ]; then
+    die "worker tree SURVIVED settle:${SURVIVORS} (settle is NOT done; ~${TREE_MB} MB still resident)"
+  fi
+  say "worker tree verified gone: ${TREE_PIDS} (${TREE_MB} MB released)"
 fi
 
 # ---- 7. ghost terminals: a terminal whose dispatch is gone ---------------------------

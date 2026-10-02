@@ -137,6 +137,7 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   # that is done but not yet closed, so nothing stays open longer than one interval even with the
   # watcher fully down.
   sweep_settle
+  sweep_orphan_trees
 }
 
 # Close dispatches that are finished but still holding a terminal or a worktree.
@@ -180,6 +181,52 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
     fi
   done <<< "$pending"
   [ "$n" -eq 0 ] && say "sweep: nothing finished is still holding a terminal"
+}
+
+# ---- orphaned opencode trees: identity is a worktree that is GONE from disk -------------
+# Every tree lib/opencode_trees.py can resolve carries the worktree of the worker that owns
+# it. A tree whose worktree no longer exists cannot be a live worker: the worker was settled
+# (or crashed) and its worktree was removed while the tree itself survived - the leak that
+# collapsed this host on 2026-10-01 (RAM 34 MB, bash could not fork, the watcher died).
+#
+# An UNRESOLVED tree is deliberately NOT reaped. Without a worktree there is no proof of whose
+# it is, and the one unresolved tree measured on this host (pid 20992, 526 MB) is the owner's
+# own opencode session launched from an editor - killing it would be exactly the mistake this
+# rule exists to prevent. Nothing is ever killed by name: only pids from a resolved tree whose
+# worktree is provably gone.
+sweep_orphan_trees() {
+  local J N ROWS
+  J="$(python "$HERE_NATIVE/lib/opencode_trees.py" --orphans --json 2>/dev/null || true)"
+  [ -n "$J" ] || { say "orphans: could not read the opencode tree list"; return; }
+  N="$(printf '%s' "$J" | node -e '
+  let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{
+  process.stdout.write(String((JSON.parse(s).roots||[]).length))}catch(e){process.stdout.write("?")}});')"
+  if [ "$N" = "0" ]; then say "orphans: none"; return; fi
+  ROWS="$(printf '%s' "$J" | node -e '
+  let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const r=JSON.parse(s).roots||[];
+  process.stdout.write(r.map(x=>[x.root_pid,x.worktree,x.mb,(x.pids||[]).join("+")].join("|")).join("\n"))}catch(e){}});')"
+  say "orphans: $N opencode tree(s) whose worktree is gone"
+  printf '%s\n' "$ROWS" | while IFS='|' read -r P WT MB PIDS; do
+    [ -n "$P" ] || continue
+    say "  orphan pid=$P worktree=$WT (${MB} MB, pids $PIDS)"
+    if [ -z "${ACT:-}" ]; then
+      say "    (dry run; --act would kill this tree)"
+      continue
+    fi
+    taskkill -T -F -PID "$P" >/dev/null 2>&1 || true
+    for Q in $(printf '%s' "$PIDS" | tr "+" " "); do
+      taskkill -F -PID "$Q" >/dev/null 2>&1 || true
+    done
+    if [ "$(powershell.exe -NoProfile -NonInteractive -Command "if (Get-Process -Id $P -ErrorAction SilentlyContinue) { 'yes' } else { 'no' }" 2>/dev/null | tr -d '\r')" = "yes" ]; then
+      say "    KILL FAILED for pid=$P - still alive; recording it"
+      mkdir -p "$INBOX_DIR"
+      printf '%s\n' "orphan tree pid=$P worktree=$WT survived the kill (${MB} MB)" >> "$INBOX_DIR/orphan-kills.log"
+    else
+      say "    killed and verified gone: pid=$P (${MB} MB released)"
+      mkdir -p "$INBOX_DIR"
+      printf '%s %s pid=%s worktree=%s mb=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" killed "$P" "$WT" "$MB" >> "$INBOX_DIR/orphan-kills.log"
+    fi
+  done
 }
 
 # Recover one stalled dispatch: abandon it, then retry the SAME task on a fresh worktree.
