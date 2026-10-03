@@ -8,7 +8,7 @@
 
 .app-welcome h2 {
   margin: 0 0 var(--space-2);
-  font-size: var(--font-size-lg);
+  font-size: var(--heading-section);
   color: var(--color-text);
 }
 
