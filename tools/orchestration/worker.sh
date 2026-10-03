@@ -3,7 +3,7 @@
 # the agent terminal, Orca closes it on release. Replaces spawn.sh + start.sh + settle.sh for the
 # dispatcher; those stay in the tree, frozen, for the old path.
 #
-#   worker.sh start <name> <base-ref> <spec-file> <task-title> [--readonly] [--min <mb>]
+#   worker.sh start <name> <base-ref> <spec-file> <task-title> [--readonly] [--min <mb>] [--serve <port>]
 #   worker.sh start <name> <base-ref> --task <task_id> --retry-of <dispatch> [--readonly] [--min <mb>]
 #   worker.sh wait  <dispatch> [--deadline <seconds>] [--interval <seconds>]
 #   worker.sh close <dispatch> [--stop]
@@ -58,7 +58,7 @@ wt_path() { printf '%s' "${1#*::}"; }
 
 # ---- start ---------------------------------------------------------------------------------
 cmd_start() {
-  local NAME="" BASE="" SPEC="" TITLE="" READONLY="" MIN="${WATCH_MIN_MB:-600}" TASK="" RETRY_OF=""
+  local NAME="" BASE="" SPEC="" TITLE="" READONLY="" MIN="${WATCH_MIN_MB:-600}" TASK="" RETRY_OF="" SERVE=""
   local pos=()
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -66,6 +66,7 @@ cmd_start() {
       --min) MIN="${2:?--min needs mb}"; shift 2;;
       --task) TASK="${2:?--task needs an id}"; shift 2;;
       --retry-of) RETRY_OF="${2:?--retry-of needs a dispatch}"; shift 2;;
+      --serve) SERVE="${2:?--serve needs a port}"; shift 2;;
       --deadline|--interval) shift 2;;   # belong to wait; tolerated so `run` can pass everything
       -*) say "start: unknown flag $1"; exit 2;;
       *) pos+=("$1"); shift;;
@@ -93,7 +94,7 @@ cmd_start() {
   bash "$HERE/wait-capacity.sh" --min "$MIN" --timeout "${WATCH_CAP_TIMEOUT:-900}" --note "dispatch: $NAME" >&2 || CAP_RC=$?
   [ "$CAP_RC" -eq 0 ] || { say "start: capacity did not reach ${MIN} MB; nothing created"; exit 3; }
   bash "$HERE/serve.sh" --orphans --kill 2>&1 | sed 's/^/worker: port: /' >&2
-  if [ -n "$SPEC" ]; then
+  if [ -n "$SPEC" ] && [ -z "$SERVE" ]; then
     local SPEC_PORT
     SPEC_PORT="$(grep -oiE 'ports?[: ]+[0-9]{4,5}' "$SPEC" 2>/dev/null | grep -oE '[0-9]{4,5}' | head -1)"
     if [ -n "$SPEC_PORT" ] && ! bash "$HERE/serve.sh" --wait "$SPEC_PORT" 2>&1 | sed 's/^/worker: port: /' >&2; then
@@ -114,6 +115,7 @@ cmd_start() {
   # From here on, a failure removes what this call created.
   rollback() {
     say "start: rolling back $WTID"
+    bash "$HERE/serve.sh" --stop-worktree "$P" >/dev/null 2>&1
     o terminal close --worktree "id:$WTID" --all --json >/dev/null
     o worktree rm --worktree "id:$WTID" --force --json >/dev/null
   }
@@ -130,6 +132,13 @@ cmd_start() {
   fi
   local CFG="$HERE/roles/write.opencode.json"; [ -n "$READONLY" ] && CFG="$HERE/roles/readonly.opencode.json"
   cp "$CFG" "$P/opencode.json" || { say "start: cannot pin $P/opencode.json"; rollback; exit 4; }
+
+  # 2b. A Tester needs the PR's build served before it starts (it writes nothing itself).
+  if [ -n "$SERVE" ]; then
+    local PREP
+    PREP="$(bash "$HERE/prep-tester.sh" "$P" "$SERVE")" || { say "start: prep-tester failed"; rollback; exit 4; }
+    printf '%s\n' "$PREP"
+  fi
 
   # 3. Orca starts the agent in its own terminal. No --terminal: that is what makes it owned.
   local WHAT=()
