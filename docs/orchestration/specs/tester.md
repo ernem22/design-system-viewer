@@ -56,15 +56,21 @@ observed: <...>
 before: <...>
 
 THEN POST A VERDICT BLOCK AS A PR COMMENT — the merge gate is computed by GitHub from
-comments, not from the coordinator reading your message:
+comments, not from the coordinator reading your message. Post it through
+`tools/orchestration/verdict-post.sh`, which renders the block from your own fields and
+REFUSES an incomplete one (exit non-zero, naming what is missing) while you are still
+alive to fix it:
 
-    gh pr comment <n> --body "$(printf '```dsv-verdict\nstatus: pass\nrole: tester\ncommit: %s\nbuild: %s\nobserved: %s\nbefore: %s\n```\n' "$(git rev-parse --short HEAD)" "<the asset hash you served>" "<what you did -> value>" "<the base value>")"
+    bash tools/orchestration/verdict-post.sh --pr <n> --role tester --status <pass|fail> \
+      --commit "$(git rev-parse --short HEAD)" --build "<the asset hash you served>" \
+      --observed "<what you did -> value>" --before "<the base value>"
 
-The block must carry `observed:`, `before:` and `build:` whether you pass or fail — a
-verdict with no observed/before is not evidence, and `verdict-post.sh` refuses to post
-one (it names the missing fields and exits non-zero while you are still alive to fix it).
-This spec used to print the thin shape (status/role/commit/build only); a Tester copied it
-onto PR #163, so it is corrected here.
+A fail verdict also needs `--reason "<why it failed>"` and/or `--fix-required "<what must
+change>"`. The block must carry `observed:`, `before:` and `build:` whether you pass or
+fail — a verdict with no observed/before is not evidence. Posting with a bare
+`gh pr comment` skips that check; this spec used to print that thin shape
+(status/role/commit/build only) as its example, a Tester copied it onto PR #163, and the
+gap it left is why the script now refuses it.
 
 `commit:` must be the head whose build you verified (your STEP 0 answer). A verdict whose
 commit is not the PR's current head does not count — that field exists because a Tester
