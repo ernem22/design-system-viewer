@@ -46,7 +46,7 @@ trees() { python "$LIB/opencode_trees.py" --all 2>/dev/null; }
 jget() {
   python -c "import json,sys
 d=json.load(open(sys.argv[1]))
-print(eval(sys.argv[2]))" "$1" "$2" 2>/dev/null || printf '?'
+print(eval(sys.argv[2]))" "$1" "$2" "${3:-}" 2>/dev/null || printf '?'
 }
 mkworktree() { git -C "$REPO" worktree add --detach "$1" HEAD >/dev/null 2>&1; }
 rmworktree() { git -C "$REPO" worktree remove --force "$1" >/dev/null 2>&1; }
@@ -139,10 +139,15 @@ say ""
 say "=== (e) start.sh held in wait-capacity (forced high floor) ==="
 WTE="$ROOT/probe-reconcile"
 rmworktree "$WTE"
+# A leftover directory that git no longer registers - an earlier run whose removal raced the
+# filesystem - is enough for Orca to suffix the name it hands back (probe-reconcile-2). Clear it,
+# so the fixture starts from the name it asks for.
+rm -rf "$WTE" 2>/dev/null || true
 SPAWN_OUT="$(bash "$HERE/spawn.sh" probe-reconcile 2>&1)"; SPAWN_RC=$?
 say "  spawn.sh rc=$SPAWN_RC: $(printf '%s' "$SPAWN_OUT" | tail -2 | tr '\n' ' ')"
-# spawn.sh names the directory it made on a PATH= line, and it suffixes the name when one is taken
-# (probe-reconcile-2). Reading it back is the only way to follow the fixture that actually exists.
+# spawn.sh names the directory it made on a PATH= line, and it suffixes the name when one is taken.
+# Reading it back is the only way to follow the fixture that actually exists - and the plan below
+# filters on that name, not on the one this script asked for.
 WTE="$(printf '%s' "$SPAWN_OUT" | sed -n 's/^PATH=//p' | head -1 | tr -d '\r')"
 say "  worktree: $WTE"
 if [ -n "$WTE" ] && [ -f "$WTE/.dsv-worker" ]; then
@@ -164,8 +169,9 @@ if [ -n "$WTE" ] && [ -f "$WTE/.dsv-worker" ]; then
   ( cd "$HERE" && WATCH_MIN_MB=999999 WATCH_CAP_TIMEOUT=5 bash start.sh "$WTE" "$SPEC" "probe-reconcile (e) throwaway" >"$SCRATCH/e-start.log" 2>&1 & echo $! > "$SCRATCH/e.pid" )
   sleep 6
   PF="$SCRATCH/plan-e.json"; plan > "$PF"
-  E_ACT="$(jget "$PF" '",".join(next((m.get("actions") or [] for m in (d.get("managed") or []) if m["worktree"]=="probe-reconcile"), []))')"
-  E_START="$(jget "$PF" 'next((bool(m.get("starting_recent")) for m in (d.get("managed") or []) if m["worktree"]=="probe-reconcile"), False)')"
+  WNAME="$(basename "$WTE")"
+  E_ACT="$(jget "$PF" '",".join(next((m.get("actions") or [] for m in (d.get("managed") or []) if m["worktree"]==sys.argv[3]), []))' "$WNAME")"
+  E_START="$(jget "$PF" 'next((bool(m.get("starting_recent")) for m in (d.get("managed") or []) if m["worktree"]==sys.argv[3]), False)' "$WNAME")"
   say "  start.sh pid=$(cat "$SCRATCH/e.pid" 2>/dev/null)  starting_recent=$E_START  actions=[$E_ACT]"
   if [ "$E_START" = "True" ] && [ -z "$E_ACT" ]; then
     setv e PASS "a worker sitting in wait-capacity was protected for the whole wait"
