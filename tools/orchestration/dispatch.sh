@@ -19,6 +19,7 @@
 #   title: Tester PR #163 @ e0f1d44   the Orca task title
 #   deadline: 3600                    seconds before a non-settling worker is stopped (default 3600)
 #   serve: 8614                       optional: build + serve this port before the agent starts
+#   pr: 163                           reviewer/tester: the PR whose verdict the dispatcher posts
 #   ---
 #   <spec body>
 #
@@ -26,12 +27,21 @@
 # pass first finishes THAT (wait out its deadline, close it), so a restart of this script, of Orca
 # or of the machine resumes instead of starting a second worker beside the first.
 #
+# VERDICTS: a reviewer/tester never posts to the PR (its config cannot). When it settles succeeded,
+# the dispatcher reads the worker's own report from Orca and posts it with verdict-post.sh
+# --from-settlement, which copies the lines verbatim and refuses an incomplete block (hunter H-005:
+# a verdict a worker could post under the owner's login is a verdict anyone could forge).
+#
+# MERGES: while no worker runs, every CLOSE_EVERY seconds (default 300) close.sh merges what the
+# pipeline/verdict gate passed, pinned to the head it read (--dry-run while not acting).
+#
 # RESULTS: $S/done/<file>.<outcome>, the spec plus a footer with dispatch, task, outcome, attempts.
 # A worker that did not settle by itself (exited, timeout, agent_wait, failed) is retried with
 # Orca's own --retry-of on the same Task, at most MAX_ATTEMPTS times in all.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+HERE_NATIVE="$(cygpath -m "$HERE" 2>/dev/null || printf '%s' "$HERE")"
 cd "$HERE/../.." || exit 2
 S="${LOCALAPPDATA:-$HOME}/orca-orchestration/design-system-viewer"
 Q="$S/queue"; DONE="$S/done"; RUNNING="$S/running.env"; LOG="$S/dispatch.log"
@@ -77,6 +87,7 @@ finish_running() {
   local BASE; BASE="$(basename "$FILE")"; BASE="${BASE#active-}"
   case "$OUTC" in
     succeeded)
+      post_verdict "$FILE" "$TASK" || OUTC="verdict-refused"
       record "$FILE" "$OUTC" ;;
     *)
       if [ "${ATTEMPT:-1}" -lt "$MAX_ATTEMPTS" ]; then
@@ -90,6 +101,21 @@ finish_running() {
       fi ;;
   esac
   rm -f "$RUNNING"
+}
+
+post_verdict() {
+  local FILE="$1" TASK="$2" ROLE PR REP RC=0
+  ROLE="$(hdr role "$FILE")"; PR="$(hdr pr "$FILE")"
+  case "$ROLE" in reviewer|tester) ;; *) return 0;; esac
+  [ -n "$PR" ] || { say "no pr: header on a $ROLE spec; nothing posted"; return 1; }
+  REP="$S/report-$TASK.txt"
+  orca orchestration task-list --json </dev/null 2>/dev/null \
+    | node "$HERE_NATIVE/lib/task-result.cjs" "$TASK" > "$REP" || { say "no report for $TASK; nothing posted"; return 1; }
+  bash "$HERE/verdict-post.sh" --pr "$PR" --role "$ROLE" --from-settlement "$REP" \
+    --source "dispatch $TASK" 2>&1 | sed 's/^/dispatch: verdict: /' | tee -a "$LOG" >&2
+  RC="${PIPESTATUS[0]}"
+  [ "$RC" -eq 0 ] && say "posted $ROLE verdict for #$PR from $TASK" || say "verdict-post refused $TASK (rc $RC); report kept at $REP"
+  return "$RC"
 }
 
 record() {
@@ -156,9 +182,20 @@ start_next() {
   say "dispatched $DISP for $(basename "$FILE")"
 }
 
+close_pass() {
+  local STAMP="$S/close.last" NOW; NOW="$(date +%s)"
+  [ -f "$RUNNING" ] && return 0
+  [ $(( NOW - $(cat "$STAMP" 2>/dev/null || echo 0) )) -ge "${CLOSE_EVERY:-300}" ] || return 0
+  echo "$NOW" > "$STAMP"
+  local ARG=(); acting || ARG=(--dry-run)
+  bash "$HERE/close.sh" "${ARG[@]+"${ARG[@]}"}" 2>&1 | grep -E 'MERGED|refused|BLOCKED|issue #|merged [0-9]' \
+    | sed 's/^/close: /' | while IFS= read -r l; do say "$l"; done
+}
+
 pass() {
   finish_running || return 0
   start_next
+  close_pass
 }
 
 status() {

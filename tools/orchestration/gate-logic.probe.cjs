@@ -27,6 +27,15 @@ const good = (role, extra = '') => ({
 
 const cases = [
   {
+    name: 'H-027. a one-digit commit that the head merely starts with is not a verdict about this head',
+    head: HEAD,
+    comments: [
+      { body: '```dsv-verdict\nstatus: pass\nrole: reviewer\ncommit: 1\nscope_ok: yes\n```', at: at(1) },
+      { body: '```dsv-verdict\nstatus: pass\nrole: tester\ncommit: 12\nobserved: x\nbefore: y\nbuild: z.js\n```', at: at(2) },
+    ],
+    expect: 'pending',
+  },
+  {
     name: '1. the broken fence, verbatim bytes from PR #134 (three backslashes, no backticks) - it names the OLD head 5dbe297, so it must NOT lock this PR',
     head: HEAD,
     comments: [
