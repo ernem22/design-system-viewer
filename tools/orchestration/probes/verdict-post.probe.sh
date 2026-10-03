@@ -29,10 +29,15 @@ VP="$HERE/verdict-post.sh"
 RESULT="$STATE_DIR/verdict-post-probe.result"
 SETTLE_F="$STATE_DIR/verdict-post-probe.settlement"
 STUB_DIR="${LOCALAPPDATA:-$HOME}/Temp/verdict-post-probe-stub"
+# The stub directory must exist BEFORE its path is resolved: on a machine that has never run
+# this probe, `cd` fails, STUB_PATH comes out empty, and the cases that clear the payload gate
+# would fall through to the real gh. Created here, resolved on the next line.
+mkdir -p "$STUB_DIR"
 # MSYS-style path for PATH. A Windows-style "C:/..." entry is split at its drive colon, so the
 # stub was silently skipped and the case reached the real gh (measured: with that form, `which
 # gh` still answered /c/Program Files/GitHub CLI/gh and the case read a real, empty head).
 STUB_PATH="$(cd "$STUB_DIR" 2>/dev/null && pwd)"
+[ -n "$STUB_PATH" ] || { printf 'probe: could not resolve the stub directory %s\n' "$STUB_DIR"; exit 2; }
 
 V_A=NOT_EXERCISED; V_B=NOT_EXERCISED; V_C=NOT_EXERCISED
 V_D=NOT_EXERCISED; V_E=NOT_EXERCISED; V_F=NOT_EXERCISED
