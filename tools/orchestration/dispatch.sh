@@ -19,7 +19,9 @@
 #   title: Tester PR #163 @ e0f1d44   the Orca task title
 #   deadline: 3600                    seconds before a non-settling worker is stopped (default 3600)
 #   serve: 8614                       optional: build + serve this port before the agent starts
-#   pr: 163                           reviewer/tester: the PR whose verdict the dispatcher posts
+#   pr: 163                           reviewer/tester/fixer: the PR (the dispatcher posts its verdict)
+#   head: e0f1d44                     reviewer/tester/fixer: the PR head the spec was written for
+#   issue: 117                        coder: the issue (needs.sh matches specs on these headers)
 #   ---
 #   <spec body>
 #
