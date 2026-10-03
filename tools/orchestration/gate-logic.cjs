@@ -87,6 +87,12 @@ function parseVerdict(body) {
  * @param {{head: string, comments: Array<{body: string, at: string}>}} input
  * @returns {{state: 'success'|'failure'|'pending', description: string, detail: object}}
  */
+// A verdict's commit names the head only when it is a real abbreviation: 7+ hex digits that the head
+// starts with. `head.startsWith(c)` alone let `commit: 4` match any head starting with 4 (hunter H-027).
+function namesHead(head, c) {
+  return typeof c === 'string' && /^[0-9a-f]{7,40}$/i.test(c) && head.toLowerCase().startsWith(c.toLowerCase());
+}
+
 function evaluate(input) {
   const head = input.head || '';
   const shortHead = head.slice(0, 7);
@@ -135,7 +141,7 @@ function evaluate(input) {
   const latest = {};
   const ignored = [];
   for (const a of attempts) {
-    if (!a.commit || !head.startsWith(a.commit)) {
+    if (!namesHead(head, a.commit)) {
       ignored.push({ role: a.role, commit: a.commit || '(none)' });
       continue;
     }
