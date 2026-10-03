@@ -12,9 +12,11 @@
 # settlement and copies them verbatim into the block. It refuses - loudly, exit 1 -
 # rather than posting something the gate cannot read:
 #
+#   * a Tester verdict - pass OR fail - must carry observed:, before: and build: (the asset
+#     hash). The payload is checked before the head, so the refusal needs no network call
+#     and the Tester is still alive to fix it;
 #   * the named commit must equal the PR's current head (a verdict about another build
 #     is not evidence about this one);
-#   * a Tester PASS must carry observed:, before: and build: (the asset hash);
 #   * a Reviewer verdict must carry scope_ok:;
 #   * --status must be pass or fail.
 #
@@ -73,19 +75,21 @@ fi
 
 case "$STATUS" in pass|fail) ;; "") fail "--status is required (or a settlement with a 'status:' line)";; *) fail "--status must be pass or fail (got '$STATUS')";; esac
 
-# --- the head this verdict is about --------------------------------------------------
-HEAD="$(gh pr view "$PR" --json headRefOid --jq .headRefOid 2>/dev/null)"
-[ -n "$HEAD" ] || fail "could not read the head of PR #$PR"
-case "$HEAD" in "$COMMIT"*) ;; *) fail "commit $COMMIT is not the head of PR #$PR ($HEAD) - refusing to post a verdict about another build";; esac
-[ -n "$COMMIT" ] || COMMIT="$HEAD"
-
-# --- what each role must carry --------------------------------------------------------
-if [ "$ROLE" = tester ] && [ "$STATUS" = pass ]; then
+# --- what each role must carry, BEFORE any network call -------------------------------
+# The payload is checked first so a thin verdict is refused without a gh round-trip: the
+# Tester is still alive when it reads the refusal, and this can be tested offline.
+# A tester verdict - PASS OR FAIL - must carry its evidence: observed:, before: and the
+# build asset hash. Measured 2026-10-03 on PR #163: a Tester posted
+# "status: fail / role: tester / commit: e0f1d44 / build: index-CVUkIPe1.js" - no observed,
+# no before - and this script accepted it, because the evidence rule only applied to PASS.
+# docs/orchestration/specs/tester.md printed the same thin shape as its example, so the
+# spec was teaching it.
+if [ "$ROLE" = tester ]; then
   MISSING=""
   [ -n "$OBSERVED" ] || MISSING="$MISSING observed"
   [ -n "$BEFORE" ] || MISSING="$MISSING before"
   [ -n "$BUILD" ] || MISSING="$MISSING build"
-  [ -z "$MISSING" ] || fail "a tester PASS must carry its evidence; missing:$MISSING (a PASS with no evidence is not a PASS)"
+  [ -z "$MISSING" ] || fail "a tester verdict must carry its evidence; missing:$MISSING (a verdict with no observed/before/build is not evidence)"
 fi
 if [ "$ROLE" = reviewer ]; then
   case "$SCOPE_OK" in yes|no) ;; *) fail "a reviewer verdict must carry --scope-ok (yes|no)";; esac
@@ -93,6 +97,12 @@ fi
 if [ "$STATUS" = fail ] && [ -z "$REASON" ] && [ -z "$FIXREQ" ]; then
   fail "a fail verdict must carry --reason and/or --fix-required"
 fi
+
+# --- the head this verdict is about --------------------------------------------------
+HEAD="$(gh pr view "$PR" --json headRefOid --jq .headRefOid 2>/dev/null)"
+[ -n "$HEAD" ] || fail "could not read the head of PR #$PR"
+case "$HEAD" in "$COMMIT"*) ;; *) fail "commit $COMMIT is not the head of PR #$PR ($HEAD) - refusing to post a verdict about another build";; esac
+[ -n "$COMMIT" ] || COMMIT="$HEAD"
 
 # --- render into a FILE: exactly three backticks, one field per line -------------------
 # Not into a variable: `$(printf 'x\n')` strips the trailing newline, so building the

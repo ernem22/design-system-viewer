@@ -58,7 +58,13 @@ before: <...>
 THEN POST A VERDICT BLOCK AS A PR COMMENT — the merge gate is computed by GitHub from
 comments, not from the coordinator reading your message:
 
-    gh pr comment <n> --body "$(printf '```dsv-verdict\nstatus: pass\nrole: tester\ncommit: %s\nbuild: %s\n```\n' "$(git rev-parse --short HEAD)" "<the asset hash you served>")"
+    gh pr comment <n> --body "$(printf '```dsv-verdict\nstatus: pass\nrole: tester\ncommit: %s\nbuild: %s\nobserved: %s\nbefore: %s\n```\n' "$(git rev-parse --short HEAD)" "<the asset hash you served>" "<what you did -> value>" "<the base value>")"
+
+The block must carry `observed:`, `before:` and `build:` whether you pass or fail — a
+verdict with no observed/before is not evidence, and `verdict-post.sh` refuses to post
+one (it names the missing fields and exits non-zero while you are still alive to fix it).
+This spec used to print the thin shape (status/role/commit/build only); a Tester copied it
+onto PR #163, so it is corrected here.
 
 `commit:` must be the head whose build you verified (your STEP 0 answer). A verdict whose
 commit is not the PR's current head does not count — that field exists because a Tester
