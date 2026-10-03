@@ -35,9 +35,15 @@ function useValueOf(system: DesignSystem | null, dark: boolean): (token: string)
 export function PreviewProps({
   system,
   dark = false,
+  active = true,
 }: {
   system: DesignSystem | null;
   dark?: boolean;
+  /** Whether the docked panel is the open surface — Preview tab active and the
+      props panel expanded. App passes the live state so the panel's Escape
+      handler is inert while another tab (or a collapsed panel) owns the
+      keyboard; defaults on for direct mounts. */
+  active?: boolean;
   /** Compatibility seam: App.tsx still passes `onPatch`, but Preview value
       edits are ephemeral now (#27) and never reach the store — the prop is
       accepted and ignored. Remove it from App.tsx with the deferred wiring,
@@ -45,7 +51,7 @@ export function PreviewProps({
   onPatch?: (name: string, value: string) => void;
 }) {
   const valueOf = useValueOf(system, dark);
-  return <ScopePanel valueOf={valueOf} />;
+  return <ScopePanel valueOf={valueOf} active={active} />;
 }
 
 /** Small-screen overlay for the same scope — desktop docks into the panel

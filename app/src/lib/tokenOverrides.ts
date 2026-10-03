@@ -239,13 +239,36 @@ export function selectScope(scope: InspectorScope | null): void {
   emit();
 }
 
+/** Element the docked inspector should hand focus back to when it closes.
+    Recorded by `openScope` at the instant of opening — before the selection
+    change commits — because reading `document.activeElement` later (the panel
+    effect used to) is not reliably the opener: the trigger need not still hold
+    focus after the selection re-render, and the effect runs post-commit. */
+let returnFocus: HTMLElement | null = null;
+
+/** The pre-open focus target recorded by the last `openScope`, for the docked
+    panel's Escape handler. Null when nothing opened the panel. */
+export function getReturnFocus(): HTMLElement | null {
+  return returnFocus;
+}
+
 /** Desktop docks the scope into the persistent right properties panel;
-    small screens keep the overlay dialog (same content, different shell). */
-export function openScope(scope: InspectorScope): void {
+    small screens keep the overlay dialog (same content, different shell).
+    `opener` is the trigger that was activated; it is the focus target on
+    Escape, so the caller passes `event.currentTarget` (the click itself is not
+    guaranteed to have focused a <button>). */
+export function openScope(scope: InspectorScope, opener?: HTMLElement | null): void {
   const mobile =
     typeof window !== "undefined" && typeof window.matchMedia === "function"
       ? window.matchMedia("(max-width: 760px)").matches
       : false;
+  if (state.selected?.id !== scope.id) {
+    returnFocus =
+      opener ??
+      (typeof document !== "undefined" && document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null);
+  }
   state = {
     ...state,
     selected: state.selected?.id === scope.id ? null : scope,
