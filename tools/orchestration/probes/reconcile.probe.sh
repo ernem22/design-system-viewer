@@ -7,10 +7,11 @@
 #   (c) unmarked worktree         - holds a live process, still unmanaged, untouched
 #   (d) worker mid-start          - marker state=starting, created_at=now -> protected, no action
 #   (e) worker held in wait-capacity - observed while start.sh really sits in the wait
+#   (f) settled dispatch + settlement - reconcile REMOVES the worktree and settle prints DONE
 #
-# (a)/(b) are the only cases that need a real dispatch, and a real dispatch needs a real task and a
-# real TUI. They are reported NOT_EXERCISED rather than faked: a fixture that cannot happen is not
-# evidence, and pretending otherwise is how a probe starts lying.
+# (a)/(b)/(f) are the only cases that need a real dispatch, and a real dispatch needs a real task
+# and a real TUI. They are reported NOT_EXERCISED rather than faked: a fixture that cannot happen
+# is not evidence, and pretending otherwise is how a probe starts lying.
 #
 # HERE must be a NATIVE path: python, node and orca are native binaries and do not translate
 # /d/code into D:\code. That one line is what made an earlier version report "?" everywhere.
@@ -27,12 +28,14 @@ SCRATCH="${LOCALAPPDATA:-$HOME}/Temp/reconcile-probe"
 REPO="${PROBE_REPO:-D:/code/design-system-viewer}"
 
 V_a=NOT_EXERCISED; V_b=NOT_EXERCISED; V_c=NOT_EXERCISED; V_d=NOT_EXERCISED; V_e=NOT_EXERCISED
+V_f=NOT_EXERCISED
 NOTE_a="needs a real dispatch (a task + a TUI)"; NOTE_b="needs a real dispatch, then worker-abandon"
+NOTE_f="needs a real dispatch that delivers worker_done, so a settlement exists"
 
 say()  { printf 'probe: %s\n' "$*"; }
 setv() { case "$1" in
     a) V_a="$2"; NOTE_a="$3" ;; b) V_b="$2"; NOTE_b="$3" ;;
-    c) V_c="$2" ;; d) V_d="$2" ;; e) V_e="$2" ;;
+    c) V_c="$2" ;; d) V_d="$2" ;; e) V_e="$2" ;; f) V_f="$2"; NOTE_f="$3" ;;
   esac
   say "  $1=$2  ${3:-}" ; }
 
@@ -49,7 +52,25 @@ d=json.load(open(sys.argv[1]))
 print(eval(sys.argv[2]))" "$1" "$2" "${3:-}" 2>/dev/null || printf '?'
 }
 mkworktree() { git -C "$REPO" worktree add --detach "$1" HEAD >/dev/null 2>&1; }
-rmworktree() { git -C "$REPO" worktree remove --force "$1" >/dev/null 2>&1; }
+# Remove a fixture THROUGH Orca, and drop the fixture's own branch. A branch left behind is what
+# makes the NEXT run take a -N suffix (measured 2026-10-03: ernem22/probe-reconcile stayed taken,
+# so the (e) fixture landed on probe-reconcile-3, and ernem22/probe-ab turned this file's fixture
+# into probe-ab-2). Only probe-namespace branches go, and only when they carry no work of their
+# own - the tip must still be the base HEAD.
+rmworktree() {
+  local br=""
+  br="$(git -C "$1" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+  orca worktree rm --worktree "path:$1" --force --json >/dev/null 2>&1
+  git -C "$REPO" worktree remove --force "$1" >/dev/null 2>&1
+  rm -rf "$1" 2>/dev/null
+  case "$br" in
+    ernem22/probe-*)
+      # no work of its own: its tip is an ancestor of the base the fixture was cut from
+      git -C "$REPO" merge-base --is-ancestor "$br" HEAD 2>/dev/null &&
+        git -C "$REPO" branch -D "$br" >/dev/null 2>&1
+      ;;
+  esac
+}
 
 # ---------------- 0. every script resolves its own helper ----------------
 say "=== helpers resolve (a \$HERE-derived path must reach a native tool intact) ==="
@@ -142,7 +163,7 @@ rmworktree "$WTE"
 # A leftover directory that git no longer registers - an earlier run whose removal raced the
 # filesystem - is enough for Orca to suffix the name it hands back (probe-reconcile-2). Clear it,
 # so the fixture starts from the name it asks for.
-rm -rf "$WTE" 2>/dev/null || true
+rmworktree "$WTE"
 SPAWN_OUT="$(bash "$HERE/spawn.sh" probe-reconcile 2>&1)"; SPAWN_RC=$?
 say "  spawn.sh rc=$SPAWN_RC: $(printf '%s' "$SPAWN_OUT" | tail -2 | tr '\n' ' ')"
 # spawn.sh names the directory it made on a PATH= line, and it suffixes the name when one is taken.
@@ -193,34 +214,40 @@ else
   say "  spawn.sh did not leave a marked worktree"; setv e NOT_EXERCISED "spawn.sh produced no marker"
 fi
 
-# ---------------- (a)/(b): need a real dispatch ----------------
+# ---------------- (a)/(b)/(f): need a real dispatch ----------------
 say ""
-say "=== (a)/(b) ==="
-# (a)/(b) cannot happen in this process: they need a real dispatch and a real TUI. They are
+say "=== (a)/(b)/(f) ==="
+# (a)/(b)/(f) cannot happen in this process: they need a real dispatch and a real TUI. They are
 # driven end to end by probes/reconcile-ab.sh, which writes one machine-written verdict line to
 # state/reconcile-probe.result. Read that file rather than restating NOT_EXERCISED - the merge
-# condition is the five-verdict line and it has to come out of one command to be quotable. A
-# missing file leaves both NOT_EXERCISED: this probe never invents a verdict it did not measure.
+# condition is the six-verdict line and it has to come out of one command to be quotable. A
+# missing file leaves all three NOT_EXERCISED: this probe never invents a verdict it did not
+# measure.
 AB_RESULT="$STATE_DIR/reconcile-probe.result"
 if [ -f "$AB_RESULT" ]; then
   AB_A="$(sed -n 's/.*\ba=\([A-Z_]*\).*/\1/p' "$AB_RESULT" | head -1)"
   AB_B="$(sed -n 's/.*\bb=\([A-Z_]*\).*/\1/p' "$AB_RESULT" | head -1)"
+  AB_F="$(sed -n 's/.*\bf=\([A-Z_]*\).*/\1/p' "$AB_RESULT" | head -1)"
   AB_AT="$(date -r "$AB_RESULT" -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || printf '?')"
   [ -n "$AB_A" ] && setv a "$AB_A" "from reconcile-ab.sh, result written $AB_AT"
   [ -n "$AB_B" ] && setv b "$AB_B" "from reconcile-ab.sh, result written $AB_AT"
+  [ -n "$AB_F" ] && setv f "$AB_F" "from reconcile-ab.sh, result written $AB_AT"
 else
-  say "  no $AB_RESULT - run probes/reconcile-ab.sh first; (a)/(b) stay NOT_EXERCISED"
+  say "  no $AB_RESULT - run probes/reconcile-ab.sh first; (a)/(b)/(f) stay NOT_EXERCISED"
 fi
 say "  a=$V_a ($NOTE_a)"
 say "  b=$V_b ($NOTE_b)"
+say "  f=$V_f ($NOTE_f)"
 say "  on record from real data this session: tester-163f/tester-172805 had live trees 33192/29848"
 say "  with no owning dispatch; reconcile killed both (still_alive=false), closed 4 terminals, and"
 say "  kept both worktrees on disk. That is case (b)'s rule, measured, not asserted."
+say "  (f) is the case (b) could not make: a settled dispatch whose settlement exists, where the"
+say "  assertion is that the DIRECTORY IS GONE - the only reading that proves settle ever ran."
 
 say ""
-say "a=$V_a b=$V_b c=$V_c d=$V_d e=$V_e"
+say "a=$V_a b=$V_b c=$V_c d=$V_d e=$V_e f=$V_f"
 [ "$HELPER_BAD" -eq 0 ] || say "helper check: $HELPER_BAD problem(s)"
-for V in "$V_a" "$V_b" "$V_c" "$V_d" "$V_e"; do
+for V in "$V_a" "$V_b" "$V_c" "$V_d" "$V_e" "$V_f"; do
   [ "$V" = "PASS" ] || exit 1
 done
 exit 0
