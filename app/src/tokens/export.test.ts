@@ -92,3 +92,23 @@ describe('systemToCss dark variant', () => {
     expect(systemToCss(lightOnly)).not.toContain('data-theme');
   });
 });
+
+// Issue #125: `source` is additive metadata on the model. The JSON export is
+// `JSON.stringify(system)`, so it must ride along unchanged, while the CSS
+// export stays CSS and never leaks the field.
+describe('source provenance round-trip', () => {
+  const source = { kind: 'file', filename: 'wire.css', importedAt: '2026-09-30T00:00:00.000Z' };
+
+  it('survives a JSON export and reparse', () => {
+    const withSource = { ...darkSystem, source } as unknown as DesignSystem;
+    const back = JSON.parse(JSON.stringify(withSource)) as DesignSystem;
+    expect(back.source).toEqual(source);
+  });
+
+  it('never leaks into the CSS export', () => {
+    const withSource = { ...darkSystem, source } as unknown as DesignSystem;
+    const css = systemToCss(withSource);
+    expect(css).not.toContain('importedAt');
+    expect(css).not.toContain('wire.css');
+  });
+});

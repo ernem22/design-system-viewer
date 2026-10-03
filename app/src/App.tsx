@@ -52,6 +52,7 @@ function App() {
     setActiveSlug,
     addSystem,
     mergeCss,
+    replaceSystem,
     patchToken,
     removeSystem,
   } = useSystems();
@@ -403,6 +404,9 @@ function App() {
         initialCss={addCss}
         onOpenChange={setAddOpen}
         onAdd={addSystem}
+        onMerge={mergeCss}
+        onReplace={replaceSystem}
+        systems={systems}
         onToast={pushToast}
         onSaved={setTab}
       />

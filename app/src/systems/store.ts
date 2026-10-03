@@ -21,6 +21,21 @@ export interface TokenGroup {
   tokens: Token[];
 }
 
+/** Where an imported system came from. Additive metadata: the bundled systems
+    and hand-made ones have none, and `ensureGroups` carries it through the
+    rebuild. It is what a later "refresh from source" diff needs. `importedAt`
+    is set when the import is written. */
+export interface SourceProvenance {
+  kind: string;
+  url?: string;
+  filename?: string;
+  importedAt: string;
+}
+
+/** A source before it is written — the dialog captures how the text arrived,
+    the store stamps `importedAt` at save time. */
+export type SourceDescriptor = Omit<SourceProvenance, "importedAt">;
+
 export interface DesignSystem {
   slug: string;
   name: string;
@@ -30,6 +45,17 @@ export interface DesignSystem {
   themes?: { dark?: Token[] };
   createdAt: string;
   updatedAt: string;
+  source?: SourceProvenance;
+}
+
+/** `slug` with the first free `-2`, `-3`… suffix for the names in `taken`.
+    The collision-resolution primitive behind addSystem's rename. */
+export function nextFreeSlug(slug: string, taken: Iterable<string>): string {
+  const used = new Set(taken);
+  if (!used.has(slug)) return slug;
+  let n = 2;
+  while (used.has(`${slug}-${n}`)) n++;
+  return `${slug}-${n}`;
 }
 
 export function coveragePercent(cov: DesignSystem["coverage"]): number | null {
@@ -262,31 +288,59 @@ export function useSystems() {
 
   /** Every mutation rebuilds through buildSystem/mergeSystem (groups +
      coverage + warnings stay derived, never hand-edited) and persists. */
+  /** A colliding slug is renamed (`-2`, `-3`…) rather than thrown: importing
+      a name that already exists is a normal choice, not an error (issue #125).
+      The dialog offers merge/replace instead; this is the rename fallback. */
   const addSystem = useCallback(
-    (name: string, css: string): DesignSystem => {
+    (name: string, css: string, source?: SourceProvenance): DesignSystem => {
       const built = buildSystem({ name, css }) as DesignSystem;
-      if (systems.some((s) => s.slug === built.slug))
-        throw new Error(`"${built.slug}" already exists — use Add Tokens to merge`);
-      const next = [...systems, built];
+      const slug = nextFreeSlug(built.slug, systems.map((s) => s.slug));
+      const system: DesignSystem = slug === built.slug ? built : { ...built, slug };
+      if (source) system.source = source;
+      const next = [...systems, system];
       setSystems(next);
       persist(next);
-      setActiveSlug(built.slug);
-      return built;
+      setActiveSlug(system.slug);
+      return system;
     },
     [systems, persist, setActiveSlug],
   );
 
   const mergeCss = useCallback(
-    (slug: string, css: string): DesignSystem => {
+    (slug: string, css: string, source?: SourceProvenance): DesignSystem => {
       const existing = systems.find((s) => s.slug === slug);
       if (!existing) throw new Error("system to merge not found");
       const merged = mergeSystem(existing, css) as DesignSystem;
+      if (source) merged.source = source;
       const next = systems.map((s) => (s.slug === slug ? merged : s));
       setSystems(next);
       persist(next);
       return merged;
     },
     [systems, persist],
+  );
+
+  /** Overwrite an existing system in place — the collision "replace" choice.
+      Keeps its slug and createdAt; the tokens are rebuilt from `css`. */
+  const replaceSystem = useCallback(
+    (slug: string, name: string, css: string, source?: SourceProvenance): DesignSystem => {
+      const existing = systems.find((s) => s.slug === slug);
+      if (!existing) throw new Error("system to replace not found");
+      const built = buildSystem({ name, css }) as DesignSystem;
+      const system: DesignSystem = {
+        ...built,
+        slug,
+        createdAt: existing.createdAt,
+        updatedAt: new Date().toISOString(),
+      };
+      if (source) system.source = source;
+      const next = systems.map((s) => (s.slug === slug ? system : s));
+      setSystems(next);
+      persist(next);
+      setActiveSlug(slug);
+      return system;
+    },
+    [systems, persist, setActiveSlug],
   );
 
   /** Single-token write — the inline editor's path. One bare line,
@@ -317,6 +371,7 @@ export function useSystems() {
     setActiveSlug,
     addSystem,
     mergeCss,
+    replaceSystem,
     patchToken,
     removeSystem,
   };
