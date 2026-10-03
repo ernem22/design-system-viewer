@@ -138,15 +138,17 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   # to resolve the worktree, printing DONE while closing nothing). This sweep closes any dispatch
   # that is done but not yet closed, so nothing stays open longer than one interval even with the
   # watcher fully down.
-
+  reconcile_cycle
+}
 
 # RECONCILE. The per-dispatch sweeps that used to live here hunted for one dispatch's
 # worktree, terminal and processes, and every miss needed another patch. This starts from what
 # is MANAGED (a worktree carrying .dsv-worker), compares against what is LIVE, and acts on the
-# difference. It is independent of --act: its first three cycles are dry runs that print the
-# plan, after which it executes.
+# difference. It is independent of --act: whether it acts is an explicit file, not a cycle count.
+REC_CYCLE=0
 reconcile_cycle() {
   [ -n "$RECONCILE" ] || return 0
+  REC_CYCLE=$((REC_CYCLE+1))
   mkdir -p "$STATE_DIR"
   local EXEC OUT
   # Gating is an explicit file, not a cycle count: a restart must never re-arm execution, and
@@ -163,10 +165,8 @@ reconcile_cycle() {
   (p.backfill||[]).forEach(b=>L.push("  BACKFILL candidate "+b.worktree+" ("+b.dispatch+")"));
   (p.executed||[]).forEach(e=>L.push("  acted "+JSON.stringify(e)));
   process.stdout.write(L.join("\n"))}catch(e){process.stdout.write("unparseable")}});')"
-  printf '%s\n' "$OUT" | while IFS= read -r line; do say "reconcile[$N]: $line"; done
-  if [ -z "$EXEC" ]; then say "reconcile[$N]: DRY RUN (cycles 1-3) - nothing was changed"; fi
-}
-reconcile_cycle
+  printf '%s\n' "$OUT" | while IFS= read -r line; do say "reconcile[$REC_CYCLE]: $line"; done
+  if [ -z "$EXEC" ]; then say "reconcile[$REC_CYCLE]: DRY RUN - nothing was changed (no state/reconcile.enabled)"; fi
 }
 
 # Close dispatches that are finished but still holding a terminal or a worktree.
