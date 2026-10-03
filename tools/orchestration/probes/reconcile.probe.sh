@@ -67,7 +67,7 @@ A="$(avail_mb)"
 say "available_mb=$A  run=$RUN"
 if [ "${A:-0}" -lt 600 ]; then
   say "under the 600 MB floor; waiting up to 60 min instead of refusing"
-  bash "$HERE/wait-capacity.sh" --min 600 --timeout 60 --note "reconcile probe" >&2 || {
+  bash "$HERE/wait-capacity.sh" --min 600 --timeout 3600 --note "reconcile probe" >&2 || {
     say "REFUSING: capacity did not arrive within 60 min"; exit 3; }
   say "capacity arrived: available_mb=$(avail_mb)"
 fi
