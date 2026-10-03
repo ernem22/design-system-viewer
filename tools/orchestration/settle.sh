@@ -188,10 +188,19 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
         { printf 'acked: n/a (the watcher had already acked it)\n'; printf '%s\n' "$BLOCK"; } > "$ITEM" || die "could not write $ITEM"
         say "settlement recovered from watchd.log into $ITEM (the watcher had already acked it)"
       else
-        NOTE="$INBOX/$(date -u +%Y%m%dT%H%M%SZ)-$DISPATCH-task-settled-no-delivery.md"
-        printf 'acked: no (nothing to ack)\ndispatch: %s\ntask: %s\ntask status: %s\nnote: the Task reads %s but no delivery was in the queue and no settlement was in watchd.log; nothing was acked.\n' \
-          "$DISPATCH" "$TASK" "$TASK_STATUS" "$TASK_STATUS" > "$NOTE"
-        say "no delivery in the queue and none in the log; wrote $NOTE"
+        # ONE note per dispatch, not one per pass. Measured 2026-10-03: every settle run wrote
+        # another note (4 -> 6 across two runs), and once reconcile's settle actually started
+        # running - it never had, see the WSL-launcher bug in lib/reconcile.py - that was ~700
+        # files a day for a dispatch whose state cannot change without a human.
+        NOTE="$(ls -t "$INBOX"/*"$DISPATCH"-task-settled-no-delivery.md 2>/dev/null | head -1)"
+        if [ -n "$NOTE" ]; then
+          say "no delivery in the queue and none in the log; the note for $DISPATCH is already on disk: $NOTE"
+        else
+          NOTE="$INBOX/$(date -u +%Y%m%dT%H%M%SZ)-$DISPATCH-task-settled-no-delivery.md"
+          printf 'acked: no (nothing to ack)\ndispatch: %s\ntask: %s\ntask status: %s\nnote: the Task reads %s but no delivery was in the queue and no settlement was in watchd.log; nothing was acked.\n' \
+            "$DISPATCH" "$TASK" "$TASK_STATUS" "$TASK_STATUS" > "$NOTE"
+          say "no delivery in the queue and none in the log; wrote $NOTE"
+        fi
         # No settlement exists, so this dispatch produced nothing we can point at. The worktree is
         # then the only evidence of what happened (measured 2026-09-30: coder-125's TUI died at
         # spawn, Orca still marked the dispatch completed, and the sweep removed the worktree).
@@ -230,9 +239,33 @@ SRC_HANDLE=""
 [ -n "$SETTLE_ITEM" ] && SRC_HANDLE="$(grep -oE 'term_[0-9a-f]{8}-[0-9a-f-]{27}' "$SETTLE_ITEM" 2>/dev/null | head -1)"
 [ -n "$SRC_HANDLE" ] || SRC_HANDLE="${SETTLE_FROM_HANDLE:-}"
 WT=""
-# FIRST: ask Orca which terminal this dispatch owns. This is the reliable mapping - the worker record
-# carries agentTerminalHandle, and the terminal carries its worktreePath. The two older lookups below
-# both failed on real dispatches (measured 2026-09-30 on reviewer-162g, tester-162 and reviewer-163b):
+# FIRST: the worker record names its own worktree. resource.worktreeId is "<repoId>::<path>",
+# and it is the only mapping that survives the TUI exiting - the handle -> terminal ->
+# worktreePath lookup below needs the terminal to still be listed, and a finished dispatch's
+# terminal is gone. Measured 2026-10-03 on tester-163b: worker-list carried the record
+# (terminalState=retained) WITH the path, `orca terminal list` had no such terminal, the last
+# fallback matched the dispatch id against a role-named path and could never match, so WT
+# stayed empty, settle.sh printed "no worktree matches this dispatch - nothing to remove", and
+# the worktree was never closed even when the script was run by hand.
+WT_REC="$(orca orchestration worker-list --run "$RUN" --json 2>/dev/null | node -e '
+let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+  const want=process.argv[1];
+  try{ const w=(JSON.parse(s).result||{}).workers||[]; const x=w.find(y=>y.dispatchId===want);
+    let id=(x&&x.resource&&x.resource.worktreeId)||"";
+    const i=id.indexOf("::"); if(i>=0) id=id.slice(i+2);
+    process.stdout.write(id); }catch(e){}
+});' "$DISPATCH" | tr -d '
+')"
+if [ -n "$WT_REC" ] && [ -d "$WT_REC" ]; then
+  WT="$WT_REC"
+  say "worktree from the worker record's resource.worktreeId: $WT"
+elif [ -n "$WT_REC" ]; then
+  say "worker record names worktree $WT_REC but it is not on disk; falling back"
+fi
+if [ -z "$WT" ]; then
+# THEN: ask Orca which terminal this dispatch owns. The worker record carries
+# agentTerminalHandle and the terminal carries its worktreePath. The older lookups below both
+# failed on real dispatches (measured 2026-09-30 on reviewer-162g, tester-162 and reviewer-163b):
 # the settlement file is named per dispatch only AFTER this script writes one, and matching the
 # dispatch id against the worktree PATH can never match, because paths are named by role.
 WT="$(orca orchestration worker-list --run "$RUN" --json 2>/dev/null | node -e '
@@ -251,7 +284,8 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
 });' "$SRC_HANDLE")"
   [ -n "$WT" ] && say "worktree from the dispatch's own terminal $SRC_HANDLE: $WT"
 fi
-if [ -n "$SRC_HANDLE" ]; then
+fi
+if [ -z "$WT" ] && [ -n "$SRC_HANDLE" ]; then
   WT="$(orca terminal list --json 2>/dev/null | node -e '
 let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   const want=process.argv[1];

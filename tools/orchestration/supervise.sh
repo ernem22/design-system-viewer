@@ -159,7 +159,7 @@ reconcile_cycle() {
   if [ -z "$PLAN" ]; then say "reconcile: could not build a plan"; return; fi
   OUT="$(printf '%s' "$PLAN" | node -e '
   let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const p=JSON.parse(s);
-  const L=[];L.push("managed="+p.managed.length+" unmanaged="+p.unmanaged.length+" live="+p.live_handles.length+" invariant="+(p.invariant_ok?"OK":"VIOLATED"));
+  const L=[];L.push("managed="+p.managed.length+" unmanaged="+p.unmanaged.length+" live="+p.live_handles.length+" invariant="+(p.invariant_ok?"OK":"VIOLATED")+" settle_failed="+((p.settle_failed||[]).join(",")||"-"));
   p.managed.filter(m=>!m.live).forEach(m=>L.push("  "+m.worktree+" -> "+(m.actions.join(",")||"-")+(m.dispatch?" ("+m.dispatch+")":"")));
   (p.violations||[]).forEach(v=>L.push("  VIOLATION "+v));
   (p.backfill||[]).forEach(b=>L.push("  BACKFILL candidate "+b.worktree+" ("+b.dispatch+")"));

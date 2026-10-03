@@ -37,9 +37,113 @@ import calendar  # age_s: UTC stamps must be read as UTC, not as local time
 
 WS_ROOT = ot.WS_ROOT
 MARKER = ".dsv-worker"
-KILL_LOG = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")),
-                        "orca-orchestration", "design-system-viewer", "inbox",
-                        "reconcile.log")
+ORCH = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")),
+                    "orca-orchestration", "design-system-viewer")
+INBOX = os.path.join(ORCH, "inbox")
+KILL_LOG = os.path.join(INBOX, "reconcile.log")
+STATE_DIR = os.environ.get("SUPERVISE_STATE") or os.path.join(ORCH, "state")
+SETTLE_FAIL_LOG = os.path.join(STATE_DIR, "settle-failures.json")
+# Three strikes. A settle that fails three times in a row for the same dispatch is a broken
+# tool, not a slow one, and retrying it every 2 minutes forever is how a real failure turns
+# into wallpaper (measured 2026-10-03: 13 identical "failed" lines for one dispatch in 15
+# minutes, every one of them a WSL launcher that could not start a shell).
+SETTLE_MAX_FAILS = 3
+
+
+def bash_path():
+    """The absolute Git-for-Windows bash. Never a PATH lookup.
+
+    CreateProcess resolves a bare "bash" against the WINDOWS PATH, where
+    C:\\Windows\\System32\\bash.exe - the WSL launcher - wins over Git's. WSL has no distro
+    on this host, so subprocess.run(["bash", ...]) returned rc=1 with an EMPTY stdout and the
+    reason only on stderr: "<3>WSL (10 - Relay) ERROR: CreateProcessCommon:817:
+    execvpe(/bin/bash) failed: No such file or directory". Measured 2026-10-03: every settle
+    entry in inbox/reconcile.log read "failed" with tail "" (probe-role999, probe-sandbox,
+    probe-ab x3, tester-163b x13) and no worktree was ever closed, while the same script run
+    by absolute path returned rc=0 and printed DONE.
+
+    DSV_BASH wins. Otherwise it is derived from `git --exec-path`
+    (<git>/mingw64/libexec/git-core -> <git>/usr/bin/bash.exe), then from the usual install
+    roots. Every candidate is RUN once and must answer, so a launcher that cannot start a
+    shell is never returned; System32 is refused outright.
+    """
+    cands = []
+    if os.environ.get("DSV_BASH"):
+        cands.append(os.environ["DSV_BASH"])
+    try:
+        cp = subprocess.run(["git", "--exec-path"], capture_output=True, timeout=30,
+                            stdin=subprocess.DEVNULL)
+        ep = (cp.stdout or b"").decode("utf-8", errors="replace").strip()
+        if ep:
+            root = os.path.dirname(os.path.dirname(os.path.dirname(ep)))
+            cands.append(os.path.join(root, "usr", "bin", "bash.exe"))
+            cands.append(os.path.join(root, "bin", "bash.exe"))
+    except (OSError, subprocess.SubprocessError):
+        pass
+    for var in ("ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"):
+        base = os.environ.get(var)
+        if base:
+            cands.append(os.path.join(base, "Git", "usr", "bin", "bash.exe"))
+    cands.append("bash")
+    for c in cands:
+        if c != "bash" and not os.path.isfile(c):
+            continue
+        if c != "bash" and "system32" in c.replace("\\", "/").lower():
+            continue
+        try:
+            cp = subprocess.run([c, "-c", "exit 0"], capture_output=True, timeout=30,
+                                stdin=subprocess.DEVNULL)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if cp.returncode == 0:
+            return c.replace("\\", "/")
+    return "bash"
+
+
+_BASH = []
+
+
+def bash():
+    """Resolved once per pass: the probe and every settle share one answer."""
+    if not _BASH:
+        _BASH.append(bash_path())
+    return _BASH[0]
+
+
+def settle_failures():
+    """dispatch -> {"fails": n, "tail": last settle output}. Persisted: a reconcile pass is a
+    fresh process, so an in-memory counter would reset every cycle and never reach three."""
+    try:
+        with open(SETTLE_FAIL_LOG, encoding="utf-8") as fh:
+            d = json.load(fh)
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def settle_failures_save(d):
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        with open(SETTLE_FAIL_LOG, "w", encoding="utf-8") as fh:
+            json.dump(d, fh, ensure_ascii=False, indent=1, sort_keys=True)
+    except OSError:
+        pass
+
+
+def settle_alert(dispatch, worktree, fails, tail):
+    """The strike-out is a human's problem now, so it goes where humans read: the inbox."""
+    ts = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    path = os.path.join(INBOX, "%s-%s-settle-failed.md" % (ts, dispatch))
+    try:
+        os.makedirs(INBOX, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("dispatch: %s\nworktree: %s\nconsecutive settle failures: %d\n"
+                     "reconcile has stopped retrying this dispatch.\n\n"
+                     "settle.sh output (stdout+stderr, last 400 chars):\n\n%s\n"
+                     % (dispatch, worktree, fails, tail))
+        return path
+    except OSError:
+        return ""
 
 
 def orca(*args):
@@ -351,6 +455,13 @@ def build(run, execute, backfill, only=()):
 # worktree. Named here so the daily report cannot let them accumulate unnoticed.
     out["no_dispatch"] = sorted(m["worktree"] for m in out["managed"]
                                 if not m["live"] and not m["dispatch"])
+    # Dispatches reconcile has given up on: reported on the summary line so a struck-out
+    # settle can never be silent, and named by WORKTREE because that is what the line's
+    # other fields name.
+    _f = settle_failures()
+    out["settle_failed"] = sorted(
+        m["worktree"] for m in out["managed"]
+        if int((_f.get(m["dispatch"]) or {}).get("fails") or 0) >= SETTLE_MAX_FAILS)
 
 
     # INVARIANT: every opencode tree in a managed worktree belongs to a live dispatch, and no
@@ -397,14 +508,40 @@ def do_actions(plan, run):
         for h in m["terminals"]:
             orca("terminal", "close", "--terminal", h, "--json")
         if m["dispatch"]:
-            cp = subprocess.run(["bash", os.path.join(os.path.dirname(HERE), "settle.sh"),
-                                 m["dispatch"]], capture_output=True, timeout=600)
-            txt = (cp.stdout or b"").decode("utf-8", errors="replace")
+            fails = settle_failures()
+            rec = fails.get(m["dispatch"]) or {}
+            n = int(rec.get("fails") or 0)
+            if n >= SETTLE_MAX_FAILS:
+                # Already struck out. Retrying a broken settle every cycle is what buried the
+                # WSL-launcher failure under 13 identical lines.
+                done.append({"worktree": m["worktree"], "dispatch": m["dispatch"],
+                             "settle": "skipped-after-%d-failures" % n,
+                             "tail": (rec.get("tail") or "")[-400:]})
+                continue
+            cp = subprocess.run([bash(), os.path.join(os.path.dirname(HERE), "settle.sh"),
+                                 m["dispatch"]], capture_output=True, timeout=600,
+                                # settle.sh otherwise derives the run from run-current, i.e. the
+                                # coordinator's own binding. This pass was built for `run`, so the
+                                # settle must read the same queue - passing --run to reconcile and
+                                # letting settle.sh pick a different run is how a settle lands in
+                                # the wrong run's inbox.
+                                env=dict(os.environ, WATCH_RUN=run))
+            # stderr, not just stdout. The one failure that mattered was visible ONLY on
+            # stderr: a bash that never started left stdout empty, so the recorded tail was
+            # "" and the cause was unreadable.
+            txt = ((cp.stdout or b"") + (cp.stderr or b"")).decode("utf-8", errors="replace")
             keep = "REFUSED" in txt or "KEEPING" in txt
+            verdict = "kept-as-evidence" if keep else ("done" if "DONE" in txt else "failed")
+            if verdict == "failed":
+                n += 1
+                fails[m["dispatch"]] = {"fails": n, "tail": txt[-400:]}
+                if n == SETTLE_MAX_FAILS:
+                    settle_alert(m["dispatch"], m["worktree"], n, txt[-400:])
+            else:
+                fails.pop(m["dispatch"], None)
+            settle_failures_save(fails)
             done.append({"worktree": m["worktree"], "dispatch": m["dispatch"],
-                         "settle": "kept-as-evidence" if keep else
-                                   ("done" if "DONE" in txt else "failed"),
-                         "tail": txt[-400:]})
+                         "settle": verdict, "tail": txt[-400:]})
     try:
         os.makedirs(os.path.dirname(KILL_LOG), exist_ok=True)
         with open(KILL_LOG, "a", encoding="utf-8") as fh:
@@ -455,11 +592,12 @@ def main(argv):
     if as_json:
         print(json.dumps(plan, ensure_ascii=False))
     else:
-        print("reconcile %s  managed=%d unmanaged=%d live=%d invariant=%s ignored=%d no_dispatch=%s"
+        print("reconcile %s  managed=%d unmanaged=%d live=%d invariant=%s ignored=%d no_dispatch=%s settle_failed=%s"
               % (plan["at"], len(plan["managed"]), len(plan["unmanaged"]),
                  len(plan["live_handles"]), "OK" if plan["invariant_ok"] else "VIOLATED",
                  len(plan.get("ignored") or []),
-          ",".join(plan.get("no_dispatch") or []) or "-"))
+                 ",".join(plan.get("no_dispatch") or []) or "-",
+                 ",".join(plan.get("settle_failed") or []) or "-"))
         for m in plan["managed"]:
             print("  %-24s live=%-5s actions=%s" % (m["worktree"], m["live"],
                                                     ",".join(m["actions"]) or "-"))
