@@ -54,7 +54,7 @@ try {
 
   # ---- C. fence / run handover -----------------------------------------------------------------
   Sec 'C1: this terminal before'
-  Add-Content $Out ('env ORCA_* : ' + ((Get-ChildItem env: | Where-Object { $_.Name -like 'ORCA*' } | ForEach-Object { $_.Name + '=' + $_.Value }) -join ' | '))
+  Add-Content $Out ('env ORCA_* : ' + ((cmd /c set ORCA 2>$null) -join ' | '))
   Cap orca @('orchestration','run-current','--json') | Out-Null
 
   # the child runs in its own Orca terminal; it measures, writes its own file, and exits
@@ -62,7 +62,7 @@ try {
 $O = '__CHILD_OUT__'
 Set-Content -Path $O -Value '' -Encoding UTF8
 function C([string[]]$A) { Add-Content $O ("`n===== orca " + ($A -join ' ') + "  [" + (Get-Date).ToUniversalTime().ToString('HH:mm:ssZ') + "]"); $o = (& orca @A 2>$null | Out-String); Add-Content $O $o; Add-Content $O "[rc=$LASTEXITCODE]" }
-Add-Content $O ('env ORCA_* : ' + ((Get-ChildItem env: | Where-Object { $_.Name -like 'ORCA*' } | ForEach-Object { $_.Name + '=' + $_.Value }) -join ' | '))
+Add-Content $O ('env ORCA_* : ' + ((cmd /c set ORCA 2>$null) -join ' | '))
 C @('orchestration','run-current','--json')
 C @('orchestration','run-use','--id','__RUN__','--json')
 C @('orchestration','run-current','--json')
