@@ -123,7 +123,9 @@ post_verdict() {
 
 record() {
   local FILE="$1" OUTC="$2" DST
-  DST="$(basename "$FILE")"; DST="$DONE/${DST#active-}.$OUTC"
+  DST="$(basename "$FILE")"; DST="${DST#active-}"
+  # a re-queued spec has the same name: keep every result (needs.sh counts verdict-refused ones)
+  if [ -e "$DONE/$DST.$OUTC" ]; then DST="$DONE/$DST.$(date +%s).$OUTC"; else DST="$DONE/$DST.$OUTC"; fi
   { cat "$FILE"; printf '\n--- result\n'; cat "$RUNNING"; printf 'OUTCOME=%s\nFINISHED=%s\n' "$OUTC" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"; } > "$DST"
   rm -f "$FILE"
   say "recorded $(basename "$DST")"

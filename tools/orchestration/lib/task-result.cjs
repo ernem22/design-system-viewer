@@ -26,5 +26,20 @@ process.stdin.on('data', (d) => (s += d)).on('end', () => {
   };
   walk(res);
   if (!out.length) process.exit(3);
-  process.stdout.write(out.join('\n') + '\n');
+  // A worker may send its whole report on ONE line: `status: pass | role: reviewer | commit: b383367 ||
+  // <prose>` (measured 2026-10-04, reviewer #163, task_3d81f4b051ac). verdict-post reads one field per
+  // line, so it took the entire line as the status and refused. Split such a line back into fields:
+  // `||` ends the field list, ` | ` separates the fields before it.
+  const lines = [];
+  for (const text of out) {
+    for (const line of text.split(/\r?\n/)) {
+      if (/^\s*status:\s*[a-z]+\s*\|/i.test(line)) {
+        const cut = line.indexOf('||');
+        const head = cut >= 0 ? line.slice(0, cut) : line;
+        for (const f of head.split(/\s+\|\s+/)) if (f.trim()) lines.push(f.trim());
+        if (cut >= 0 && line.slice(cut + 2).trim()) lines.push(line.slice(cut + 2).trim());
+      } else lines.push(line);
+    }
+  }
+  process.stdout.write(lines.join('\n') + '\n');
 });
