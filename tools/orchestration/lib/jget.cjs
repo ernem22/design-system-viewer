@@ -6,6 +6,8 @@
 // orca.exe can print crashpad noise before the JSON, so parsing starts at the first '{'.
 // A missing path prints an empty line, never "undefined", so a caller's `read` stays aligned.
 // Unparseable input exits 4 and prints nothing: the caller must treat that as "unknown", not "no".
+// A reader that takes only the first line (`| grep -m1 .`) closes the pipe early; that is not an error.
+process.stdout.on('error', (e) => { if (e.code === 'EPIPE') process.exit(0); throw e; });
 let s = '';
 process.stdin.on('data', (d) => (s += d)).on('end', () => {
   let j;

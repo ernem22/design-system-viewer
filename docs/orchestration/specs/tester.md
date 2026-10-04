@@ -55,7 +55,7 @@ build: <asset hash served on :PORT>
 observed: <...>
 before: <...>
 
-A fail also carries `reason: <why it failed>` and/or `fix_required: <what must change>`.
+A fail MUST carry `reason: <why it failed>` (the gate reads a reason-less fail as unparseable) and should carry `fix_required: <what must change>`.
 `observed:`, `before:` and `build:` are required whether you pass or fail — a verdict with
 no observed/before is not evidence.
 

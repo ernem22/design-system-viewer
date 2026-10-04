@@ -94,8 +94,11 @@ fi
 if [ "$ROLE" = reviewer ]; then
   case "$SCOPE_OK" in yes|no) ;; *) fail "a reviewer verdict must carry --scope-ok (yes|no)";; esac
 fi
-if [ "$STATUS" = fail ] && [ -z "$REASON" ] && [ -z "$FIXREQ" ]; then
-  fail "a fail verdict must carry --reason and/or --fix-required"
+# The gate reads a fail with no `reason:` line as UNPARSEABLE (gate-logic.cjs), so a fail carrying only
+# fix_required was posted here and then locked the gate instead of failing it - measured on PR #163 @
+# e0f1d44 (2026-10-04, needs.sh: "unparsable verdict comment - a fail verdict has no reason: line").
+if [ "$STATUS" = fail ] && [ -z "$REASON" ]; then
+  fail "a fail verdict must carry --reason (the gate treats a reason-less fail as unparseable)"
 fi
 
 # --- the head this verdict is about --------------------------------------------------
