@@ -49,28 +49,21 @@ OUTPUT — worker_done body:
 status: pass | fail
 role: tester
 task: <task id from your preamble>
-commit: n/a
+commit: <short sha of the build you verified: git rev-parse --short HEAD>
 tests: n/a
 build: <asset hash served on :PORT>
 observed: <...>
 before: <...>
 
-THEN POST A VERDICT BLOCK AS A PR COMMENT — the merge gate is computed by GitHub from
-comments, not from the coordinator reading your message. Post it through
-`tools/orchestration/verdict-post.sh`, which renders the block from your own fields and
-REFUSES an incomplete one (exit non-zero, naming what is missing) while you are still
-alive to fix it:
+A fail MUST carry `reason: <why it failed>` (the gate reads a reason-less fail as unparseable) and should carry `fix_required: <what must change>`.
+`observed:`, `before:` and `build:` are required whether you pass or fail — a verdict with
+no observed/before is not evidence.
 
-    bash tools/orchestration/verdict-post.sh --pr <n> --role tester --status <pass|fail> \
-      --commit "$(git rev-parse --short HEAD)" --build "<the asset hash you served>" \
-      --observed "<what you did -> value>" --before "<the base value>"
-
-A fail verdict also needs `--reason "<why it failed>"` and/or `--fix-required "<what must
-change>"`. The block must carry `observed:`, `before:` and `build:` whether you pass or
-fail — a verdict with no observed/before is not evidence. Posting with a bare
-`gh pr comment` skips that check; this spec used to print that thin shape
-(status/role/commit/build only) as its example, a Tester copied it onto PR #163, and the
-gap it left is why the script now refuses it.
+DO NOT POST ANYTHING TO THE PR. Your worker_done body IS the verdict: the dispatcher reads
+it after you settle and posts the gate's `dsv-verdict` block itself through
+`tools/orchestration/verdict-post.sh`, which copies your lines verbatim and refuses an
+incomplete one. You have no permission to comment on the PR, by design: a verdict the
+worker could post under the owner's login is a verdict anyone could forge (hunter H-005).
 
 `commit:` must be the head whose build you verified (your STEP 0 answer). A verdict whose
 commit is not the PR's current head does not count — that field exists because a Tester

@@ -94,8 +94,11 @@ fi
 if [ "$ROLE" = reviewer ]; then
   case "$SCOPE_OK" in yes|no) ;; *) fail "a reviewer verdict must carry --scope-ok (yes|no)";; esac
 fi
-if [ "$STATUS" = fail ] && [ -z "$REASON" ] && [ -z "$FIXREQ" ]; then
-  fail "a fail verdict must carry --reason and/or --fix-required"
+# The gate reads a fail with no `reason:` line as UNPARSEABLE (gate-logic.cjs), so a fail carrying only
+# fix_required was posted here and then locked the gate instead of failing it - measured on PR #163 @
+# e0f1d44 (2026-10-04, needs.sh: "unparsable verdict comment - a fail verdict has no reason: line").
+if [ "$STATUS" = fail ] && [ -z "$REASON" ]; then
+  fail "a fail verdict must carry --reason (the gate treats a reason-less fail as unparseable)"
 fi
 
 # --- the head this verdict is about --------------------------------------------------
@@ -125,13 +128,16 @@ REASON="$(sanitize "$REASON")"; FIXREQ="$(sanitize "$FIXREQ")"; SOURCE="$(saniti
   printf 'commit: %s\n' "$COMMIT"
   if [ "$ROLE" = reviewer ]; then
     printf 'scope_ok: %s\n' "$SCOPE_OK"
-    [ -n "$REASON" ] && printf 'reason: %s\n' "$REASON"
-    [ -n "$FIXREQ" ] && printf 'fix_required: %s\n' "$FIXREQ"
   else
     [ -n "$OBSERVED" ] && printf 'observed: %s\n' "$OBSERVED"
     [ -n "$BEFORE" ] && printf 'before: %s\n' "$BEFORE"
     [ -n "$BUILD" ] && printf 'build: %s\n' "$BUILD"
   fi
+  # Both roles. Measured 2026-10-04 on PR #163: reason:/fix_required: were rendered for a reviewer
+  # only, so a Tester FAIL whose own report carried both was posted without them, and the gate
+  # read the reason-less fail as unparseable - the PR stayed locked instead of failing.
+  [ -n "$REASON" ] && printf 'reason: %s\n' "$REASON"
+  [ -n "$FIXREQ" ] && printf 'fix_required: %s\n' "$FIXREQ"
   [ -n "$SOURCE" ] && printf 'source: %s\n' "$SOURCE"
   printf '%s\n' '```'
   [ -n "$NOTE" ] && printf '\n%s\n' "$NOTE"
@@ -143,11 +149,16 @@ LINES="$(wc -l < "$BODYF")"
 [ "$LINES" -ge 5 ] || fail "internal error: the rendered block is $LINES lines"
 
 # --- one comment per role per head: edit the existing one, else create -----------------
-EXISTING="$(gh api "repos/{owner}/{repo}/issues/$PR/comments" --paginate --slurp 2>/dev/null | node -e '
+# One JSON object per line from an explicit repo: `--paginate --slurp` and the {owner}/{repo}
+# placeholder both depend on the gh version and the caller's checkout, and measured 2026-10-04 the
+# lookup came back empty from the dispatcher's worktree, so a SECOND verdict comment was created.
+REPO_SLUG="${DSV_REPO:-ernem22/design-system-viewer}"
+list_comments() { gh api "repos/$REPO_SLUG/issues/$PR/comments" --paginate --jq '.[] | {id, body}' 2>/dev/null; }
+EXISTING="$(list_comments | node -e '
 let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   const head=process.argv[1], role=process.argv[2];
   let out="";
-  try{ const pages=JSON.parse(s); const a=Array.isArray(pages)?pages.flat():pages;
+  try{ const a=s.split("\n").filter(Boolean).map(l=>JSON.parse(l));
     for(const c of a){ const b=c.body||"";
       if(b.indexOf("```dsv-verdict")<0) continue;
       const m=/^role:\s*([a-z]+)\s*$/m.exec(b), k=/^commit:\s*([0-9a-fA-F]+)\s*$/m.exec(b);
@@ -158,7 +169,7 @@ let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
 });' "$HEAD" "$ROLE")"
 
 if [ -n "$EXISTING" ]; then
-  gh api --method PATCH "repos/{owner}/{repo}/issues/comments/$EXISTING" -F body=@"$BODYF" >/dev/null 2>&1 \
+  gh api --method PATCH "repos/$REPO_SLUG/issues/comments/$EXISTING" -F body=@"$BODYF" >/dev/null 2>&1 \
     || fail "could not edit comment $EXISTING"
   ACTION="edited comment $EXISTING"
 else
@@ -169,11 +180,11 @@ fi
 rm -f "$BODYF"
 
 # --- read it back: a write that is not verified is not a write -------------------------
-VERIFY="$(gh api "repos/{owner}/{repo}/issues/$PR/comments" --paginate --slurp 2>/dev/null | node -e '
+VERIFY="$(list_comments | node -e '
 let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
   const head=process.argv[1], role=process.argv[2];
   let hit=null, n=0;
-  try{ const pages=JSON.parse(s); const a=Array.isArray(pages)?pages.flat():pages;
+  try{ const a=s.split("\n").filter(Boolean).map(l=>JSON.parse(l));
     for(const c of a){ const b=c.body||"";
       if(b.indexOf("```dsv-verdict")<0) continue;
       const m=/^role:\s*([a-z]+)\s*$/m.exec(b), k=/^commit:\s*([0-9a-fA-F]+)\s*$/m.exec(b);
@@ -189,9 +200,12 @@ COUNT="${FIRST%%|*}"
 STATE="${FIRST##*|}"
 BODY="$(printf '%s\n' "$VERIFY" | tail -n +2)"
 [ "$STATE" = present ] || fail "posted, but no $ROLE verdict for head $HEAD reads back"
-[ "$COUNT" = 1 ] || fail "read back $COUNT $ROLE verdicts for head $HEAD; there must be exactly one"
+# The gate keeps the LATEST verdict per role, so what must hold is that the latest one is ours.
+printf '%s\n' "$BODY" | grep -qx "status: $STATUS" || fail "the latest $ROLE verdict for head $HEAD is not the one just written"
+if [ "$STATUS" = fail ]; then printf '%s\n' "$BODY" | grep -q '^reason: .' || fail "the latest $ROLE fail for head $HEAD reads back with no reason:"; fi
+[ "$COUNT" = 1 ] || echo "verdict-post: note: $COUNT $ROLE verdicts exist for head ${HEAD:0:7} (older ones predate this tool); the gate reads the latest" >&2
 echo "verdict-post: $ACTION"
-echo "verdict-post: $ROLE verdicts for head ${HEAD:0:7} now: $COUNT (must be 1)"
+echo "verdict-post: latest $ROLE verdict for head ${HEAD:0:7} reads back as written ($COUNT on the head)"
 echo "--- body as stored ---"
 printf '%s\n' "$BODY"
 exit 0

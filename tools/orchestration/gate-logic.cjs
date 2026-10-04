@@ -78,7 +78,7 @@ function parseVerdict(body) {
   // on - a Fixer has nothing to fix, so a whole cycle was spent on a verdict that names nothing. A
   // reason-less fail is unparseable, exactly like a broken fence, and it must not read as a real fail.
   if ((fields.status || '').toLowerCase() === 'fail' && !String(fields.reason || '').trim()) {
-    return { ok: false, reason: 'a fail verdict has no `reason:` line, so nothing can be fixed: unparseable rather than a real fail', commit: fields.commit || commitish };
+    return { ok: false, reason: 'a fail verdict has no `reason:` line, so nothing can be fixed: unparseable rather than a real fail', commit: fields.commit || commitish, role: fields.role };
   }
   return { ok: true, fields };
 }
@@ -87,6 +87,12 @@ function parseVerdict(body) {
  * @param {{head: string, comments: Array<{body: string, at: string}>}} input
  * @returns {{state: 'success'|'failure'|'pending', description: string, detail: object}}
  */
+// A verdict's commit names the head only when it is a real abbreviation: 7+ hex digits that the head
+// starts with. `head.startsWith(c)` alone let `commit: 4` match any head starting with 4 (hunter H-027).
+function namesHead(head, c) {
+  return typeof c === 'string' && /^[0-9a-f]{7,40}$/i.test(c) && head.toLowerCase().startsWith(c.toLowerCase());
+}
+
 function evaluate(input) {
   const head = input.head || '';
   const shortHead = head.slice(0, 7);
@@ -109,7 +115,7 @@ function evaluate(input) {
       continue;
     }
     if (!p.ok) {
-      unparsable.push({ at: c.at || '', reason: p.reason, commit: p.commit || '' });
+      unparsable.push({ at: c.at || '', reason: p.reason, commit: p.commit || '', role: p.role || '' });
       continue;
     }
     attempts.push({ ...p.fields, at: c.at || '' });
@@ -121,7 +127,13 @@ function evaluate(input) {
     // lock a PR forever (CodeRabbit: "limit unparsable-verdict failures to current,
     // relevant attempts"). An attempt counts as current when it names this head's short
     // sha, or names no commit at all (so a fence typo on a fresh verdict still fails).
-    const relevant = unparsable.filter((u) => !u.commit || head.startsWith(u.commit));
+    // ...and only while nothing has replaced it: a malformed attempt is superseded by a LATER valid
+    // verdict of the same role on this head. Measured 2026-10-04 on PR #163: a reason-less tester
+    // fail from 10-03 kept the gate at "unparsable" after a complete tester fail was posted for the
+    // same head, so a correct, newer verdict could never be read.
+    const superseded = (u) => u.role && attempts.some((a) => a.role === u.role
+      && namesHead(head, a.commit) && String(a.at) > String(u.at));
+    const relevant = unparsable.filter((u) => (!u.commit || head.startsWith(u.commit)) && !superseded(u));
     if (relevant.length) {
       const first = relevant.sort((a, b) => String(a.at).localeCompare(String(b.at)))[0];
       return {
@@ -135,7 +147,7 @@ function evaluate(input) {
   const latest = {};
   const ignored = [];
   for (const a of attempts) {
-    if (!a.commit || !head.startsWith(a.commit)) {
+    if (!namesHead(head, a.commit)) {
       ignored.push({ role: a.role, commit: a.commit || '(none)' });
       continue;
     }

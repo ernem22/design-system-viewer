@@ -104,7 +104,9 @@ for pr in $(gh pr list --repo "$REPO" --state open --json number --jq '.[].numbe
       if [ "$DRY" = "--dry-run" ]; then
         echo "#$pr: READY — gate success, ci: $ci"
       else
-        if gh pr merge "$pr" --repo "$REPO" --squash --delete-branch >/dev/null 2>&1; then
+        # Pinned to the head whose status was just read (hunter H-012): a push between that read
+        # and this merge makes GitHub refuse, instead of merging a head the gate never saw.
+        if merge_err="$(gh pr merge "$pr" --repo "$REPO" --squash --delete-branch --match-head-commit "$head" 2>&1 >/dev/null)"; then
           sha=$(gh pr view "$pr" --repo "$REPO" --json mergeCommit --jq '.mergeCommit.oid[0:7]')
           echo "#$pr: MERGED $sha  (ci: $ci)"
           merged=$((merged+1))
@@ -123,7 +125,7 @@ for pr in $(gh pr list --repo "$REPO" --state open --json number --jq '.[].numbe
               && echo "     issue #$n closed"
           done
         else
-          echo "#$pr: gate says success but the merge was refused — run it by hand and read why"
+          echo "#$pr: gate says success but the merge was refused: $(printf '%s' "$merge_err" | tr '\n' ' ' | cut -c1-240)"
         fi
       fi
       ;;
