@@ -24,10 +24,21 @@ $Bash = @("$env:ProgramFiles\Git\bin\bash.exe", "${env:ProgramFiles(x86)}\Git\bi
   Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $Bash) { throw 'Git Bash not found under Program Files\Git\bin' }
 
-$Action   = New-ScheduledTaskAction -Execute $Bash -Argument "-l `"$Launcher`""
+# The task runs a bootstrap kept OUTSIDE every worktree: it re-creates the code tree if something
+# removed it (measured 2026-10-04), then runs that tree's launcher.
+$Root = (& git -C $Code rev-parse --path-format=absolute --git-common-dir) | Split-Path -Parent
+if (-not $Root -or -not (Test-Path $Root)) { throw "root checkout of $Code not found" }
+$State = Join-Path $env:LOCALAPPDATA 'orca-orchestration\design-system-viewer'
+New-Item -ItemType Directory -Force -Path $State | Out-Null
+$Boot = Join-Path $State 'bootstrap.sh'
+Copy-Item (Join-Path $Code 'tools\orchestration\dispatcher-bootstrap.sh') $Boot -Force
+$Boot = $Boot -replace '\\', '/'
+$CodeArg = $Code -replace '\\', '/'
+$RootArg = $Root -replace '\\', '/'
+$Action   = New-ScheduledTaskAction -Execute $Bash -Argument "-l `"$Boot`" `"$CodeArg`" `"$RootArg`""
 $AtLogon  = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $Every5   = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 5)
 $Settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable `
   -ExecutionTimeLimit (New-TimeSpan -Minutes 3) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 Register-ScheduledTask -TaskName $Name -Action $Action -Trigger $AtLogon, $Every5 -Settings $Settings -Force | Out-Null
-Write-Host "registered scheduled task $Name -> $Bash -l $Launcher (at logon + every 5 min)"
+Write-Host "registered scheduled task $Name -> $Bash -l $Boot $CodeArg $RootArg (at logon + every 5 min)"
