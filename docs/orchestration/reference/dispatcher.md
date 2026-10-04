@@ -106,13 +106,19 @@ bash tools/orchestration/dispatch.sh --status
 bash tools/orchestration/needs.sh
 ```
 
-`close.sh` runs every `CLOSE_EVERY` seconds (300) while no worker is running. It runs with
+`close.sh` runs between workers, before the next one starts, at most every `CLOSE_EVERY` seconds (300). It runs with
 `--dry-run` while `dispatch.enabled` is absent. Its merges are pinned with `--match-head-commit`.
 
 ## Keeping it alive (H-002)
 
-- `install-dispatcher.ps1` registers a Task Scheduler entry, `dsv-dispatcher`. It runs
-  `launch-dispatcher.sh` at logon and every 5 minutes. Remove it with `-Uninstall`.
+- `install-dispatcher.ps1` registers a Task Scheduler entry, `dsv-dispatcher`. It runs at logon and
+  every 5 minutes. Remove it with `-Uninstall`.
+- The task runs `bootstrap.sh` from the state dir, a copy of `dispatcher-bootstrap.sh` kept outside
+  every worktree. If the code tree is gone it re-creates it, detached at `origin/<base>`, then runs
+  that tree's `launch-dispatcher.sh`. Measured 2026-10-04: the code tree vanished from git's worktree
+  list while a Coder ran, and the launcher went with it.
+- Write workers may not run `git worktree`, `orca worktree|terminal`, `orca orchestration
+  worker-*|run-*` or a recursive `rm` (`roles/write.opencode.json`).
 - The launcher does nothing while a dispatcher holds `dispatch.lock`. Otherwise it opens an Orca
   terminal titled `dsv-dispatcher` running `dispatch.sh --bind`.
 - `--bind` takes the Run for that terminal with `run-use`. The Run id comes from
