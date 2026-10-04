@@ -39,9 +39,15 @@ alive >/dev/null && exit 0
 # Orca up? A cheap read; no answer means Orca is not running yet.
 orca orchestration run-list --limit 1 --json </dev/null >/dev/null 2>&1 || { say "Orca not answering; next tick"; exit 0; }
 
+# Task Scheduler starts us in an arbitrary directory; repo-id.sh resolves the repo from the cwd.
+cd "$HERE" || exit 1
 # shellcheck source=/dev/null
 . "$HERE/repo-id.sh" || { say "repo id not resolvable; next tick"; exit 0; }
-ROOT="$(dirname "$(git -C "$HERE" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")"
+# git runs FROM the script's directory, not `git -C <posix path>`: MSYS path conversion is off on this
+# host, so native git.exe could not enter /d/code/... and ROOT came back as "." (measured 2026-10-04,
+# the launcher's first cut-over run: `orca terminal create --worktree id:<repo>::.` -> selector_not_found).
+ROOT="$(dirname "$(cd "$HERE" && git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")"
+[ -d "$ROOT/.git" ] || [ -f "$ROOT/.git" ] || { say "root checkout not found (ROOT='$ROOT'); not launching"; exit 1; }
 BASH_EXE="$(winpath "$(command -v bash)")"
 CMD_FILE="$S/dispatcher.cmd"
 printf '@echo off\r\n"%s" -l "%s" --bind\r\n' "$BASH_EXE" "$(native "$HERE/dispatch.sh")" > "$CMD_FILE"
