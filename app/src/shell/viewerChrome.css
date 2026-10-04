@@ -1,0 +1,264 @@
+/* ── Viewer chrome theme (issue #111) ─────────────────────────────────────
+   The viewer's light/dark theme is its OWN axis, separate from the design
+   system under inspection. The system's tokens are applied as inline custom
+   properties on <html> by App.tsx; a stylesheet rule at :root cannot beat
+   those, so instead the chrome elements redeclare the `--color-*` names they
+   consume from the `--viewer-*` palette below. The closest-ancestor
+   declaration wins for inheritance, so `[data-theme]` themes the chrome
+   without ever touching the system's tokens in `.app-main` (the Preview
+   content stays the system's own colours).
+
+   This is not the topbar Dark switch: that one toggles the active system's
+   `themes.dark` variant. This one paints the viewer frame. */
+
+:root {
+  --viewer-bg: #f6f7f9;
+  --viewer-surface: #ffffff;
+  --viewer-surface-raised: #ffffff;
+  --viewer-surface-overlay: #ffffff;
+  --viewer-surface-sunken: #eceef1;
+  --viewer-surface-inverse: #1a1d21;
+  --viewer-surface-disabled: #e5e7eb;
+  --viewer-text: #1a1d21;
+  --viewer-text-secondary: #4b5563;
+  --viewer-text-muted: #6b7280;
+  --viewer-text-disabled: #9ca3af;
+  --viewer-text-inverse: #ffffff;
+  --viewer-text-link: #4f46e5;
+  --viewer-text-link-hover: #4338ca;
+  --viewer-border: #d8dbe0;
+  --viewer-border-subtle: #e8eaed;
+  --viewer-border-strong: #b7bcc4;
+  --viewer-border-disabled: #d1d5db;
+  --viewer-divider: #e2e4e8;
+  --viewer-accent: #4f46e5;
+  --viewer-accent-hover: #4338ca;
+  --viewer-accent-active: #3730a3;
+  --viewer-accent-subtle: #eef2ff;
+  --viewer-accent-border: #a5b4fc;
+  --viewer-accent-text: #4338ca;
+  --viewer-on-accent: #ffffff;
+  --viewer-focus-ring: #818cf8;
+  --viewer-hover-overlay: rgb(15 23 42 / 0.04);
+  --viewer-active-overlay: rgb(15 23 42 / 0.08);
+  --viewer-pressed-overlay: rgb(15 23 42 / 0.12);
+  --viewer-selected: #eef2ff;
+  --viewer-selected-subtle: #f5f8ff;
+  --viewer-input-bg: #ffffff;
+  --viewer-input-bg-hover: #f9fafb;
+  --viewer-input-border: #d8dbe0;
+  --viewer-input-border-focus: #a5b4fc;
+  --viewer-input-border-hover: #b7bcc4;
+  --viewer-input-placeholder: #9ca3af;
+  --viewer-input-text: #1a1d21;
+  --viewer-input-icon: #6b7280;
+  --viewer-icon-disabled: #9ca3af;
+  --viewer-success: #16a34a;
+  --viewer-success-subtle: #f0fdf4;
+  --viewer-success-text: #15803d;
+  --viewer-warning: #d97706;
+  --viewer-warning-subtle: #fffbeb;
+  --viewer-warning-text: #b45309;
+  --viewer-danger: #dc2626;
+  --viewer-danger-subtle: #fef2f2;
+  --viewer-danger-text: #b91c1c;
+  --viewer-info: #0284c7;
+  --viewer-info-subtle: #f0f9ff;
+  --viewer-info-text: #0369a1;
+  --viewer-scrim: rgb(15 23 42 / 0.5);
+}
+
+:root[data-theme="dark"] {
+  --viewer-bg: #14161a;
+  --viewer-surface: #1b1e24;
+  --viewer-surface-raised: #22262e;
+  --viewer-surface-overlay: #22262e;
+  --viewer-surface-sunken: #101216;
+  --viewer-surface-inverse: #f6f7f9;
+  --viewer-surface-disabled: #22262e;
+  --viewer-text: #e8eaed;
+  --viewer-text-secondary: #b7bcc4;
+  --viewer-text-muted: #8b93a1;
+  --viewer-text-disabled: #5b6472;
+  --viewer-text-inverse: #14161a;
+  --viewer-text-link: #a5b4fc;
+  --viewer-text-link-hover: #c7d2fe;
+  --viewer-border: #333944;
+  --viewer-border-subtle: #272c35;
+  --viewer-border-strong: #4a515e;
+  --viewer-border-disabled: #333944;
+  --viewer-divider: #2b303a;
+  --viewer-accent: #818cf8;
+  --viewer-accent-hover: #a5b4fc;
+  --viewer-accent-active: #c7d2fe;
+  --viewer-accent-subtle: #262b45;
+  --viewer-accent-border: #4f46e5;
+  --viewer-accent-text: #c7d2fe;
+  --viewer-on-accent: #12141a;
+  --viewer-focus-ring: #818cf8;
+  --viewer-hover-overlay: rgb(255 255 255 / 0.06);
+  --viewer-active-overlay: rgb(255 255 255 / 0.1);
+  --viewer-pressed-overlay: rgb(255 255 255 / 0.14);
+  --viewer-selected: #262b45;
+  --viewer-selected-subtle: #1e2338;
+  --viewer-input-bg: #1b1e24;
+  --viewer-input-bg-hover: #22262e;
+  --viewer-input-border: #333944;
+  --viewer-input-border-focus: #6366f1;
+  --viewer-input-border-hover: #4a515e;
+  --viewer-input-placeholder: #6b7280;
+  --viewer-input-text: #e8eaed;
+  --viewer-input-icon: #8b93a1;
+  --viewer-icon-disabled: #5b6472;
+  --viewer-success: #4ade80;
+  --viewer-success-subtle: #14301f;
+  --viewer-success-text: #86efac;
+  --viewer-warning: #fbbf24;
+  --viewer-warning-subtle: #3a2e14;
+  --viewer-warning-text: #fcd34d;
+  --viewer-danger: #f87171;
+  --viewer-danger-subtle: #3a1d1d;
+  --viewer-danger-text: #fca5a5;
+  --viewer-info: #38bdf8;
+  --viewer-info-subtle: #0e2a3a;
+  --viewer-info-text: #7dd3fc;
+  --viewer-scrim: rgb(0 0 0 / 0.6);
+}
+
+/* Chrome elements + Radix portals (dialogs, select menus, toasts) consume the
+   viewer palette instead of the system's tokens. Scoped deliberately: the
+   Preview/Tokens gallery lives in `.app-main`, which is left untouched, so the
+   system's tokens still paint its content. */
+.app-topbar,
+.app-rail,
+.app-props,
+.app-select-content,
+.tok-menu,
+.app-toasts,
+.tok-dialog,
+.tok-dialog-overlay,
+.viewer-help-overlay,
+.viewer-help-content {
+  --color-bg: var(--viewer-bg);
+  --color-surface: var(--viewer-surface);
+  --color-surface-raised: var(--viewer-surface-raised);
+  --color-surface-overlay: var(--viewer-surface-overlay);
+  --color-surface-sunken: var(--viewer-surface-sunken);
+  --color-surface-inverse: var(--viewer-surface-inverse);
+  --color-surface-disabled: var(--viewer-surface-disabled);
+  --color-text: var(--viewer-text);
+  --color-text-secondary: var(--viewer-text-secondary);
+  --color-text-muted: var(--viewer-text-muted);
+  --color-text-disabled: var(--viewer-text-disabled);
+  --color-text-inverse: var(--viewer-text-inverse);
+  --color-text-link: var(--viewer-text-link);
+  --color-text-link-hover: var(--viewer-text-link-hover);
+  --color-border: var(--viewer-border);
+  --color-border-subtle: var(--viewer-border-subtle);
+  --color-border-strong: var(--viewer-border-strong);
+  --color-border-disabled: var(--viewer-border-disabled);
+  --color-divider: var(--viewer-divider);
+  --color-accent: var(--viewer-accent);
+  --color-accent-hover: var(--viewer-accent-hover);
+  --color-accent-active: var(--viewer-accent-active);
+  --color-accent-subtle: var(--viewer-accent-subtle);
+  --color-accent-border: var(--viewer-accent-border);
+  --color-accent-text: var(--viewer-accent-text);
+  --color-on-accent: var(--viewer-on-accent);
+  --color-focus-ring: var(--viewer-focus-ring);
+  --color-hover-overlay: var(--viewer-hover-overlay);
+  --color-active-overlay: var(--viewer-active-overlay);
+  --color-pressed-overlay: var(--viewer-pressed-overlay);
+  --color-selected: var(--viewer-selected);
+  --color-selected-subtle: var(--viewer-selected-subtle);
+  --color-input-bg: var(--viewer-input-bg);
+  --color-input-bg-hover: var(--viewer-input-bg-hover);
+  --color-input-border: var(--viewer-input-border);
+  --color-input-border-focus: var(--viewer-input-border-focus);
+  --color-input-border-hover: var(--viewer-input-border-hover);
+  --color-input-placeholder: var(--viewer-input-placeholder);
+  --color-input-text: var(--viewer-input-text);
+  --color-input-icon: var(--viewer-input-icon);
+  --color-icon-disabled: var(--viewer-icon-disabled);
+  --color-success: var(--viewer-success);
+  --color-success-subtle: var(--viewer-success-subtle);
+  --color-success-text: var(--viewer-success-text);
+  --color-warning: var(--viewer-warning);
+  --color-warning-subtle: var(--viewer-warning-subtle);
+  --color-warning-text: var(--viewer-warning-text);
+  --color-danger: var(--viewer-danger);
+  --color-danger-subtle: var(--viewer-danger-subtle);
+  --color-danger-text: var(--viewer-danger-text);
+  --color-info: var(--viewer-info);
+  --color-info-subtle: var(--viewer-info-subtle);
+  --color-info-text: var(--viewer-info-text);
+  --color-scrim: var(--viewer-scrim);
+}
+
+/* The side panels have no background of their own (they let `.app-shell`'s
+   show), so paint them with the viewer surface to make the theme visible. */
+.app-rail,
+.app-props {
+  background: var(--viewer-bg);
+}
+
+/* ── viewer controls in the brand slot ── */
+.viewer-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.viewer-theme-toggle,
+.viewer-help-trigger {
+  color: var(--viewer-text-muted);
+}
+
+.viewer-theme-toggle:hover,
+.viewer-help-trigger:hover {
+  color: var(--viewer-text);
+}
+
+/* ── help dialog body ── */
+.viewer-help-content {
+  width: min(560px, 94vw);
+}
+
+.viewer-help-steps {
+  margin: 0 0 var(--space-4);
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.viewer-help-steps b {
+  color: var(--color-text);
+}
+
+.viewer-help-rule {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-subtle);
+  border: 1px solid var(--color-accent-border);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-secondary);
+}
+
+.viewer-help-rule b {
+  color: var(--color-text);
+}
+
+.viewer-help-rule code,
+.viewer-help-steps code {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  background: var(--color-surface-sunken);
+  padding: 0 4px;
+  border-radius: var(--radius-xs);
+}
