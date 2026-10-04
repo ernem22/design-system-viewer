@@ -20,7 +20,10 @@ PORT="${2:?usage: prep-tester.sh <worktree-path> <port>}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # The ROOT checkout (where node_modules is installed), not whichever worktree this script runs from:
 # the common git dir is shared by every worktree, its parent is the root checkout.
-ROOT="$(dirname "$(git -C "$HERE" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")"
+# git runs FROM the script's directory, not `git -C <posix path>`: MSYS path conversion is off on this
+# host, so native git.exe could not enter /d/code/... and ROOT came back as "." (measured 2026-10-04,
+# the launcher's first cut-over run: `orca terminal create --worktree id:<repo>::.` -> selector_not_found).
+ROOT="$(dirname "$(cd "$HERE" && git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")"
 [ -d "$ROOT/app" ] || ROOT="$(cd "$HERE/../.." && pwd)"
 S="${LOCALAPPDATA:-$HOME}/orca-orchestration/design-system-viewer"
 say() { printf 'prep-tester: %s\n' "$*" >&2; }
