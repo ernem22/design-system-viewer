@@ -15,7 +15,7 @@
 #
 #   name: tester-163d                 worktree/branch name (Orca suffixes a taken one)
 #   base: origin/ernem22/coder-117    the ref the worktree starts from (a PR's head for tester/fixer)
-#   role: tester                      coder|fixer -> write config; reviewer|tester -> read-only config
+#   role: tester                      coder|fixer -> write; reviewer -> readonly; tester -> tester (readonly + node/playwright)
 #   title: Tester PR #163 @ e0f1d44   the Orca task title
 #   deadline: 3600                    seconds before a non-settling worker is stopped (default 3600)
 #   serve: 8614                       optional: build + serve this port before the agent starts
@@ -141,7 +141,7 @@ start_next() {
 
   local BAD="" RO=()
   [ -n "$NAME" ] && [ -n "$BASE" ] && [ -n "$TITLE" ] || BAD="name/base/title missing"
-  case "$ROLE" in coder|fixer) RO=();; reviewer|tester) RO=(--readonly);; *) BAD="${BAD:+$BAD; }role '$ROLE' unknown";; esac
+  case "$ROLE" in coder|fixer) RO=();; reviewer) RO=(--readonly);; tester) RO=(--config tester);; *) BAD="${BAD:+$BAD; }role '$ROLE' unknown";; esac
   grep -qx -- '---' "$FILE" || BAD="${BAD:+$BAD; }no --- line"
   if [ -n "$BAD" ]; then
     say "rejecting $(basename "$FILE"): $BAD"; mv "$FILE" "$DONE/$(basename "$FILE").rejected"; return 0

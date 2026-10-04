@@ -3,7 +3,7 @@
 # the agent terminal, Orca closes it on release. Replaces spawn.sh + start.sh + settle.sh for the
 # dispatcher; those stay in the tree, frozen, for the old path.
 #
-#   worker.sh start <name> <base-ref> <spec-file> <task-title> [--readonly] [--min <mb>] [--serve <port>]
+#   worker.sh start <name> <base-ref> <spec-file> <task-title> [--readonly|--config <role>] [--min <mb>] [--serve <port>]
 #   worker.sh start <name> <base-ref> --task <task_id> --retry-of <dispatch> [--readonly] [--min <mb>]
 #   worker.sh wait  <dispatch> [--deadline <seconds>] [--interval <seconds>]
 #   worker.sh close <dispatch> [--stop]
@@ -58,11 +58,12 @@ wt_path() { printf '%s' "${1#*::}"; }
 
 # ---- start ---------------------------------------------------------------------------------
 cmd_start() {
-  local NAME="" BASE="" SPEC="" TITLE="" READONLY="" MIN="${WATCH_MIN_MB:-600}" TASK="" RETRY_OF="" SERVE=""
+  local NAME="" BASE="" SPEC="" TITLE="" READONLY="" CONFIG="" MIN="${WATCH_MIN_MB:-600}" TASK="" RETRY_OF="" SERVE=""
   local pos=()
   while [ $# -gt 0 ]; do
     case "$1" in
       --readonly) READONLY=1; shift;;
+      --config) CONFIG="${2:?--config needs a role config name}"; shift 2;;
       --min) MIN="${2:?--min needs mb}"; shift 2;;
       --task) TASK="${2:?--task needs an id}"; shift 2;;
       --retry-of) RETRY_OF="${2:?--retry-of needs a dispatch}"; shift 2;;
@@ -131,6 +132,8 @@ cmd_start() {
     done
   fi
   local CFG="$HERE/roles/write.opencode.json"; [ -n "$READONLY" ] && CFG="$HERE/roles/readonly.opencode.json"
+  [ -n "$CONFIG" ] && CFG="$HERE/roles/$CONFIG.opencode.json"
+  [ -f "$CFG" ] || { say "start: no role config $CFG"; rollback; exit 4; }
   cp "$CFG" "$P/opencode.json" || { say "start: cannot pin $P/opencode.json"; rollback; exit 4; }
 
   # 2b. A Tester needs the PR's build served before it starts (it writes nothing itself).
