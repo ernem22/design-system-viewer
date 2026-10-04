@@ -29,7 +29,9 @@
       "head *": "allow",
       "tail *": "allow",
       "wc *": "allow",
-      "rg *--pre*": "deny"
+      "rg *--pre*": "deny",
+      "git * --output*": "deny",
+      "git * --ext-diff*": "deny"
     }
   }
 }

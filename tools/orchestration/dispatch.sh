@@ -127,6 +127,15 @@ post_verdict() {
   REP="$S/report-$TASK.txt"
   orca orchestration task-list --json </dev/null 2>/dev/null \
     | node "$HERE_NATIVE/lib/task-result.cjs" "$TASK" > "$REP" || { say "no report for $TASK; nothing posted"; return 1; }
+  # the report must be about the head this spec was written for: verdict-post checks it against the
+  # PR's head NOW, which a push between spec and settlement can make a different build
+  local SPEC_HEAD REP_COMMIT
+  SPEC_HEAD="$(hdr head "$FILE" | tr -d "\r ")"
+  REP_COMMIT="$(sed -n 's/^[[:space:]]*commit:[[:space:]]*\([0-9a-fA-F]\{7,40\}\).*/\1/p' "$REP" | head -1)"
+  if [ -n "$SPEC_HEAD" ] && [ -n "$REP_COMMIT" ]; then
+    case "$SPEC_HEAD" in "$REP_COMMIT"*) ;; *) case "$REP_COMMIT" in "$SPEC_HEAD"*) ;; *)
+      say "report commit $REP_COMMIT is not the spec head $SPEC_HEAD; nothing posted"; return 1;; esac;; esac
+  fi
   bash "$HERE/verdict-post.sh" --pr "$PR" --role "$ROLE" --from-settlement "$REP" \
     --source "dispatch $TASK" 2>&1 | sed 's/^/dispatch: verdict: /' | tee -a "$LOG" >&2
   RC="${PIPESTATUS[0]}"
