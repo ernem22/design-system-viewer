@@ -210,11 +210,14 @@ close_pass() {
     | sed 's/^/close: /' | while IFS= read -r l; do say "$l"; done
 }
 
-# An empty queue is refilled from GitHub by specgen.sh (needs.sh -> one spec per need), at most every
+# The queue is topped up from GitHub by specgen.sh (needs.sh -> one spec per need) at most every
 # SPECGEN_EVERY seconds, so the pipeline advances without anyone writing a spec or asking "sonuc?".
+# It runs even when the queue is not empty: measured 2026-10-04, with four Coders queued (up to 90 min
+# each) the Reviewer/Testers owed on open PRs would have waited hours behind them, because they were
+# only generated once the queue drained. Name order (1xx fixer < 2xx tester < 3xx reviewer < 5xx
+# coder) then runs them first; needs.sh never re-queues a spec that is already queued.
 fill_queue() {
   [ -f "$RUNNING" ] && return 0
-  [ -n "$(ls -1 "$Q" 2>/dev/null | grep -v '^\.')" ] && return 0
   local STAMP="$S/specgen.last" NOW; NOW="$(date +%s)"
   [ $(( NOW - $(cat "$STAMP" 2>/dev/null || echo 0) )) -ge "${SPECGEN_EVERY:-300}" ] || return 0
   echo "$NOW" > "$STAMP"
