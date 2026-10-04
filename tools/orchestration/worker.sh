@@ -249,6 +249,16 @@ cmd_close() {
   fi
   case "$RS" in
     released|already_released) say "close: $DISP released" ;;
+    retained)
+      # Orca settled the dispatch but kept its terminal. Measured 2026-10-04 on coder-111
+      # (ctx_89e71e81ff2b): every release answered `retained` after the dispatcher had been restarted
+      # mid-run, and the close looped for 10+ minutes. The dispatch is settled and the worktree is
+      # ours (owner marker), so its terminals are closed with the tree in step 3; without the
+      # marker nothing is touched. Orca's own reason is logged so the cause stays visible.
+      local WHY
+      WHY="$(o orchestration worker-show --dispatch "$DISP" --json | jget result.terminalResource.retainedReason)"
+      if [ -z "$OURS" ]; then say "close: $DISP retained (${WHY:-no reason}) and the tree is not ours; kept"; exit 6; fi
+      say "close: $DISP retained by Orca (${WHY:-no reason}); closing the terminals of our own worktree" ;;
     *)
       if [ -n "$H" ] && o terminal list --json | grep -q "\"$H\""; then
         say "close: $DISP release '$RS' and terminal $H is still listed; worktree kept"; exit 6
