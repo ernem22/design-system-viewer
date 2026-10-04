@@ -108,3 +108,17 @@ bash tools/orchestration/needs.sh
 
 `close.sh` runs every `CLOSE_EVERY` seconds (300) while no worker is running. It runs with
 `--dry-run` while `dispatch.enabled` is absent. Its merges are pinned with `--match-head-commit`.
+
+## Keeping it alive (H-002)
+
+- `install-dispatcher.ps1` registers a Task Scheduler entry, `dsv-dispatcher`. It runs
+  `launch-dispatcher.sh` at logon and every 5 minutes. Remove it with `-Uninstall`.
+- The launcher does nothing while a dispatcher holds `dispatch.lock`. Otherwise it opens an Orca
+  terminal titled `dsv-dispatcher` running `dispatch.sh --bind`.
+- `--bind` takes the Run for that terminal with `run-use`. The Run id comes from
+  `dispatch.run`; the first time, the dispatcher creates a fresh Run instead.
+- Measured 2026-10-04: `run-use` from a second terminal takes the Run, and the old holder then reads
+  `run-current = null` and gets `run_required`. After the cut-over, Hermes can no longer start
+  workers.
+- Installing the task is therefore the cut-over. Until then, run the dispatcher by hand from the
+  coordinator terminal.

@@ -5,6 +5,7 @@
 #   dispatch.sh            loop forever (one instance; a second one exits 0)
 #   dispatch.sh --once     one pass, then exit
 #   dispatch.sh --status   print the queue, the running worker and the last results
+#   dispatch.sh --bind     bind THIS terminal to the dispatcher's Run first, then loop (launcher's form)
 #
 # Acts only while $S/dispatch.enabled exists. Without it every pass is a dry run that logs what it
 # WOULD start - the shadow mode for the cut-over, and the kill switch afterwards.
@@ -200,6 +201,27 @@ pass() {
   close_pass
 }
 
+# The dispatcher owns its Run: `run-use` from this terminal takes the Run from whichever terminal held
+# it (measured 2026-10-04: the old holder then reads run-current=null and gets run_required), so after
+# this Hermes can no longer start workers - the point of the design. The Run id is kept in
+# $S/dispatch.run; the first bind creates a fresh Run (the old one holds 240 dispatches of history).
+bind_run() {
+  local WANT CUR
+  WANT="$(cat "$S/dispatch.run" 2>/dev/null)"
+  CUR="$(orca orchestration run-current --json </dev/null 2>/dev/null | node "$HERE_NATIVE/lib/jget.cjs" result.run.id)"
+  if [ -z "$WANT" ]; then
+    WANT="$(orca orchestration run-create --objective "dsv dispatcher" --json </dev/null 2>/dev/null \
+      | node "$HERE_NATIVE/lib/jget.cjs" result.run.id)"
+    [ -n "$WANT" ] || { say "bind: run-create failed"; exit 4; }
+    echo "$WANT" > "$S/dispatch.run"; say "bind: created Run $WANT"
+  elif [ "$CUR" != "$WANT" ]; then
+    orca orchestration run-use --id "$WANT" --json </dev/null >/dev/null 2>&1 || { say "bind: run-use $WANT failed"; exit 4; }
+    say "bind: this terminal now holds Run $WANT"
+  fi
+  [ "$(orca orchestration run-current --json </dev/null 2>/dev/null | node "$HERE_NATIVE/lib/jget.cjs" result.run.id)" = "$WANT" ] \
+    || { say "bind: run-current is not $WANT after binding"; exit 4; }
+}
+
 status() {
   echo "enabled: $(acting && echo yes || echo 'no (dry run)')"
   echo "running:"; [ -f "$RUNNING" ] && sed 's/^/  /' "$RUNNING" || echo "  (none)"
@@ -210,6 +232,8 @@ status() {
 case "${1:-}" in
   --status) status ;;
   --once) lock; pass ;;
+  --bind) lock; bind_run; say "dispatcher up (pid $$, Run $(cat "$S/dispatch.run"), $(acting && echo acting || echo 'dry run'))"
+      while :; do pass; sleep "$INTERVAL"; done ;;
   "") lock; say "dispatcher up (pid $$, $(acting && echo acting || echo 'dry run'))"
       while :; do pass; sleep "$INTERVAL"; done ;;
   *) sed -n '2,8p' "$0" >&2; exit 2 ;;
