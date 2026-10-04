@@ -29,10 +29,25 @@ known() {
       sed -n '1,/^---$/p' "$f" | grep -qiE "^head: ${head:0:7}" || continue
       # a finished attempt that failed to start or was rejected does not satisfy the need
       case "$f" in *.rejected|*.start-failed) continue;; esac
+      # a worker whose verdict could not be posted is retried, at most twice per role and head:
+      # the work ran but nothing reached the gate (measured 2026-10-04, reviewer #163 b383367).
+      case "$f" in *.verdict-refused) [ "$(refused_count "$role" "$val" "$head")" -ge 2 ] || continue;; esac
     fi
     return 0
   done
   return 1
+}
+
+refused_count() {   # role pr head -> number of verdict-refused results for it
+  local n=0 f
+  for f in "$S"/done/*.verdict-refused; do
+    [ -f "$f" ] || continue
+    sed -n '1,/^---$/p' "$f" | grep -qx "role: $1" || continue
+    sed -n '1,/^---$/p' "$f" | grep -qx "pr: $2" || continue
+    sed -n '1,/^---$/p' "$f" | grep -qiE "^head: ${3:0:7}" || continue
+    n=$((n+1))
+  done
+  echo "$n"
 }
 
 emit() {   # role ref head why [branch]
