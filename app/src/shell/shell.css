@@ -693,6 +693,99 @@
   transform: translateX(14px);
 }
 
+/* Viewer dark control (issue #115) — always rendered, unlike the per-system
+   Dark switch above, which only exists for systems shipping `themes.dark`. */
+.app-viewer-dark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.app-viewer-dark-switch {
+  appearance: none;
+  position: relative;
+  width: 30px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-border-strong);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.app-viewer-dark-switch[data-state="checked"] {
+  background: var(--color-accent);
+}
+
+.app-viewer-dark-switch:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.app-viewer-dark-thumb {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+  background: var(--color-on-accent);
+  transform: translateX(2px);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.app-viewer-dark-switch[data-state="checked"] .app-viewer-dark-thumb {
+  transform: translateX(14px);
+}
+
+/* Viewer dark chrome (issue #115). The active system's tokens are written
+   inline on <html>, so a `:root[data-theme="dark"]` rule would lose to them;
+   scoping the palette onto the chrome containers instead makes it win for the
+   chrome subtree, while .app-main keeps the system's own tokens. The palette
+   mirrors Aurora's dark scale so the viewer theme is not an ad-hoc invention.
+   The chrome containers get `color`/`background` explicitly: a custom property
+   set on a node does not retroactively change that node's inherited value. */
+html[data-theme="dark"] .app-topbar,
+html[data-theme="dark"] .app-rail,
+html[data-theme="dark"] .app-props {
+  --color-bg: #0a0f1c;
+  --color-surface: #0f172a;
+  --color-surface-raised: #1e293b;
+  --color-surface-overlay: #1e293b;
+  --color-surface-sunken: #05070d;
+  --color-text: #f1f5f9;
+  --color-text-secondary: #cbd5e1;
+  --color-text-muted: #94a3b8;
+  --color-text-disabled: #64748b;
+  --color-border: #334155;
+  --color-border-subtle: #1e293b;
+  --color-border-strong: #475569;
+  --color-divider: #334155;
+  --color-hover-overlay: rgb(241 245 249 / 0.06);
+  --color-active-overlay: rgb(241 245 249 / 0.1);
+  --color-pressed-overlay: rgb(241 245 249 / 0.14);
+  --color-accent: #818cf8;
+  --color-accent-hover: #a5b4fc;
+  --color-accent-subtle: #1e1b4b;
+  --color-accent-border: #4338ca;
+  --color-accent-text: #c7d2fe;
+  --color-focus-ring: #818cf8;
+  --color-on-accent: #1e1b4b;
+  color: var(--color-text);
+}
+
+html[data-theme="dark"] .app-topbar {
+  background: var(--color-surface);
+}
+
+html[data-theme="dark"] .app-rail,
+html[data-theme="dark"] .app-props {
+  background: var(--color-bg);
+}
+
 /* ── narrow viewport: rails become overlay drawers ── */
 
 /* Below this width the two fixed-width rails (208px + 300px) would squeeze
