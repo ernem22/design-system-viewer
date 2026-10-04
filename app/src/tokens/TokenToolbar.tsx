@@ -54,7 +54,14 @@ export function TokenToolbar({
             aria-label="Filter tokens"
             onChange={(e) => setFilter(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Escape") setFilter("");
+              if (e.key === "Escape") {
+                // Clearing the filter is this field's own Escape; consume it so
+                // it never bubbles to a layout-level keydown (the docked
+                // Preview inspector, force-mounted on the other tab) and closes
+                // a panel the user cannot even see.
+                e.preventDefault();
+                setFilter("");
+              }
             }}
           />
           {filter && (
