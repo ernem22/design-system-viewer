@@ -85,7 +85,20 @@ finish_running() {
   bash "$HERE/worker.sh" close "${CLOSE_ARGS[@]}" >/dev/null || CRC=$?
   # 5 = released but the tree is not ours to remove: the dispatch IS finished, record it.
   # Anything else non-zero is unconfirmed: keep running.env and try the close again next pass.
-  if [ "$CRC" -ne 0 ] && [ "$CRC" -ne 5 ]; then say "close of $DISP unconfirmed (rc $CRC); retrying next pass"; return 1; fi
+  if [ "$CRC" -ne 0 ] && [ "$CRC" -ne 5 ]; then
+    # Bounded: a close that keeps failing must not stall the whole pipeline. Measured 2026-10-04 on
+    # coder-111: the worker had settled, the close returned rc 6 every pass, and the queue stood
+    # still with its deadline draining. After CLOSE_MAX tries the result is recorded anyway and the
+    # unclosed dispatch is listed in leftovers.txt for a later sweep.
+    local TRIES; TRIES=$(( $(kv CLOSE_TRIES "$RUNNING" || echo 0) + 1 ))
+    sed -i '/^CLOSE_TRIES=/d' "$RUNNING"; echo "CLOSE_TRIES=$TRIES" >> "$RUNNING"
+    if [ "$TRIES" -lt "${CLOSE_MAX:-10}" ]; then
+      say "close of $DISP unconfirmed (rc $CRC, try $TRIES/${CLOSE_MAX:-10}); retrying next pass"; return 1
+    fi
+    say "close of $DISP still unconfirmed after $TRIES tries (rc $CRC); recording the result and moving on"
+    printf '%s dispatch=%s worktree=%s rc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$DISP" \
+      "$(kv WORKTREE "$RUNNING")" "$CRC" >> "$S/leftovers.txt"
+  fi
 
   local BASE; BASE="$(basename "$FILE")"; BASE="${BASE#active-}"
   case "$OUTC" in
