@@ -195,8 +195,20 @@ close_pass() {
     | sed 's/^/close: /' | while IFS= read -r l; do say "$l"; done
 }
 
+# An empty queue is refilled from GitHub by specgen.sh (needs.sh -> one spec per need), at most every
+# SPECGEN_EVERY seconds, so the pipeline advances without anyone writing a spec or asking "sonuc?".
+fill_queue() {
+  [ -f "$RUNNING" ] && return 0
+  [ -n "$(ls -1 "$Q" 2>/dev/null | grep -v '^\.')" ] && return 0
+  local STAMP="$S/specgen.last" NOW; NOW="$(date +%s)"
+  [ $(( NOW - $(cat "$STAMP" 2>/dev/null || echo 0) )) -ge "${SPECGEN_EVERY:-300}" ] || return 0
+  echo "$NOW" > "$STAMP"
+  bash "$HERE/specgen.sh" 2>&1 | while IFS= read -r l; do say "$l"; done
+}
+
 pass() {
   finish_running || return 0
+  fill_queue
   start_next
   close_pass
 }

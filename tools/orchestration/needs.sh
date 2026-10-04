@@ -35,9 +35,9 @@ known() {
   return 1
 }
 
-emit() {
+emit() {   # role ref head why [branch]
   if [ -n "$JSON" ]; then
-    printf '{"role":"%s","ref":"%s","head":"%s","why":"%s"}\n' "$1" "$2" "$3" "$(printf '%s' "$4" | sed 's/"/\\"/g')"
+    printf '{"role":"%s","ref":"%s","head":"%s","branch":"%s","why":"%s"}\n' "$1" "$2" "$3" "${5:--}" "$(printf '%s' "$4" | sed 's/"/\\"/g')"
   else
     printf '%-8s %-6s %-8s %s\n' "$1" "$2" "${3:0:7}" "$4"
   fi
@@ -64,10 +64,10 @@ printf '%s' "$PRS_JSON" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on(
   case "$state" in
     success) continue ;;   # close.sh merges it
     failure)
-      known fixer pr "$pr" "$head" || emit fixer "#$pr" "$head" "gate failure: $desc" ;;
+      known fixer pr "$pr" "$head" || emit fixer "#$pr" "$head" "gate failure: $desc" "$ref" ;;
     *)
       # pending / none: whichever verdicts are missing for THIS head
-      case "$desc" in *reviewer*|"") known reviewer pr "$pr" "$head" || emit reviewer "#$pr" "$head" "no reviewer verdict for this head";; esac
-      case "$desc" in *tester*|"")   known tester   pr "$pr" "$head" || emit tester   "#$pr" "$head" "no tester verdict for this head (branch $ref)";; esac ;;
+      case "$desc" in *reviewer*|"") known reviewer pr "$pr" "$head" || emit reviewer "#$pr" "$head" "no reviewer verdict for this head" "$ref";; esac
+      case "$desc" in *tester*|"")   known tester   pr "$pr" "$head" || emit tester   "#$pr" "$head" "no tester verdict for this head (branch $ref)" "$ref";; esac ;;
   esac
 done
