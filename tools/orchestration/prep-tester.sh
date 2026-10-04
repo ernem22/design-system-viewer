@@ -31,18 +31,29 @@ native() { cygpath -m "$1" 2>/dev/null || printf '%s' "$1"; }
 
 [ -f "$P/app/package.json" ] || { say "no app/package.json in $P"; exit 2; }
 
+# node_modules: a copy of the root checkout's when the lockfiles match (no npm ci RAM peak), else - and
+# whenever the copy fails - npm ci. Measured 2026-10-04: robocopy failed within a second for three
+# Testers in a row (rc not recorded then), while npm ci had built the same tree in 24 s; a failed copy
+# must cost a slower install, never the whole Tester.
+install_deps() {
+  rm -rf "$P/app/node_modules"
+  say "npm ci"
+  npm --prefix "$P/app" ci --no-audit --no-fund >&2 || { say "npm ci failed"; exit 3; }
+}
 if [ ! -d "$P/app/node_modules" ]; then
-  if [ -d "$ROOT/app/node_modules" ] && cmp -s "$ROOT/app/package-lock.json" "$P/app/package-lock.json"; then
+  if [ -d "$ROOT/app/node_modules" ] && cmp -s "$ROOT/app/package-lock.json" "$P/app/package-lock.json" \
+     && command -v robocopy >/dev/null 2>&1; then
     say "copying node_modules from the root checkout (lockfiles match)"
-    if command -v robocopy >/dev/null 2>&1; then
-      robocopy "$(native "$ROOT/app/node_modules")" "$(native "$P/app/node_modules")" /E /NFL /NDL /NJH /NJS /NP /MT:8 >/dev/null
-      [ $? -lt 8 ] || { say "robocopy failed"; exit 3; }
-    else
-      cp -r "$ROOT/app/node_modules" "$P/app/node_modules" || { say "copy failed"; exit 3; }
+    RC=0
+    RLOG="$(MSYS_NO_PATHCONV=1 robocopy "$(native "$ROOT/app/node_modules")" "$(native "$P/app/node_modules")" \
+      /E /NFL /NDL /NJH /NP /R:1 /W:1 /MT:8 2>&1)" || RC=$?
+    if [ "$RC" -ge 8 ]; then
+      say "robocopy rc $RC (>= 8 is a failure); last lines:"
+      printf '%s\n' "$RLOG" | tr -d '\r' | grep -v '^\s*$' | tail -8 | sed 's/^/prep-tester:   /' >&2
+      install_deps
     fi
   else
-    say "lockfiles differ (or no root node_modules): npm ci"
-    npm --prefix "$P/app" ci --no-audit --no-fund >&2 || { say "npm ci failed"; exit 3; }
+    install_deps
   fi
 fi
 
