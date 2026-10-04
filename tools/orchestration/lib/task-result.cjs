@@ -11,6 +11,7 @@ process.stdin.on('data', (d) => (s += d)).on('end', () => {
   const id = process.argv[2];
   let j;
   try { const i = s.indexOf('{'); j = JSON.parse(i >= 0 ? s.slice(i) : s); } catch (e) { process.exit(4); }
+  if (!j || typeof j !== 'object') process.exit(4);
   const r = j.result || {};
   const tasks = Array.isArray(r) ? r : r.tasks || r.items || [];
   const t = tasks.find((x) => x && (x.id === id || x.taskId === id || x.task_id === id));

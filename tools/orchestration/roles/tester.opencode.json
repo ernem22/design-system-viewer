@@ -32,7 +32,9 @@
       "node *": "allow",
       "npx playwright *": "allow",
       "npx --yes playwright *": "allow",
-      "rg *--pre*": "deny"
+      "rg *--pre*": "deny",
+      "git * --output*": "deny",
+      "git * --ext-diff*": "deny"
     }
   }
 }

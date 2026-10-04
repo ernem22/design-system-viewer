@@ -35,7 +35,7 @@
 # --from-settlement, which copies the lines verbatim and refuses an incomplete block (hunter H-005:
 # a verdict a worker could post under the owner's login is a verdict anyone could forge).
 #
-# MERGES: while no worker runs, every CLOSE_EVERY seconds (default 300) close.sh merges what the
+# MERGES: between workers, at most every CLOSE_EVERY seconds (default 300), close.sh merges what the
 # pipeline/verdict gate passed, pinned to the head it read (--dry-run while not acting).
 #
 # RESULTS: $S/done/<file>.<outcome>, the spec plus a footer with dispatch, task, outcome, attempts.
@@ -127,6 +127,15 @@ post_verdict() {
   REP="$S/report-$TASK.txt"
   orca orchestration task-list --json </dev/null 2>/dev/null \
     | node "$HERE_NATIVE/lib/task-result.cjs" "$TASK" > "$REP" || { say "no report for $TASK; nothing posted"; return 1; }
+  # the report must be about the head this spec was written for: verdict-post checks it against the
+  # PR's head NOW, which a push between spec and settlement can make a different build
+  local SPEC_HEAD REP_COMMIT
+  SPEC_HEAD="$(hdr head "$FILE" | tr -d "\r ")"
+  REP_COMMIT="$(sed -n 's/^[[:space:]]*commit:[[:space:]]*\([0-9a-fA-F]\{7,40\}\).*/\1/p' "$REP" | head -1)"
+  if [ -n "$SPEC_HEAD" ] && [ -n "$REP_COMMIT" ]; then
+    case "$SPEC_HEAD" in "$REP_COMMIT"*) ;; *) case "$REP_COMMIT" in "$SPEC_HEAD"*) ;; *)
+      say "report commit $REP_COMMIT is not the spec head $SPEC_HEAD; nothing posted"; return 1;; esac;; esac
+  fi
   bash "$HERE/verdict-post.sh" --pr "$PR" --role "$ROLE" --from-settlement "$REP" \
     --source "dispatch $TASK" 2>&1 | sed 's/^/dispatch: verdict: /' | tee -a "$LOG" >&2
   RC="${PIPESTATUS[0]}"
@@ -224,11 +233,14 @@ fill_queue() {
   bash "$HERE/specgen.sh" 2>&1 | while IFS= read -r l; do say "$l"; done
 }
 
+# close_pass runs BEFORE start_next: it only acts while no worker runs, and start_next starts one
+# whenever the queue is not empty - measured 2026-10-04, with the queue never empty #163, #135 and
+# #206 sat with a green gate for hours and nothing merged them.
 pass() {
   finish_running || return 0
+  close_pass
   fill_queue
   start_next
-  close_pass
 }
 
 # The dispatcher owns its Run: `run-use` from this terminal takes the Run from whichever terminal held
