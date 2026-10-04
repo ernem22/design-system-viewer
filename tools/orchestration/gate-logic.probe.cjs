@@ -27,6 +27,28 @@ const good = (role, extra = '') => ({
 
 const cases = [
   {
+    name: '#163 2026-10-04. an older reason-less tester fail is superseded by a newer complete tester fail on the same head',
+    head: HEAD,
+    comments: [
+      { body: '```dsv-verdict\nstatus: fail\nrole: tester\ncommit: ' + HEAD + '\nobserved: x\nbefore: y\nbuild: z.js\n```', at: at(1) },
+      { body: '```dsv-verdict\nstatus: fail\nrole: tester\ncommit: ' + HEAD.slice(0, 7) + '\nobserved: x\nbefore: y\nbuild: z.js\nreason: column head pinned to root\n```', at: at(3) },
+      good('reviewer'),
+    ],
+    expect: 'failure',
+    expectDesc: 'tester failed', // a real, readable fail - not "unparsable"
+  },
+  {
+    name: '#163 inverse. a reason-less tester fail NEWER than a valid one still locks the gate',
+    head: HEAD,
+    comments: [
+      good('reviewer'),
+      { body: '```dsv-verdict\nstatus: pass\nrole: tester\ncommit: ' + HEAD.slice(0, 7) + '\nobserved: x\nbefore: y\nbuild: z.js\n```', at: at(2) },
+      { body: '```dsv-verdict\nstatus: fail\nrole: tester\ncommit: ' + HEAD.slice(0, 7) + '\nobserved: x\nbefore: y\nbuild: z.js\n```', at: at(4) },
+    ],
+    expect: 'failure',
+    expectDesc: 'unparsable',
+  },
+  {
     name: 'H-027. a one-digit commit that the head merely starts with is not a verdict about this head',
     head: HEAD,
     comments: [
@@ -184,7 +206,7 @@ const cases = [
 let bad = 0;
 for (const c of cases) {
   const got = evaluate({ head: c.head, comments: c.comments.map(asOwner), allowlist: c.allowlist });
-  const ok = got.state === c.expect;
+  const ok = got.state === c.expect && (!c.expectDesc || got.description.includes(c.expectDesc));
   if (!ok) bad++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  expected=${c.expect.padEnd(8)} got=${got.state.padEnd(8)} :: ${c.name}`);
   console.log(`      description: ${got.description}`);
