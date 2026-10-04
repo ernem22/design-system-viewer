@@ -161,6 +161,22 @@
   --font-size-6xl: 3.75rem;
   --font-size-7xl: 4.5rem;
 
+  /* Heading Scale — one size per role, not per surface (issue #117). Every
+     chrome heading resolves its size from one of these, so the same role
+     renders the same wherever it appears; a surface never sets its own
+     heading size. Aliases of the type scale above, so a system that overrides
+     a type step carries the heading with it. Ordered section > subsection >
+     label, and the smallest (label, 14px) still clears the 12–14px UI text it
+     introduces — never inverted. */
+  --heading-section: var(--font-size-2xl); /* h2 — page/section title       24px */
+  --heading-subsection: var(--font-size-lg); /* h3 — block/demo/modal       18px */
+  --heading-label: var(--font-size-sm); /* h3/h4 — panel label             14px */
+  /* Compare column head. A .cmp-col re-scopes every --font-size-* inline, so
+     the label role can resolve under the column's base copy (gs5: sm 13px over
+     14px); the head is a subsection-level role, named separately so the label
+     role keeps one size everywhere. */
+  --heading-column: var(--font-size-lg); /* Compare column head             18px */
+
   /* Font Weight */
   --font-weight-light: 300;
   --font-weight-regular: 400;

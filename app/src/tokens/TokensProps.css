@@ -9,7 +9,7 @@
 
 .tok-props-block h3 {
   margin: 0 0 var(--space-2);
-  font-size: var(--font-size-xs);
+  font-size: var(--heading-label);
   font-weight: var(--font-weight-semibold);
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-wide);

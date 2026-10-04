@@ -19,7 +19,7 @@
 
 .dsv-kanban-col { min-width: 0; background: var(--color-surface-sunken); border-radius: var(--radius-lg); padding: var(--space-3); }
 
-.dsv-kanban-col h4 { margin: 0 0 var(--space-3); font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: var(--letter-spacing-wide); color: var(--color-text-muted); }
+.dsv-kanban-col h4 { margin: 0 0 var(--space-3); font-size: var(--heading-label); text-transform: uppercase; letter-spacing: var(--letter-spacing-wide); color: var(--color-text-muted); }
 
 .dsv-kanban-card { background: var(--color-surface); border: var(--border-width-thin) solid var(--color-border-subtle); border-radius: var(--radius-md); padding: var(--space-3); margin-bottom: var(--space-2); box-shadow: var(--shadow-xs); font-size: var(--font-size-sm); transition: box-shadow var(--motion-hover), transform var(--motion-hover), border-color var(--motion-hover); }
 

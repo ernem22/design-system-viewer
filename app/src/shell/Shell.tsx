@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { readViewUrl, type UrlTab } from "../lib/urlState.ts";
 import RailFrame from "./RailFrame.tsx";
 import PropsFrame from "./PropsFrame.tsx";
@@ -87,6 +88,13 @@ export default function Shell({
     >
       <div className="app-shell" data-tab={tab}>
         <header className="app-topbar">
+          {/* The document's single h1 (issue #117): the viewer had 0 h1 and
+             94 h2, so the outline had no top. Visually hidden (absolutely
+              positioned, so it takes no grid track) — the visible identity is
+              the brand lockup, but screen readers get the page root. */}
+          <VisuallyHidden.Root asChild>
+            <h1>Design System Viewer</h1>
+          </VisuallyHidden.Root>
           <div className="app-topbar-left">
             {brand}
             {systemSwitcher}
