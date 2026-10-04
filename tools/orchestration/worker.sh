@@ -139,8 +139,12 @@ cmd_start() {
   # 2b. A Tester needs the PR's build served before it starts (it writes nothing itself).
   if [ -n "$SERVE" ]; then
     local PREP
-    PREP="$(bash "$HERE/prep-tester.sh" "$P" "$SERVE")" || { say "start: prep-tester failed"; rollback; exit 4; }
-    printf '%s\n' "$PREP"
+    # Never inside $(...): a long-lived process started under it holds the pipe open on MSYS
+    # (measured 2026-10-04, tester-163d). Output goes to a file; stdin is closed.
+    local PREPLOG="$S/prep-$NAME.log"
+    PREP_WORKTREE_ID="$WTID" bash "$HERE/prep-tester.sh" "$P" "$SERVE" > "$PREPLOG" 2>&1 </dev/null \
+      || { cat "$PREPLOG" >&2; say "start: prep-tester failed (log $PREPLOG)"; rollback; exit 4; }
+    grep -E '^(SERVING|ASSET)=' "$PREPLOG"
   fi
 
   # 3. Orca starts the agent in its own terminal. No --terminal: that is what makes it owned.

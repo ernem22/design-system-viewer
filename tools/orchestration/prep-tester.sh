@@ -47,13 +47,24 @@ npm --prefix "$P/app" run build >&2 || { say "build failed"; exit 3; }
 bash "$HERE/serve.sh" "$P" "$PORT" >&2 || { say "serve.sh could not free port $PORT"; exit 3; }
 
 mkdir -p "$S" 2>/dev/null || true
-VITE="$(native "$P/app/node_modules/vite/bin/vite.js")"
-( cd "$P/app" && nohup node "$VITE" preview --port "$PORT" --strictPort --host 127.0.0.1 \
-    > "$S/preview-$PORT.log" 2>&1 & )
+# The preview runs as an ORCA TERMINAL inside the worker's own worktree, not as a background child of
+# this script. Measured 2026-10-04 on tester-163d: a `nohup node ... &` started here inherited the
+# pipe of the caller's $(...) (MSYS hands native children its handles), so worker.sh waited on a
+# server that never exits and the Tester was never started. An Orca terminal is detached from every
+# pipe here, and it belongs to the worktree: `orca worktree rm` closes it with the tree, so nothing
+# this script starts can outlive the worker.
+WTID="${PREP_WORKTREE_ID:?prep-tester: PREP_WORKTREE_ID (the worker worktree id) is required}"
+winpath() { cygpath -w "$1" 2>/dev/null || printf '%s' "$1"; }
+CMD_FILE="$S/preview-$PORT.cmd"
+printf '@echo off\r\ncd /d "%s"\r\nnode "%s" preview --port %s --strictPort --host 127.0.0.1\r\n' \
+  "$(winpath "$P/app")" "$(winpath "$P/app/node_modules/vite/bin/vite.js")" "$PORT" > "$CMD_FILE"
+TOUT="$(orca terminal create --worktree "id:$WTID" --title "preview-$PORT" \
+  --command "cmd.exe /c $(winpath "$CMD_FILE")" --json </dev/null 2>/dev/null)"
+case "$TOUT" in *'"ok":true'*|*'"ok": true'*) ;; *) say "could not open the preview terminal: $(printf '%s' "$TOUT" | tr '\n' ' ' | cut -c1-300)"; exit 3;; esac
 
 if ! OUT="$(bash "$HERE/serve.sh" --wait "$PORT" 2>&1)"; then
   say "$OUT"
-  bash "$HERE/serve.sh" --stop-worktree "$P" >&2
+  orca terminal close --worktree "id:$WTID" --all --json </dev/null >/dev/null 2>&1
   exit 3
 fi
 say "$OUT"
