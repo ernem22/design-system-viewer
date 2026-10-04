@@ -18,7 +18,10 @@ set -uo pipefail
 P="${1:?usage: prep-tester.sh <worktree-path> <port>}"
 PORT="${2:?usage: prep-tester.sh <worktree-path> <port>}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$HERE/../.." && pwd)"
+# The ROOT checkout (where node_modules is installed), not whichever worktree this script runs from:
+# the common git dir is shared by every worktree, its parent is the root checkout.
+ROOT="$(dirname "$(git -C "$HERE" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")"
+[ -d "$ROOT/app" ] || ROOT="$(cd "$HERE/../.." && pwd)"
 S="${LOCALAPPDATA:-$HOME}/orca-orchestration/design-system-viewer"
 say() { printf 'prep-tester: %s\n' "$*" >&2; }
 native() { cygpath -m "$1" 2>/dev/null || printf '%s' "$1"; }
