@@ -9,7 +9,7 @@
 #
 # Prints, then exits 0, when any of these appears:
 #   * an attention event in events.log (written by dispatch.sh):
-#       kept no-pr no-push unknown start-failed start-refused verdict-refused merge-refused leftover gave-up
+#       kept no-pr no-push unknown start-failed start-refused verdict-refused merge-refused leftover gave-up down
 #   * dispatcher-dead: dispatch.lock has held no live pid for DEAD_AFTER seconds (default 600; the
 #     scheduled bootstrap restarts it every 5 min, so this means the restart itself is failing)
 #   * idle-with-work: no worker live and nothing queued for IDLE_AFTER seconds (default 1800) while
@@ -23,7 +23,7 @@ S="${LOCALAPPDATA:-$HOME}/orca-orchestration/design-system-viewer"
 EV="$S/events.log"; OFF="$S/events.hermes-offset"; LOCK="$S/hermes-watch.lock"
 MAX_WAIT=3600; [ "${1:-}" = "--max-wait" ] && MAX_WAIT="${2:?--max-wait needs seconds}"
 DEAD_AFTER="${DEAD_AFTER:-600}"; IDLE_AFTER="${IDLE_AFTER:-1800}"; TICK=15
-ATTN='^[^ ]+ (kept|no-pr|no-push|unknown|start-failed|start-refused|verdict-refused|merge-refused|leftover|gave-up)( |$)'
+ATTN='^[^ ]+ (kept|no-pr|no-push|unknown|start-failed|start-refused|verdict-refused|merge-refused|leftover|gave-up|down)( |$)'
 
 # one watcher at a time; a lock left by a dead watcher is taken over
 if ! mkdir "$LOCK" 2>/dev/null; then

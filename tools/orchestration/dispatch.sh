@@ -80,7 +80,7 @@ say() { printf '%s dispatch: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" | tee -
 # EVENTS for the manager (Hermes): one line each in events.log, `<time> <kind> key=value ...`.
 # The dispatcher does not wait for anyone to read them; hermes-watch.sh wakes Hermes on the ones
 # that need attention. Kinds: up started finished delivered kept no-pr no-push unknown start-failed
-# start-refused verdict-refused merge-refused conflict leftover gave-up.
+# start-refused verdict-refused merge-refused conflict leftover gave-up down.
 event() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$S/events.log"; }
 acting() { [ -f "$S/dispatch.enabled" ]; }
 hdr() { sed -n "1,/^---\$/s/^$1:[[:space:]]*//p" "$2" | head -1; }
@@ -95,7 +95,22 @@ lock() {
     if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then say "already running as pid $PID"; exit 0; fi
   fi
   echo $$ > "$L"
-  trap 'rm -f "$S/dispatch.lock"' EXIT
+  # The lock is removed only while it still names THIS process. It used to be removed blindly:
+  # measured 2026-10-05, a dispatcher killed during a child (`sleep`, an orca call) runs its trap
+  # only after that child ends, by which time a new dispatcher had written its own pid; the old
+  # trap deleted the NEW lock, the launcher saw "no dispatcher" and started another one.
+  trap on_exit EXIT
+  trap 'say "got SIGTERM"; exit 143' TERM
+  trap 'say "got SIGHUP (terminal closed)"; exit 129' HUP
+  trap 'say "got SIGINT"; exit 130' INT
+}
+# Every exit says why: the exit code, the line and the command bash was running. 2026-10-05: three
+# dispatchers ended within minutes and nothing recorded a cause.
+on_exit() {
+  local RC=$? CMD="${BASH_COMMAND:-?}"
+  [ "$(cat "$S/dispatch.lock" 2>/dev/null)" = "$$" ] && rm -f "$S/dispatch.lock"
+  say "exiting (pid $$, rc $RC, last command: ${CMD:0:200})"
+  event "down pid=$$ rc=$RC"
 }
 
 # ---- finish the running dispatch (resume after any restart) ---------------------------------
@@ -504,7 +519,11 @@ status() {
 case "${1:-}" in
   --status) status ;;
   --once) lock; pass ;;
-  --bind) lock; bind_run; say "dispatcher up (pid $$, Run $(cat "$S/dispatch.run"), $(acting && echo acting || echo 'dry run'))"; event "up pid=$$"
+  --bind) lock
+      # bash's own errors (e.g. "unbound variable") go to stderr only; keep a copy on disk so a
+      # dispatcher that ends by itself leaves its reason behind, not just in a closed terminal.
+      exec 2> >(tee -a "$S/dispatch.err" >&2)
+      bind_run; say "dispatcher up (pid $$, Run $(cat "$S/dispatch.run"), $(acting && echo acting || echo 'dry run'))"; event "up pid=$$"
       while :; do pass; sleep "$INTERVAL"; done ;;
   "") lock; say "dispatcher up (pid $$, $(acting && echo acting || echo 'dry run'))"
       while :; do pass; sleep "$INTERVAL"; done ;;

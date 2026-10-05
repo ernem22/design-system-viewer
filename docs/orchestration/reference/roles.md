@@ -43,6 +43,7 @@ Keep-alive: Task Scheduler -> `bootstrap.sh` -> `launch-dispatcher.sh`, every 5 
 | `leftover` | a close could not be confirmed after 10 tries |
 | `merge-refused` | `close.sh` found the gate green but GitHub refused the merge (CI red, protection) |
 | `gave-up` | a spec failed on every attempt |
+| `down` | the dispatcher exited (`rc=`; the reason line is in `dispatch.log`, bash's own error in `dispatch.err`) |
 
 Hermes never reads Orca's mailbox for the dispatcher's Run: its terminal is fenced off it
 (`check` answers `consumer_fenced`, measured 2026-10-05).
@@ -72,6 +73,7 @@ per process (measured 2026-09-28).
 | `start-refused` | reads `dispatch.sh --status`; reports if the host stays full |
 | `leftover` | calls `bash tools/orchestration/worker.sh close <dispatch> --stop` once; reports the result |
 | `gave-up` | reports the spec and its last outcome to the user |
+| `down` | reads the `exiting` line in `dispatch.log` and the tail of `dispatch.err`; the launcher restarts the dispatcher within 5 min (otherwise `dispatcher-dead` follows); reports the reason |
 | `dispatcher-dead` | calls `bash "$LOCALAPPDATA/orca-orchestration/design-system-viewer/bootstrap.sh" D:/code/dsv-dispatcher D:/code/design-system-viewer`; reports the launcher log |
 | `idle-with-work` | runs `dispatch.sh --status` and `needs.sh`; reports why the owed work is not queued |
 | heartbeat (exit 3) | nothing; runs the watcher again |
