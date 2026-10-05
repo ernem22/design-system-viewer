@@ -30,17 +30,27 @@ known() {
     case "$f" in *.rejected|*.start-failed) continue;; esac
     # a blocked result holds the need for BLOCKED_TTL minutes only (default 240): what blocked it -
     # typically another open PR holding the files - is expected to move, and nobody re-queues it
-    case "$f" in *.blocked) [ -n "$(find "$f" -mmin -"${BLOCKED_TTL:-240}" 2>/dev/null)" ] || continue;; esac
+    case "$f" in *.blocked) young "$f" "${BLOCKED_TTL:-240}" || continue;; esac
+    # Only a delivered result (succeeded) or a human-facing one (unreproducible) holds a need for good.
+    # Every other ending holds it for RETRY_TTL minutes (default 180), then the need is owed again.
+    # Measured 2026-10-05: two Testers each for #203 and #170 ended verdict-refused, the old rule
+    # ("2 refused = done") hid both PRs for good, and the pipeline sat idle with the gates pending.
+    case "$f" in *.failed|*.timeout|*.exited|*.agent_wait|*.cancelled|*.unknown)
+      young "$f" "${RETRY_TTL:-180}" || continue;; esac
     if [ -n "$head" ]; then
       sed -n '1,/^---$/p' "$f" | grep -qiE "^head:[[:space:]]*${head:0:7}" || continue
-      # a worker whose verdict could not be posted is retried, at most twice per role and head:
-      # the work ran but nothing reached the gate (measured 2026-10-04, reviewer #163 b383367).
-      case "$f" in *.verdict-refused) [ "$(refused_count "$role" "$val" "$head")" -ge 2 ] || continue;; esac
+      # a worker whose verdict could not be posted is retried at once, twice per role and head (the
+      # work ran but nothing reached the gate, measured 2026-10-04, reviewer #163 b383367); after
+      # that, each refused result holds the need for RETRY_TTL minutes only
+      case "$f" in *.verdict-refused)
+        [ "$(refused_count "$role" "$val" "$head")" -ge 2 ] && young "$f" "${RETRY_TTL:-180}" || continue;; esac
     fi
     return 0
   done
   return 1
 }
+
+young() { [ -n "$(find "$1" -mmin -"$2" 2>/dev/null)" ]; }   # file, minutes
 
 refused_count() {   # role pr head -> number of verdict-refused results for it
   local n=0 f
@@ -73,7 +83,10 @@ LIMIT=200
 [ "$(printf '%s' "$PRS_JSON" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).length))')" -ge "$LIMIT" ] \
   && echo "needs.sh: $LIMIT open PRs listed - the limit; some may be missing" >&2
 # gh issue list defaults to 30: past that, agent issues were silently never seen
-ISSUES="$(gh issue list --repo "$REPO" --label agent --state open --json number --jq '.[].number' --limit "$LIMIT" 2>/dev/null)" \
+# `retired`, `umbrella` and `held` issues are not dispatchable: retired by a product decision, an
+# umbrella that must be split first, or held on purpose (#116 went to a Coder whole, 2026-10-05).
+ISSUES="$(gh issue list --repo "$REPO" --label agent --state open --json number,labels --limit "$LIMIT" \
+  --jq '.[]|select([.labels[].name]|any(.=="retired" or .=="umbrella" or .=="held")|not)|.number' 2>/dev/null)" \
   || { echo "needs.sh: cannot list agent issues (gh)" >&2; exit 4; }
 [ "$(printf '%s\n' $ISSUES | grep -c .)" -ge "$LIMIT" ] && echo "needs.sh: $LIMIT agent issues listed - the limit; some may be missing" >&2
 for n in $ISSUES; do
