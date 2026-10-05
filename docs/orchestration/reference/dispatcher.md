@@ -15,7 +15,7 @@ There is no slot and no "one at a time". A queued spec starts unless something r
 | free memory (`WATCH_MIN_MB`) | 600 MB | `worker.sh start` refuses (rc 3) and the spec stays queued; one `start-refused` event per 30 min |
 | a Tester's `serve:` port in use | - | specgen gives each PR its own port (`8600 + pr % 100`) |
 | a Coder on the same issue / a Fixer on the same PR | - | two writers on one branch collide |
-| `DISPATCH_MAX` live workers | 0 (none) | optional ceiling |
+| `DISPATCH_MAX` live workers | 3 | measured 2026-10-05: one opencode worker holds 1.2-1.6 GB once working; at 5-6 live this 7.5 GB host had 56 MB free and bash could not fork |
 | `MODEL_CAP_<model>` live workers on one model | 0 (none) | set only from a measured quota |
 
 A blocked spec never holds the ones behind it: the queue is walked in name order and each ready spec starts.

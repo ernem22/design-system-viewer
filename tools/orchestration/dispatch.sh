@@ -55,14 +55,17 @@ mkdir -p "$Q" "$DONE" "$RUN_DIR" 2>/dev/null || true
 # WORKERS RUN WHILE THERE IS WORK (2026-10-05: one worker at a time gave 3 product PRs in ~15 h).
 # Every queued spec starts as soon as nothing real stops it; each live worker has its own
 # $RUN_DIR/<spec>.env. The only limits are real resources:
-#   * DISPATCH_MAX workers in all (default 4): a ceiling for this 7.5 GB host;
+#   * DISPATCH_MAX workers in all (default 3, MEASURED - see below);
 #   * memory: worker.sh start refuses (rc 3, the spec stays queued) below WATCH_MIN_MB free;
-#   * a model's request quota: at most MODEL_CAP_<model> live workers per model (default 2);
+#   * a model's request quota: at most MODEL_CAP_<model> live workers per model (default 0 = none);
 #   * a Tester's port: never two Testers on one port;
 #   * one writer per PR: never two Coders on one issue or two Fixers on one PR.
-# 0 = no ceiling. Memory is the brake (worker.sh refuses below WATCH_MIN_MB); a fixed count was a
-# guess that held unrelated workers back (2026-10-05).
-MAX_WORKERS="${DISPATCH_MAX:-0}"
+# Why 3 (measured 2026-10-05 on this 7.5 GB host): one opencode worker holds 1.2-1.6 GB private once
+# it is working, but starts small, so the free-memory check at start time let a 5th and 6th in. With 4
+# live, free RAM was 15-580 MB; with 5-6 live, 56 MB, and bash could no longer fork (0xC000012D),
+# which failed a start (rc 4) and can end the dispatcher itself. Raise it only after measuring again
+# (e.g. after closing other programs): DISPATCH_MAX=n in the environment of dispatcher.cmd.
+MAX_WORKERS="${DISPATCH_MAX:-3}"
 REPO_SLUG="${DSV_REPO:-ernem22/design-system-viewer}"
 role_cfg() { case "$1" in coder|fixer) echo write;; reviewer) echo readonly;; tester) echo tester;; esac; }
 model_of() {   # spec file -> the model it will run on (its model: header, else its role's config)
