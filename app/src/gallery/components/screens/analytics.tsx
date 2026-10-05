@@ -11,6 +11,11 @@ const PAGES: [string, string, string][] = [
   ["/blog", "9.8k", "up"],
 ];
 
+// Grouped locale totals — tr-TR grouping keeps the shown "128.402"/"54.190"
+// shapes while the values stay real numbers.
+const intTotal = new Intl.NumberFormat("tr-TR");
+const intPart = new Intl.NumberFormat("tr-TR", { useGrouping: false });
+
 export default function AnalyticsBody() {
   const [range, setRange] = useState("month");
   return (
@@ -86,11 +91,13 @@ export default function AnalyticsBody() {
         <Separator.Root className="dsv-sep" />
         <dl className="dsv-datalist">
           <dt>Total visits</dt>
-          <dd>128.402</dd>
+          <dd>{intTotal.format(128402)}</dd>
           <dt>Unique visitors</dt>
-          <dd>54.190</dd>
+          <dd>{intTotal.format(54190)}</dd>
           <dt>Avg. duration</dt>
-          <dd>2d 41s</dd>
+          <dd>
+            {intPart.format(2)}d {intPart.format(41)}s
+          </dd>
           <dt>Bounce rate</dt>
           <dd>38%</dd>
         </dl>
@@ -99,9 +106,9 @@ export default function AnalyticsBody() {
         <table className="dsv-table dsv-table--zebra">
           <thead>
             <tr>
-              <th>Page</th>
-              <th>Views</th>
-              <th>Change</th>
+              <th scope="col">Page</th>
+              <th scope="col">Views</th>
+              <th scope="col">Change</th>
             </tr>
           </thead>
           <tbody>

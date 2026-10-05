@@ -30,7 +30,7 @@ export default function ChatBody() {
           </div>
           <div className="dsv-bubble dsv-bubble--them">Is token bridge working?</div>
           <div className="dsv-bubble dsv-bubble--me">Yes, live via postMessage.</div>
-          <div className="dsv-bubble dsv-bubble--them">Great. Let's add more screens.</div>
+          <div className="dsv-bubble dsv-bubble--them">Great. Let’s add more screens.</div>
           <div className="dsv-bubble dsv-bubble--me">This screen is one of them 😄</div>
           <div className="dsv-bubble dsv-bubble--them">
             <span className="dsv-spinner dsv-spinner--xs" /> typing…
@@ -44,7 +44,12 @@ export default function ChatBody() {
             gap: "var(--space-2)",
           }}
         >
-          <input className="dsv-input" placeholder="Write a message…" style={{ flex: 1 }} />
+          <input
+            className="dsv-input"
+            placeholder="Write a message…"
+            aria-label="Write a message"
+            style={{ flex: 1 }}
+          />
           <Button className="dsv-icon-btn" aria-label="Send">
             <Icon name="chevronRight" size={16} />
           </Button>

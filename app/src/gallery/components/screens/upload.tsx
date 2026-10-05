@@ -58,6 +58,7 @@ export default function UploadBody() {
               <Progress.Root
                 className="dsv-progress"
                 value={pct}
+                aria-label={`Upload progress for ${name}`}
                 style={{ width: "100%", marginTop: "var(--space-1)" }}
               >
                 <Progress.Indicator

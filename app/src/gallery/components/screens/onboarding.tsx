@@ -32,6 +32,7 @@ export default function OnboardingBody() {
       <Progress.Root
         className="dsv-progress"
         value={(step + 1) * 25}
+        aria-label="Onboarding completion"
         style={{ width: "100%", marginBottom: "var(--space-5)" }}
       >
         <Progress.Indicator

@@ -37,7 +37,13 @@ export default function SignupBody() {
             <input id="s-team" className="dsv-input" defaultValue="Acme" />
           </Field>
           <Field label="Invite emails" id="s-inv" hint="comma separated">
-            <input id="s-inv" className="dsv-input" placeholder="a@x.com, b@x.com" />
+            <input
+              id="s-inv"
+              className="dsv-input"
+              placeholder="a@x.com, b@x.com"
+              spellCheck={false}
+              autoComplete="off"
+            />
           </Field>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: "var(--space-6)" }}>

@@ -6,9 +6,12 @@ import { Icon } from "../../../lib/icons.tsx";
 import { Avat } from "./screenBits.tsx";
 import "./screens.css";
 
+// Grouped locale count — tr-TR grouping keeps the shown "1.284" shape.
+const intCount = new Intl.NumberFormat("tr-TR");
+
 const STATS: [string, string, string, string][] = [
   ["Revenue", "₺48.2k", "up", "▲ 12%"],
-  ["Users", "1.284", "up", "▲ 4%"],
+  ["Users", intCount.format(1284), "up", "▲ 4%"],
   ["Error rate", "0.4%", "down", "▼ 0.1%"],
   ["Uptime", "99.98%", "up", "▲ 0.02%"],
 ];
@@ -55,7 +58,12 @@ export default function DashboardBody() {
             66 / 100
           </span>
         </div>
-        <Progress.Root className="dsv-progress" value={66} style={{ width: "100%" }}>
+        <Progress.Root
+          className="dsv-progress"
+          value={66}
+          aria-label="Monthly goal progress"
+          style={{ width: "100%" }}
+        >
           <Progress.Indicator className="dsv-progress-indicator" style={{ width: "66%" }} />
         </Progress.Root>
         <Separator.Root className="dsv-sep" />
@@ -71,9 +79,19 @@ export default function DashboardBody() {
           {[13, 5, 47, 22].map((n) => (
             <HoverCard.Root key={n} openDelay={120}>
               <HoverCard.Trigger asChild>
-                <span style={{ display: "inline-flex" }}>
+                <button
+                  type="button"
+                  aria-label={`Contributor ${n} details`}
+                  style={{
+                    display: "inline-flex",
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                  }}
+                >
                   <Avat n={n} />
-                </span>
+                </button>
               </HoverCard.Trigger>
               <HoverCard.Portal container={portalContainer}>
                 <HoverCard.Content className="dsv-pop" sideOffset={6}>
