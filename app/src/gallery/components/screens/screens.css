@@ -149,3 +149,11 @@
 @media (max-width: 640px) {
   .dsv-inbox { grid-template-columns: 1fr; }
 }
+
+/* Issue 220: honour prefers-reduced-motion. The pulse dot is infinite, so
+   it stops and stays static. */
+@media (prefers-reduced-motion: reduce) {
+  .dsv-pulse-dot {
+    animation: none;
+  }
+}

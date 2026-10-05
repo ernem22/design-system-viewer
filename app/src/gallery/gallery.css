@@ -583,3 +583,17 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
 @keyframes dsv-pulse { 0%, 100% { opacity: 1; } 50% { opacity: var(--opacity-overlay); } }
 
 @keyframes dsv-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(calc(-1 * var(--space-3))); } }
+
+/* Issue 220: the shared animation set must honour prefers-reduced-motion.
+   Infinite motion (dsv-spin) stops; entrance motion (dsv-fade/dsv-pop/
+   dsv-scale) drops to none so surfaces appear in their final state. */
+@media (prefers-reduced-motion: reduce) {
+  .dsv-overlay,
+  .dsv-modal,
+  .dsv-pop,
+  .dsv-menu,
+  .dsv-tooltip,
+  .dsv-spinner {
+    animation: none;
+  }
+}

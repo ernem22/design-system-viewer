@@ -31,3 +31,15 @@
 .dsv-feedback-empty { padding: var(--space-6); }
 .dsv-feedback-loading-card { min-width: var(--space-40); justify-content: center; }
 .dsv-feedback-loading-text { font-size: var(--font-size-sm); }
+
+/* Issue 220: honour prefers-reduced-motion. Entrance/exit drops to none;
+   the closed toast keeps opacity 0 so dismissal still hides it instantly. */
+@media (prefers-reduced-motion: reduce) {
+  .dsv-toast {
+    animation: none;
+  }
+  .dsv-toast[data-state="closed"] {
+    animation: none;
+    opacity: 0;
+  }
+}
