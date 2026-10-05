@@ -38,8 +38,13 @@ known() {
     # Every other ending holds it for RETRY_TTL minutes (default 180), then the need is owed again.
     # Measured 2026-10-05: two Testers each for #203 and #170 ended verdict-refused, the old rule
     # ("2 refused = done") hid both PRs for good, and the pipeline sat idle with the gates pending.
-    case "$f" in *.failed|*.timeout|*.exited|*.agent_wait|*.cancelled|*.unknown)
+    case "$f" in *.failed|*.timeout|*.exited|*.agent_wait|*.cancelled|*.unknown|*.no-pr|*.no-push)
       young "$f" "${RETRY_TTL:-180}" || continue;; esac
+    # A Coder's success is its open PR, and an issue with an open PR never reaches this check (it is
+    # claimed above). So a succeeded Coder result for an unclaimed issue means its PR is gone or never
+    # existed: it holds the issue for an hour at most (measured 2026-10-05: nine "succeeded" Coders,
+    # no PR, nine issues hidden for good).
+    [ "$role" = "coder" ] && case "$f" in *.succeeded) young "$f" "${CODER_OK_TTL:-60}" || continue;; esac
     if [ -n "$head" ]; then
       sed -n '1,/^---$/p' "$f" | grep -qiE "^head:[[:space:]]*${head:0:7}" || continue
       # a worker whose verdict could not be posted is retried at once, twice per role and head (the
