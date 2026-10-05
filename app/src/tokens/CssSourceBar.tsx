@@ -54,9 +54,12 @@ export function CssSourceBar({ onLoad, onToast }: { onLoad: (css: string) => voi
       <input
         className="tok-input tok-source-url"
         type="url"
+        name="stylesheet-url"
         value={url}
         placeholder="https://…/tokens.css"
         aria-label="Stylesheet URL"
+        autoComplete="off"
+        spellCheck={false}
         onChange={(e) => setUrl(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
@@ -65,7 +68,14 @@ export function CssSourceBar({ onLoad, onToast }: { onLoad: (css: string) => voi
           }
         }}
       />
-      <button type="button" className="tok-btn" disabled={busy} onClick={() => void fetchUrl()}>
+      <button
+        type="button"
+        className="tok-btn"
+        disabled={busy}
+        aria-live="polite"
+        aria-busy={busy}
+        onClick={() => void fetchUrl()}
+      >
         {busy ? "…" : "Fetch"}
       </button>
     </div>

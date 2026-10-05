@@ -43,7 +43,7 @@ export function CssPreview({ css, baseCss = "" }: { css: string; baseCss?: strin
       {lint.length > 0 && <span className="warn"> · {lint.length} value warnings</span>}
       {cov.extraCount > 0 && (
         <details>
-          <summary className="warn">extra — won&apos;t render in Preview</summary>
+          <summary className="warn">extra — won’t render in Preview</summary>
           <div>
             Preview only reads the {cov.expected} schema names (see Schema view). Rename these to match, or
             they&apos;ll just sit unused:
