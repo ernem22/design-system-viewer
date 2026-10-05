@@ -32,6 +32,33 @@ export interface ImportedSystem {
   slug?: string;
 }
 
+/** What merging an incoming block into a target would do, by token name.
+    `added` is a name the target does not have; `overridden` a name it has with
+    a different value; `unchanged` a name it has with the same value. */
+export interface MergePreview {
+  added: number;
+  overridden: number;
+  unchanged: number;
+}
+
+/** Classify an incoming CSS block against a target's current tokens, the merge
+    review the dialog shows before a merge. Mirrors `mergeSystem`'s last-write
+    parser: duplicates collapse, so each name is counted once. */
+export function mergePreview(existingCss: string, incomingCss: string): MergePreview {
+  const base = new Map(
+    (parseTokens(existingCss) as { name: string; value: string }[]).map((t) => [t.name, t.value]),
+  );
+  let added = 0;
+  let overridden = 0;
+  let unchanged = 0;
+  for (const { name, value } of parseTokens(incomingCss) as { name: string; value: string }[]) {
+    if (!base.has(name)) added++;
+    else if (base.get(name) === value) unchanged++;
+    else overridden++;
+  }
+  return { added, overridden, unchanged };
+}
+
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

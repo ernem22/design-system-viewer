@@ -4,6 +4,7 @@ import {
   detectPrefixes,
   extraSuggestions,
   isSchemaName,
+  mergePreview,
   nameSimilarity,
   readSystemJson,
   stripPrefix,
@@ -138,5 +139,24 @@ describe("isSchemaName", () => {
   it("tells a schema name from an extra", () => {
     expect(isSchemaName("--font-size-base")).toBe(true);
     expect(isSchemaName("--color-background")).toBe(false);
+  });
+});
+
+// Issue #125: merge mode's review step. A merge is last-write, so the counts
+// have to classify every incoming name against the target's current value.
+describe("mergePreview", () => {
+  const target = "--color-bg: #ffffff;\n--color-text: #000000;";
+
+  it("classifies added, overridden and unchanged against the target", () => {
+    const incoming = "--color-bg: #000000;\n--color-text: #000000;\n--color-accent: #ff0000;";
+    expect(mergePreview(target, incoming)).toEqual({ added: 1, overridden: 1, unchanged: 1 });
+  });
+
+  it("reports an empty incoming block as all zeros", () => {
+    expect(mergePreview(target, "")).toEqual({ added: 0, overridden: 0, unchanged: 0 });
+  });
+
+  it("counts every name in an empty target as added", () => {
+    expect(mergePreview("", "--a: 1;\n--b: 2;")).toEqual({ added: 2, overridden: 0, unchanged: 0 });
   });
 });
