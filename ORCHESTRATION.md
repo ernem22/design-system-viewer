@@ -715,8 +715,21 @@ a handle. Pass the coordinator terminal's handle explicitly, and the same
 identity on every call of the wave.
 
 **Fan-out bounds.** One Coder per `app/src` area at a time (see the Issue-Label
-State Machine) — a conflict rule, not a rate limit. Beyond that, size the wave
-to what the coordinator can process: the budget assumes roughly one `check
+State Machine) — a conflict rule, not a rate limit. On top of that, what decides how
+many workers run at once is **measured memory, not a fixed number of workers**:
+
+  * read `node D:/code/orca-supervisor/src/capacity.js` before **every** dispatch and
+    log `available_mb` together with the decision;
+  * **dispatch only while `available_mb >= 600`, at most 2 workers; below 600 —
+    including 400–599 — do not dispatch, wait.** This is provisional and measured: three
+    opencode TUIs ran to completion at a minimum of 257 MB available, and `capacity.js`'s
+    own notes record free RAM moving 977 -> 1,850 MB while load was being added;
+  * the wait is `tools/orchestration/wait-capacity.sh --min 600` instead of pausing the
+    pipeline — `worker.sh start` runs it before creating anything (`WATCH_MIN_MB`,
+    default 600), and a timeout writes an inbox note and the caller carries on with other
+    work.
+
+The budget still assumes roughly one `check
 --wait` per wave. Review and verification are per PR now, so the seats to fan
 out are Coders and Testers; the Reviewer's cross-PR conflict block is what keeps
 several live PRs from colliding at merge.
@@ -788,9 +801,14 @@ issue in one turn's context.
     opens PR with "Closes #<n>", swaps label to `needs-review`
   → CI runs automatically on the PR — no dispatch, no label
   → Hermes scans `--label needs-review`. CI red → dispatch a Fixer with the
-    failing output and leave the label alone. CI green → dispatch the Reviewer
-    and the Tester for that PR in ONE wave; they depend on the same gate and not
-    on each other's verdict, so serializing them only adds latency
+    failing output and leave the label alone. CI green → dispatch the Reviewer for
+    that PR **first**, and that PR's Tester **only after the Reviewer returns PASS**.
+    (Corrected 2026-09-28; the "ONE wave" rule that stood here is superseded.) The
+    measurement behind the correction: in one session 4 of 7 Reviewer verdicts came
+    back `fail`, and every fail sent a Fixer that rewrote the head, so a Tester dispatched
+    alongside its Reviewer would have measured a build that was about to change — one
+    whole Tester phase wasted per fail. The two stages share a gate, not a head; the
+    Reviewer is read-only, but its FAIL is what moves the head, through the Fixer
   → both PASS (Reviewer `scope_ok: yes`, Tester with real `observed:` and
     `before:` lines) → Hermes merges and closes the issue, unless the issue
     carries `human-merge`, in which case it swaps the label to
@@ -1143,11 +1161,7 @@ worker's model or personal identity.
   legacy `username@users.noreply.github.com` address resolves to whoever currently
   owns that username.
 - **Both identities land on the merged commit.** The worker's branch commit
-  carries the role tag and `orca-<role>` as author, and its body must also name
-  the human: `Co-authored-by: erne <97901269+ernem22@users.noreply.github.com>`. (This used
-  to name `ernmctt@gmail.com`; that plain address is blocked on push by GitHub's email-privacy
-  protection, GH007, and resolves to no account, so it attributed nothing — see the identity
-  rules below.) At merge time Hermes
+  carries the role tag and `orca-<role>` as author. At merge time Hermes
   squashes with `--subject "<subject> (#<n>)"` — the tag survives in the subject
   — and a `--body` carrying `Co-authored-by: orca-<role> <BOT_EMAIL>`, because a
   squash re-authors the commit to the merging
@@ -1156,6 +1170,14 @@ worker's model or personal identity.
   (`6cf38f9`, `e425c79`, `df02f59`, `30c162d`) carry `[coder]` in the subject and
   only `erne` as author — the worker author survives on its own branch and
   nowhere else.
+- **The human trailer was removed on 2026-09-28.** Until then this section required the
+  worker's commit body to name the human as `Co-authored-by: erne <ernmctt@gmail.com>`,
+  which contradicted the "Coordinator commits use the real human identity" line above:
+  that address is private and a push carrying it is rejected with `GH007`. The human
+  identity is already on the merge commit itself — `gh api
+  repos/ernem22/design-system-viewer/commits/<sha> --jq .author.login` returns `ernem22`
+  for every merge, and the squash author is `erne <97901269+ernem22@users.noreply.github.com>`.
+  Do not reintroduce a private address into a commit body.
 - **Use `--worktree`, never bare `git config user.name`.** Bare is `--local`
   and lives in the shared `.git/config` that every worktree of the repo reads,
   so setting it in one worktree silently overwrites the identity every other
@@ -1357,9 +1379,10 @@ Three findings worth carrying forward:
 
 ## Review
 
-One Reviewer dispatch per PR, in the same wave as that PR's Tester: they depend
-on the same green `app` check and not on each other's verdict, so serializing
-them only adds latency.
+One Reviewer dispatch per PR, **before** that PR's Tester — see the Issue-Label State
+Machine for the measurement that corrected the "same wave" rule on 2026-09-28. A
+Tester that runs before its Reviewer's verdict can measure a head the Reviewer is
+about to move.
 
 Batching (3-5 PRs per dispatch) existed for a quota that is no longer in play —
 OpenCode Zen's 100 requests/day. The current model has no such cap, so the batch
