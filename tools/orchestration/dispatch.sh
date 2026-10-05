@@ -336,7 +336,7 @@ deliver() {
   PRN="$(gh pr list --repo "$REPO_SLUG" --head "$BR" --state open --json number --jq '.[0].number // empty' 2>/dev/null)"
   if [ -z "$PRN" ]; then
     BODY="$S/deliver-$TASK.md"
-    { echo "Closes #$N"; echo; echo "## Worker report"; echo; cat "$REP"; echo
+    { echo "Closes #$N"; echo; echo "## Worker report"; echo; report_text "$REP"; echo
       echo "_Delivered by the dispatcher: the worker ($TASK, $(kv MODEL "$RUNNING")) settled succeeded without opening a PR. The Reviewer and Tester gate it as usual._"; } > "$BODY"
     URL="$(gh pr create --repo "$REPO_SLUG" --base "$BASEBR" --head "$BR" --title "$TITLE" --body-file "$BODY" 2>&1)" \
       || { say "deliver: gh pr create failed: $(printf '%s' "$URL" | tr '\n' ' ' | cut -c1-200)"; return 1; }
@@ -346,6 +346,15 @@ deliver() {
   DELIVERED_PR="$PRN"
   event "delivered role=coder spec=$(basename "$FILE" | sed 's/^active-//') pr=$PRN branch=$BR"
   return 0
+}
+
+# The report as a reader wants it: task-result.cjs prints EVERY string of Orca's result, so a report
+# without status:/commit: lines comes with Orca's own fields mixed in (measured 2026-10-05, #235's body:
+# worker_report, succeeded, msg_..., term_... twice, an ISO time). Those lines are dropped here only;
+# verdict-post.sh reads the unfiltered report.
+report_text() {
+  grep -vE '^[[:space:]]*(worker_report|succeeded|failed|blocked|msg_[0-9a-f]+|term_[0-9a-f-]+|[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z)[[:space:]]*$' "$1" \
+    | sed '/./,$!d'
 }
 
 record() {
