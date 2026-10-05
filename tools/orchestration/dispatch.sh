@@ -73,6 +73,11 @@ live_count() { live | grep -c . ; }
 live_with() { local K="$1" V="$2" F N=0; for F in $(live); do [ "$(kv "$K" "$F")" = "$V" ] && N=$((N+1)); done; echo "$N"; }
 
 say() { printf '%s dispatch: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" | tee -a "$LOG" >&2; }
+# EVENTS for the manager (Hermes): one line each in events.log, `<time> <kind> key=value ...`.
+# The dispatcher does not wait for anyone to read them; hermes-watch.sh wakes Hermes on the ones
+# that need attention. Kinds: up started finished kept no-pr no-push unknown start-failed
+# verdict-refused leftover gave-up.
+event() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$S/events.log"; }
 acting() { [ -f "$S/dispatch.enabled" ]; }
 hdr() { sed -n "1,/^---\$/s/^$1:[[:space:]]*//p" "$2" | head -1; }
 body() { sed '1,/^---$/d' "$1"; }
@@ -105,7 +110,13 @@ finish_running() {
   local CLOSE_ARGS=("$DISP")
   case "$OUTC" in succeeded|failed|cancelled) ;; *) CLOSE_ARGS+=(--stop) ;; esac
   local CRC=0
-  bash "$HERE/worker.sh" close "${CLOSE_ARGS[@]}" >/dev/null || CRC=$?
+  local COUT
+  COUT="$(bash "$HERE/worker.sh" close "${CLOSE_ARGS[@]}")" || CRC=$?
+  # 7 = closed, but the tree holds work that is not on the remote: kept for the manager, not removed
+  if [ "$CRC" -eq 7 ]; then
+    local KEPT; KEPT="$(printf '%s\n' "$COUT" | sed -n 's/^KEPT=//p')"
+    echo "KEPT=$KEPT" >> "$RUNNING"; event "kept dispatch=$DISP spec=$(basename "$FILE" | sed "s/^active-//") path=$KEPT"; CRC=0
+  fi
   # 5 = released but the tree is not ours to remove: the dispatch IS finished, record it.
   # Anything else non-zero is unconfirmed: keep running.env and try the close again next pass.
   if [ "$CRC" -ne 0 ] && [ "$CRC" -ne 5 ]; then
@@ -121,6 +132,7 @@ finish_running() {
     say "close of $DISP still unconfirmed after $TRIES tries (rc $CRC); recording the result and moving on"
     printf '%s dispatch=%s worktree=%s rc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$DISP" \
       "$(kv WORKTREE "$RUNNING")" "$CRC" >> "$S/leftovers.txt"
+    event "leftover dispatch=$DISP worktree=$(kv WORKTREE "$RUNNING") rc=$CRC"
   fi
 
   local BASE; BASE="$(basename "$FILE")"; BASE="${BASE#active-}"
@@ -137,6 +149,7 @@ finish_running() {
         rm -f "$FILE"
       else
         say "$DISP ended '$OUTC' after $MAX_ATTEMPTS attempts: giving up on $BASE"
+        event "gave-up dispatch=$DISP spec=$BASE outcome=$OUTC"
         record "$FILE" "$OUTC"
       fi ;;
   esac
@@ -151,7 +164,7 @@ post_verdict() {
   case "$ROLE" in reviewer|tester) ;; *) return 0;; esac
   [ -n "$PR" ] || { say "no pr: header on a $ROLE spec; nothing posted"; return 1; }
   REP="$S/report-$TASK.txt"
-  orca orchestration task-list --json </dev/null 2>/dev/null \
+  orca orchestration task-list --run "$(cat "$S/dispatch.run" 2>/dev/null)" --json </dev/null 2>/dev/null \
     | node "$HERE_NATIVE/lib/task-result.cjs" "$TASK" > "$REP" || { say "no report for $TASK; nothing posted"; return 1; }
   # the report must be about the head this spec was written for: verdict-post checks it against the
   # PR's head NOW, which a push between spec and settlement can make a different build
@@ -179,7 +192,7 @@ report_status() {
   case "$ROLE" in coder|fixer) ;; *) echo succeeded; return;; esac
   # kept for diagnosis, like a reviewer's report
   REP="$S/report-$TASK.txt"
-  orca orchestration task-list --json </dev/null 2>/dev/null | node "$HERE_NATIVE/lib/task-result.cjs" "$TASK" > "$REP" 2>/dev/null
+  orca orchestration task-list --run "$(cat "$S/dispatch.run" 2>/dev/null)" --json </dev/null 2>/dev/null | node "$HERE_NATIVE/lib/task-result.cjs" "$TASK" > "$REP" 2>/dev/null
   ST="$(sed -n 's/^[[:space:]]*status:[[:space:]]*\([a-z]*\).*/\1/p' "$REP" | head -1)"
   case "$ST" in
     blocked|unreproducible|failed) say "$TASK reported status: $ST"; echo "$ST"; return;;
@@ -214,6 +227,8 @@ record() {
   { cat "$FILE"; printf '\n--- result\n'; cat "$RUNNING"; printf 'OUTCOME=%s\nFINISHED=%s\n' "$OUTC" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"; } > "$DST"
   rm -f "$FILE"
   say "recorded $(basename "$DST")"
+  event "finished spec=$(basename "$FILE" | sed 's/^active-//') outcome=$OUTC model=$(kv MODEL "$RUNNING")"
+  case "$OUTC" in no-pr|no-push|unknown|verdict-refused) event "$OUTC spec=$(basename "$FILE" | sed 's/^active-//') dispatch=$(kv DISPATCH "$RUNNING")";; esac
 }
 
 # ---- start the next queued spec ---------------------------------------------------------------
@@ -292,9 +307,15 @@ start_one() {
   if [ "$RC" -ne 0 ] || [ -z "$DISP" ]; then
     if [ "$RC" -eq 3 ]; then
       # refused before anything was created (capacity, base, port): back to the queue unchanged
-      say "start refused (rc 3); $(basename "$FILE") stays queued"; mv "$ACTIVE" "$FILE"; return 1
+      say "start refused (rc 3); $(basename "$FILE") stays queued"; mv "$ACTIVE" "$FILE"
+      # refused for memory/base/port: one event per 30 min at most, so a host that cannot start
+      # anything is seen without flooding the manager
+      local RL="$S/refused.last"; [ $(( $(date +%s) - $(cat "$RL" 2>/dev/null || echo 0) )) -ge 1800 ] \
+        && { date +%s > "$RL"; event "start-refused spec=$(basename "$FILE") live=$(live_count)"; }
+      return 1
     else
       say "start failed (rc $RC) for $(basename "$FILE")"
+      event "start-failed spec=$(basename "$FILE") rc=$RC"
       { cat "$ACTIVE"; printf '\n--- result\nSTART_RC=%s\n%s\n' "$RC" "$OUT"; } > "$DONE/$(basename "$FILE").start-failed"
       rm -f "$ACTIVE"
     fi
@@ -307,6 +328,7 @@ start_one() {
   printf '%s\n' "$OUT" | sed -n 's/^\(WORKTREE\|PATH\|SERVING\|ASSET\|MODEL\)=/&/p' >> "$RUNNING"
   grep -q '^MODEL=' "$RUNNING" || echo "MODEL=$MODEL" >> "$RUNNING"
   say "dispatched $DISP for $(basename "$FILE")"
+  event "started dispatch=$DISP spec=$(basename "$FILE") model=$MODEL"
 }
 
 close_pass() {
@@ -378,7 +400,7 @@ status() {
 case "${1:-}" in
   --status) status ;;
   --once) lock; pass ;;
-  --bind) lock; bind_run; say "dispatcher up (pid $$, Run $(cat "$S/dispatch.run"), $(acting && echo acting || echo 'dry run'))"
+  --bind) lock; bind_run; say "dispatcher up (pid $$, Run $(cat "$S/dispatch.run"), $(acting && echo acting || echo 'dry run'))"; event "up pid=$$"
       while :; do pass; sleep "$INTERVAL"; done ;;
   "") lock; say "dispatcher up (pid $$, $(acting && echo acting || echo 'dry run'))"
       while :; do pass; sleep "$INTERVAL"; done ;;

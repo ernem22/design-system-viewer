@@ -1,5 +1,7 @@
 # Dispatcher (worker.sh + dispatch.sh)
 
+Roles and events: see `roles.md` (the dispatcher is a hand; Hermes manages).
+
 The pipeline's control plane. No model decides anything in it. Hermes writes spec text into a
 queue. The dispatcher starts every spec that nothing real blocks, polls the live workers, closes
 each one when it settles, posts its verdict and merges what the gate passed.

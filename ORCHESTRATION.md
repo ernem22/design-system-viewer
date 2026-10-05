@@ -6,6 +6,11 @@ widens it. This document is the operational contract — Hermes reads it before
 touching orchestration, and it is corrected in place, not duplicated, when
 reality diverges from it.
 
+> **2026-10-05: roles changed.** Hermes is now the manager, not the driver: the dispatcher
+> (`tools/orchestration/dispatch.sh`) starts, polls, closes and merges on its own, and Hermes is woken
+> by its events. Read `docs/orchestration/reference/roles.md` first; where it and the coordinator
+> sections below disagree (Hermes Responsibilities, The Wake-Up Loop, Dispatch Sequence), roles.md wins.
+
 ## Objective
 
 Hermes is a **control plane**, not a worker. It spawns, tracks, and retires

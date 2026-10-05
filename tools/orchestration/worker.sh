@@ -26,6 +26,7 @@
 #
 # Output is KEY=value lines on stdout; the narrative goes to stderr and to $S/worker.log.
 # Exit: 0 ok · 2 usage/context · 3 refused (nothing changed) · 4 Orca said no · 5 not ours · 6 unconfirmed
+#       · 7 kept (close: a coder/fixer tree holds work that is not on the remote; released, not removed)
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -302,6 +303,18 @@ cmd_close() {
   fi
   bash "$HERE/serve.sh" --stop-worktree "$P" 2>&1 | sed 's/^/worker: /' >&2
   o terminal close --worktree "id:$WTID" --all --json >/dev/null
+  # A Coder's or Fixer's tree is never removed while it holds work that is not on the remote:
+  # measured 2026-10-05, eight Coders' finished changes were deleted with their trees because the
+  # agent never committed or pushed them. Such a tree is kept (rc 7) and reported, not removed.
+  if grep -qE '^role=(coder|fixer)-' "$P/$MARK" 2>/dev/null; then
+    local DIRTY AHEAD
+    DIRTY="$(git -C "$P" status --porcelain --untracked-files=normal 2>/dev/null | grep -c .)"
+    AHEAD="$(git -C "$P" rev-list --count HEAD --not --remotes=origin 2>/dev/null || echo 0)"
+    if [ "${DIRTY:-0}" -gt 0 ] || [ "${AHEAD:-0}" -gt 0 ]; then
+      say "close: $DISP released; $P KEPT - $DIRTY uncommitted path(s), $AHEAD unpushed commit(s)"
+      echo "KEPT=$P"; echo "CLOSED=$DISP"; exit 7
+    fi
+  fi
   o worktree rm --worktree "id:$WTID" --force --json >/dev/null
   if git worktree list --porcelain 2>/dev/null | grep -qiF "worktree $P"; then
     say "close: orca left $P registered in git; removing that one tree"
