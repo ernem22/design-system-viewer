@@ -720,13 +720,14 @@ many workers run at once is **measured memory, not a fixed number of workers**:
 
   * read `node D:/code/orca-supervisor/src/capacity.js` before **every** dispatch and
     log `available_mb` together with the decision;
-  * **up to 2 workers while `available_mb >= 600`; stop dispatching below 400.** This
-    is provisional and measured: three opencode TUIs ran to completion at a minimum
-    of 257 MB available, and `capacity.js`'s own notes record free RAM moving
-    977 -> 1,850 MB while load was being added;
-  * when the threshold is not met, **wait for it** with
-    `tools/orchestration/wait-capacity.sh` instead of pausing the pipeline — a timeout
-    writes an inbox note and the coordinator carries on with other work.
+  * **dispatch only while `available_mb >= 600`, at most 2 workers; below 600 —
+    including 400–599 — do not dispatch, wait.** This is provisional and measured: three
+    opencode TUIs ran to completion at a minimum of 257 MB available, and `capacity.js`'s
+    own notes record free RAM moving 977 -> 1,850 MB while load was being added;
+  * the wait is `tools/orchestration/wait-capacity.sh --min 600` instead of pausing the
+    pipeline — `worker.sh start` runs it before creating anything (`WATCH_MIN_MB`,
+    default 600), and a timeout writes an inbox note and the caller carries on with other
+    work.
 
 The budget still assumes roughly one `check
 --wait` per wave. Review and verification are per PR now, so the seats to fan
@@ -804,10 +805,10 @@ issue in one turn's context.
     that PR **first**, and that PR's Tester **only after the Reviewer returns PASS**.
     (Corrected 2026-09-28; the "ONE wave" rule that stood here is superseded.) The
     measurement behind the correction: in one session 4 of 7 Reviewer verdicts came
-    back `fail`, and every fail rewrote the head, so a Tester dispatched alongside its
-    Reviewer would have measured a build that was about to change — one whole Tester
-    phase wasted per fail. The two stages share a gate, not a head, and the head is
-    precisely what the Reviewer can move
+    back `fail`, and every fail sent a Fixer that rewrote the head, so a Tester dispatched
+    alongside its Reviewer would have measured a build that was about to change — one
+    whole Tester phase wasted per fail. The two stages share a gate, not a head; the
+    Reviewer is read-only, but its FAIL is what moves the head, through the Fixer
   → both PASS (Reviewer `scope_ok: yes`, Tester with real `observed:` and
     `before:` lines) → Hermes merges and closes the issue, unless the issue
     carries `human-merge`, in which case it swaps the label to
