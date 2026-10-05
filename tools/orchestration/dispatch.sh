@@ -235,9 +235,7 @@ post_verdict() {
 # the dispatch succeeded, the work did not. Recorded under that status, so needs.sh can tell a
 # blocked issue (retried later) from a delivered one (measured 2026-10-05: coder-116 blocked on files
 # held by #170 would otherwise have been recorded as succeeded and never retried).
-report_stop_asked() { [ -f "$S/dispatch.stop" ] || return 0; rm -f "$S/dispatch.stop"; say "stop requested; exiting between passes"; exit 0; }
-
-status() {
+report_status() {
   local FILE="$1" TASK="$2" ROLE ST REP PRN SHA
   ROLE="$(hdr role "$FILE")"
   case "$ROLE" in coder|fixer) ;; *) echo succeeded; return;; esac
