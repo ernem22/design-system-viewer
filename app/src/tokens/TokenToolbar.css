@@ -108,6 +108,8 @@
   font-weight: var(--font-weight-medium);
   cursor: pointer;
   white-space: nowrap;
+  /* No double-tap zoom delay on touch: the button fires on the first tap. */
+  touch-action: manipulation;
 }
 
 .tok-btn:hover {
@@ -167,6 +169,8 @@
   inset: 0;
   background: var(--color-hover-overlay);
   z-index: var(--z-overlay);
+  /* Wheel/touch chains must stop at the modal, not scroll the page behind. */
+  overscroll-behavior: contain;
 }
 
 .tok-dialog {
@@ -184,6 +188,8 @@
   /* long previews (missing list, warnings) must scroll, not overflow */
   max-height: 90vh;
   overflow-y: auto;
+  /* The dialog is itself the scroll container: keep its own scroll chained. */
+  overscroll-behavior: contain;
 }
 
 .tok-dialog-title {

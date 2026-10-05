@@ -80,7 +80,6 @@ export function TokenDialog({
         <Dialog.Overlay className="tok-dialog-overlay" />
         <Dialog.Content
           className="tok-dialog tok-dialog-wide"
-          aria-describedby={undefined}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
           }}
@@ -127,10 +126,11 @@ export function TokenDialog({
           {hint && <p className="tok-dialog-meta">{hint}</p>}
           <textarea
             className="tok-textarea"
+            name="tokens-css"
             value={css}
             rows={10}
             spellCheck={false}
-            placeholder="--color-accent-hover: #818cf8;"
+            placeholder="--color-accent-hover: #818cf8;…"
             aria-label="Additional CSS tokens"
             onChange={(e) => {
               setCss(e.target.value);

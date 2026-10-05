@@ -59,7 +59,9 @@ export function TokensView({
     <div className="tok-view">
       {warnings.length > 0 && (
         <details className="tok-warns">
-          <summary>⚠ {warnings.length} possible value issues</summary>
+          <summary>
+            <span aria-hidden="true">⚠</span> {warnings.length} possible value issues
+          </summary>
           {warnings.map((w) => (
             <div key={w.name}>
               <code>

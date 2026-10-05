@@ -7,6 +7,15 @@ type ContrastPair = [fg: string, bg: string, label: string];
 /** Root src/core/* is imported untyped on purpose (allowJs, checkJs off). */
 const PAIRS = CONTRAST_PAIRS as ContrastPair[];
 
+// Locale-shaped two-decimal ratio text via Intl (a bare toFixed hardcodes
+// the en-US shape inline and bypasses the internationalisation API). The
+// locale is pinned to en-US so the rendered ratio is stable on every machine
+// — the suite pins "21.00" — rather than varying with the runtime locale.
+const ratioFormat = new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 interface ContrastRow {
   fg: string;
   bg: string;
@@ -88,7 +97,7 @@ export function ContrastSection({ values }: { values: Map<string, string> }) {
       </h2>
       <div className="tok-contrast-rows">
         {rows.map((r) => {
-          const num = r.ratio == null ? "—" : r.ratio.toFixed(2);
+          const num = r.ratio == null ? "—" : ratioFormat.format(r.ratio);
           const title =
             r.ratio == null ? "could not calculate — color unresolved" : `ratio ${num}`;
           return (

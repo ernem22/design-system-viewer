@@ -2,6 +2,7 @@ import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import * as Checkbox from "@radix-ui/react-checkbox";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Toggle from "@radix-ui/react-toggle";
+import type { KeyboardEvent } from "react";
 import { Icon } from "../lib/icons.tsx";
 import type { DesignSystem } from "../systems/store.ts";
 import { TokenDialog } from "./TokenDialog.tsx";
@@ -40,14 +41,54 @@ export function TokenToolbar({
     setSchemaMode,
   } = view;
 
+  // Roving arrow-key navigation for the toolbar buttons (WAI-APG toolbar
+  // pattern): Left/Right/Home/End move focus between the toolbar's buttons.
+  // Text entry keeps its caret keys — an arrow inside the filter input must
+  // move the caret, never steal focus — so targets that consume arrows
+  // (input, textarea, select, contenteditable) are left alone. Tab still
+  // reaches every control; arrows are a shortcut between the buttons.
+  const onToolbarKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft" && e.key !== "Home" && e.key !== "End")
+      return;
+    const target = e.target as HTMLElement | null;
+    if (
+      target &&
+      (target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
+        target.isContentEditable)
+    )
+      return;
+    const bar = e.currentTarget as HTMLElement;
+    const items = [...bar.querySelectorAll<HTMLElement>("button:not([disabled])")];
+    const at = items.indexOf(target as HTMLElement);
+    if (at === -1) return;
+    e.preventDefault();
+    const next =
+      e.key === "ArrowRight"
+        ? items[(at + 1) % items.length]
+        : e.key === "ArrowLeft"
+          ? items[(at - 1 + items.length) % items.length]
+          : e.key === "Home"
+            ? items[0]
+            : items[items.length - 1];
+    next?.focus();
+  };
+
   return (
-    <div className="tok-toolbar" role="toolbar" aria-label="Token actions">
+    <div
+      className="tok-toolbar"
+      role="toolbar"
+      aria-label="Token actions"
+      onKeyDown={onToolbarKeyDown}
+    >
       <div className="tok-search">
         <span className="tok-filter-wrap">
           <Icon name="search" size={14} className="tok-search-ico" />
           <input
             type="search"
             className="tok-filter"
+            name="filter"
             placeholder="Filter tokens…"
             value={filter}
             autoComplete="off"
