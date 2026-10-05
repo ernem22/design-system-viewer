@@ -86,6 +86,13 @@ async function click(el: HTMLElement | undefined): Promise<void> {
   await act(async () => el!.click());
 }
 
+/** The stepper shell (#213) holds identity and the write on step 3: the
+    source text is set on step 1, everything else happens on step 3. */
+async function goToSave(): Promise<void> {
+  await click(button("Continue"));
+  await click(button("Continue"));
+}
+
 afterEach(() => {
   act(() => root?.unmount());
   root = null;
@@ -100,10 +107,11 @@ afterEach(() => {
 describe("AddSystemDialog write modes", () => {
   it("merges into a chosen system and reports added / overridden / unchanged", async () => {
     await renderDialog();
+    await act(async () => setValue(textPane()!, "--color-bg: #111111;\n--color-accent: #ff0000;"));
+    await goToSave();
     await click(mode("Merge into"));
     const select = document.querySelector<HTMLSelectElement>('select[aria-label="System to merge into"]')!;
     await act(async () => setValue(select, "aurora"));
-    await act(async () => setValue(textPane()!, "--color-bg: #111111;\n--color-accent: #ff0000;"));
 
     expect(review()?.textContent).toContain("Added 1");
     expect(review()?.textContent).toContain("Overridden 1");
@@ -117,10 +125,11 @@ describe("AddSystemDialog write modes", () => {
 
   it("clones a chosen system, seeding the new system from its tokens", async () => {
     await renderDialog();
+    await act(async () => setValue(textPane()!, "--color-accent: #ff0000;"));
+    await goToSave();
     await click(mode("Clone from"));
     const select = document.querySelector<HTMLSelectElement>('select[aria-label="System to clone from"]')!;
     await act(async () => setValue(select, "aurora"));
-    await act(async () => setValue(textPane()!, "--color-accent: #ff0000;"));
     await act(async () => setValue(nameField()!, "Aurora copy"));
 
     await click(button("Clone system"));
@@ -134,6 +143,7 @@ describe("AddSystemDialog write modes", () => {
   it("records the import source on a plain new-system write", async () => {
     await renderDialog();
     await act(async () => setValue(textPane()!, "--color-bg: #123456;"));
+    await goToSave();
     await act(async () => setValue(nameField()!, "Probe"));
     await click(button("Save system"));
 
@@ -147,6 +157,7 @@ describe("AddSystemDialog slug-collision resolution", () => {
   async function collide(): Promise<void> {
     await renderDialog();
     await act(async () => setValue(textPane()!, "--color-bg: #111111;"));
+    await goToSave();
     await act(async () => setValue(nameField()!, "Aurora"));
     await click(button("Save system"));
   }

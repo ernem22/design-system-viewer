@@ -10,12 +10,13 @@ vi.mock("../lib/cssImport.ts", () => ({
   readCssFile: vi.fn(),
 }));
 
-// Issue #124, second composition. The dialog exists to add a system, so the
-// work owns the surface: the schema fill and the raw text are both live, and
-// the ways in are compact triggers in the top bar — no steps, no wizard. These
-// tests pin the properties that make that true: both panes on open, a source
-// that opens only its own row, a JSON export read back in, the fill pane
-// tracking the text, and a write that only happens on Save.
+// Issue #124, second composition, with the #213 stepper shell. The dialog
+// exists to add a system: step 1 holds the work (the schema fill and the raw
+// text are both live) and the ways in as compact triggers in the top bar —
+// steps 2–3 gate the write, not the work. These tests pin the properties
+// that make that true: both panes on step 1, a source that opens only its
+// own row, a JSON export read back in, the fill pane tracking the text, and
+// a write that only happens on Save (step 3).
 
 const JSON_EXPORT = JSON.stringify({
   name: "Aurora",
@@ -64,6 +65,12 @@ async function click(el: HTMLElement | undefined): Promise<void> {
   await act(async () => el!.click());
 }
 
+/** The stepper shell (#213) holds the write on step 3: reach the Save step. */
+async function goToSave(): Promise<void> {
+  await click(button("Continue"));
+  await click(button("Continue"));
+}
+
 afterEach(() => {
   act(() => root?.unmount());
   root = null;
@@ -76,19 +83,26 @@ afterEach(() => {
 });
 
 describe("AddSystemDialog composition", () => {
-  it("opens with the work on screen: both panes, no steps", async () => {
+  it("opens on step 1 with the work on screen: both panes behind Source", async () => {
     await renderDialog();
+    // The stepper shell (#213): Source → Review → Save inside `.tok-dialog`.
+    expect(document.querySelector(".app-import-steps")).not.toBeNull();
+    expect(
+      document.querySelector('.app-import-step[data-active="true"] .app-import-steplabel')?.textContent,
+    ).toBe("Source");
     expect(document.querySelector('[aria-label="Schema fill"]')).not.toBeNull();
     expect(document.querySelector('[aria-label="CSS text"]')).not.toBeNull();
-    expect(document.querySelector(".app-import-steps")).toBeNull();
     expect(textPane()).not.toBeNull();
-    expect(nameField()).not.toBeNull();
-    // The fill pane is live, not behind a step: one section per schema group.
+    // The name field and the write live on the Save step, not on open.
+    expect(nameField()).toBeNull();
+    expect(button("Save system")).toBeUndefined();
+    // The fill pane is live on step 1, not behind a gate: one section per group.
     expect(document.querySelectorAll(".app-fill-group")).toHaveLength(54);
   });
 
   it("writes nothing without a token, and says why", async () => {
     await renderDialog();
+    await goToSave();
     await click(button("Save system"));
     expect(added).toHaveLength(0);
     expect(document.querySelector(".app-import-error")?.textContent).toMatch(/no .*token/i);
@@ -98,8 +112,10 @@ describe("AddSystemDialog composition", () => {
     await renderDialog();
     await act(async () => setValue(textPane()!, JSON_EXPORT));
     expect(textPane()!.value).toBe("--color-bg: #0a0a0f;\n--color-text: #f0f0f3;");
-    expect(nameField()!.value).toBe("Aurora");
     expect(document.querySelector(".app-import-status")?.textContent).toContain("JSON export");
+    // Identity lives on the Save step: the imported name travels with the buffer.
+    await goToSave();
+    expect(nameField()!.value).toBe("Aurora");
   });
 
   it("keeps the fill pane in step with the text", async () => {
@@ -149,6 +165,7 @@ describe("AddSystemDialog composition", () => {
   it("writes on Save, with the name that is in the field", async () => {
     await renderDialog();
     await act(async () => setValue(textPane()!, "--color-bg: #fff;"));
+    await goToSave();
     await act(async () => setValue(nameField()!, "Probe"));
     await click(button("Save system"));
     expect(added).toEqual([{ name: "Probe", css: "--color-bg: #fff;" }]);

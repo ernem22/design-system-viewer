@@ -122,6 +122,80 @@
   outline-offset: var(--focus-ring-offset);
 }
 
+/* Stepper shell (#213): Source → Review → Save. The steps gate the write,
+   not the work — step 1 holds every source trigger and both panes, step 2
+   shows only the parsed token count, step 3 holds identity and the write. */
+.app-import-steps {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+  list-style: none;
+}
+
+.app-import-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.app-import-step + .app-import-step::before {
+  content: "→";
+  margin-right: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.app-import-stepnum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-5);
+  height: var(--space-5);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+}
+
+.app-import-step[data-active="true"] {
+  color: var(--color-text);
+}
+
+.app-import-step[data-active="true"] .app-import-stepnum {
+  color: var(--color-text);
+  background: var(--color-accent-subtle);
+  border-color: var(--color-accent-border);
+}
+
+.app-import-step[data-done="true"] {
+  color: var(--color-text-secondary);
+}
+
+/* Review / Save steps read the same buffer: a single scroller, no nested
+   panes, so Back never loses the parsed text. */
+.app-import-stepbody {
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4);
+}
+
+.app-import-reviewpane,
+.app-import-savepane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: var(--container-max-width-md);
+}
+
+.app-import-reviewcount {
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+}
+
 /* A source that needs input opens exactly one row and nothing else. */
 .app-import-inline {
   display: flex;

@@ -39,6 +39,18 @@ function openInLabel(): string | null {
   return document.querySelector(".app-import-openin")?.textContent?.replace(/[^A-Za-z]/g, "") ?? null;
 }
 
+/** The stepper shell (#213) holds the write on step 3: reach the Save step. */
+function continueButton(): HTMLButtonElement {
+  return [...document.querySelectorAll<HTMLButtonElement>(".app-import-dialog button")].find(
+    (b) => b.textContent?.trim() === "Continue",
+  )!;
+}
+
+async function goToSave(): Promise<void> {
+  await act(async () => continueButton().click());
+  await act(async () => continueButton().click());
+}
+
 function setValue(el: HTMLInputElement | HTMLTextAreaElement, value: string): void {
   const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
   Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(el, value);
@@ -58,23 +70,27 @@ describe("AddSystemDialog 'Open in' preference", () => {
   it("honors a legacy dsv.afterSave=system preference as the Tokens choice", async () => {
     localStorage.setItem("dsv.afterSave", "system");
     await renderDialog();
+    await goToSave();
     expect(openInLabel()).toBe("Tokens");
   });
 
   it("honors a legacy dsv.afterSave=compare preference", async () => {
     localStorage.setItem("dsv.afterSave", "compare");
     await renderDialog();
+    await goToSave();
     expect(openInLabel()).toBe("Compare");
   });
 
   it("falls back to the default (Preview) for an unknown stored value", async () => {
     localStorage.setItem("dsv.app.afterSave", "bogus");
     await renderDialog();
+    await goToSave();
     expect(openInLabel()).toBe("Preview");
   });
 
   it("defaults to Preview when nothing is stored", async () => {
     await renderDialog();
+    await goToSave();
     expect(openInLabel()).toBe("Preview");
   });
 
@@ -84,6 +100,7 @@ describe("AddSystemDialog 'Open in' preference", () => {
     await act(async () =>
       setValue(document.querySelector<HTMLTextAreaElement>('textarea[aria-label="CSS text"]')!, "--color-bg: #fff;"),
     );
+    await goToSave();
     const save = [...document.querySelectorAll<HTMLButtonElement>(".app-import-dialog button")].find(
       (b) => b.textContent?.trim() === "Save system",
     )!;
@@ -93,6 +110,7 @@ describe("AddSystemDialog 'Open in' preference", () => {
 
   it("writes the canonical key and value when another tab is picked", async () => {
     await renderDialog();
+    await goToSave();
     const trigger = document.querySelector<HTMLButtonElement>(".app-import-openin")!;
     await act(async () => {
       trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
