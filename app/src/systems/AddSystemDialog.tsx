@@ -308,6 +308,9 @@ export function AddSystemDialog({
         <Dialog.Overlay className="tok-dialog-overlay" />
         <Dialog.Content
           className="tok-dialog app-import-dialog"
+          /* Radix sets role="dialog" + aria-labelledby/-describedby but not
+             aria-modal, so AT cannot tell the page behind is inert. */
+          aria-modal="true"
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
           }}

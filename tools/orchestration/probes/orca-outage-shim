@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Probe shim: simulate an Orca outage for the first N invocations, then hand over to the real CLI.
+# The error text is byte-identical to what the runtime emits when the app is down (measured
+# 2026-09-29 in watch-settlements.log: {"code":"runtime_unavailable","message":"Could not connect to
+# the running Orca app. Restart Orca and try again."}), so the watcher's error path sees exactly what
+# it saw during the real restart.
+N="${SHIM_FAILS:-2}"
+COUNTER="${SHIM_COUNTER:-${LOCALAPPDATA}/Temp/shim-count}"
+i=$(cat "$COUNTER" 2>/dev/null || echo 0)
+i=$((i + 1))
+echo "$i" > "$COUNTER"
+if [ "$i" -le "$N" ]; then
+  printf '{"ok":false,"error":{"code":"runtime_unavailable","message":"Could not connect to the running Orca app. Restart Orca and try again."}}\n'
+  exit 0
+fi
+exec "$SHIM_REAL_ORCA" "$@"

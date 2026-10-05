@@ -2,7 +2,7 @@
 # Stateless spawn: worktree + model pin + terminal for one worker.
 # Holds no state of its own; the path is written only so reap.sh can find it.
 #
-#   spawn.sh <role-slug> [base-branch] [--plan] [--worktree-only]
+#   spawn.sh <role-slug> [base-branch] [--plan|--readonly] [--worktree-only]
 #
 # Prints: PATH=<worktree path>  ROLE=<role-slug>
 # Exit 0 only when the worktree, the opencode.json pin and the terminal exist.
@@ -15,10 +15,18 @@ set -euo pipefail
 ROLE=""
 BASE=""
 PLAN=""
+READONLY=""
 WORKTREE_ONLY=""
 for arg in "$@"; do
   case "$arg" in
     --plan) PLAN="--plan" ;;
+    # --readonly: the same deny-based read-only config as --plan, but WITHOUT OpenCode's plan mode.
+    # Plan mode is a UI mode: the agent finishes its review and then asks a human to toggle it off
+    # before it may post anything, and nothing on the coordinator side can send that toggle.
+    # Measured 2026-09-28 on reviewer-162e: "the review is complete and the verdict is ready" while
+    # it sat unable to post. The permission block below is what actually enforces read-only, so plan
+    # mode was never needed for it.
+    --readonly) READONLY="--readonly" ;;
     --worktree-only) WORKTREE_ONLY="1" ;;
     -*)
       echo "spawn.sh: unknown flag $arg (usage: spawn.sh <role> [base-branch] [--plan] [--worktree-only])" >&2
@@ -35,8 +43,17 @@ done
 # successful spawn. It cost a Tester dispatch (a Coder had named its own branch
 # `coder/88-gallery-wcag-tokens` and the guessed `ernem22/coder-88` did not exist), so
 # the base is verified before anything is created.
-git rev-parse --verify --quiet "$BASE^{commit}" >/dev/null \
-  || { echo "spawn.sh: base ref '$BASE' does not exist — git fetch, or read the PR's headRefName" >&2; exit 3; }
+if ! git rev-parse --verify --quiet "$BASE^{commit}" >/dev/null; then
+  # Only a REMOTE ref may exist for this branch: measured 2026-09-30, the local ref for an open PR's
+  # branch had been cleaned up while the PR was still open, so spawn.sh refused a base that was
+  # perfectly fetchable. Fetch the tracking ref rather than stopping.
+  if git fetch --quiet origin "$BASE:$BASE" 2>/dev/null && git rev-parse --verify --quiet "$BASE^{commit}" >/dev/null; then
+    echo "spawn.sh: no local ref for '$BASE'; fetched it from origin" >&2
+  else
+    echo "spawn.sh: base ref '$BASE' does not exist — git fetch, or read the PR's headRefName" >&2
+    exit 3
+  fi
+fi
 
 S="${LOCALAPPDATA}/orca-orchestration/design-system-viewer"
 # The Orca repo id is machine state, not a constant: re-importing the folder mints a
@@ -47,14 +64,35 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/repo-id.sh"
 CMD="opencode"
 [ "$PLAN" = "--plan" ] && CMD="opencode --agent plan"
+# --readonly deliberately leaves CMD as plain `opencode`: the agent must be able to run the allowed
+# commands (gh, git log, curl) to deliver its verdict.
 
 mkdir -p "$S/worktrees"
 TMP="${LOCALAPPDATA}/Temp/terminals_$$.json"
 
 RAW=$(orca worktree create --repo "id:$REPO_ID" --name "$ROLE" \
-  --base-branch "$BASE" --setup skip --json 2>&1)
+  --base-branch "$BASE" --setup skip --json 2>/dev/null)
 P=$(printf '%s' "$RAW" | node -e \
-  "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);console.log(j.result.worktree.path||j.result.path)})")
+  "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const i=s.indexOf('{');const j=JSON.parse(i>=0?s.slice(i):s);console.log(j.result.worktree.path||j.result.path)})")
+
+# Ownership marker: reconcile.py treats a worktree as MANAGED only when this file exists, so
+# everything the pipeline did not create - the owner's own opencode, the coordinator, houndshark,
+# the root checkout - stays invisible to it. Written here because this is the one moment the
+# worktree path and the role are both known. `dispatch` is filled in once the handle is.
+printf 'role=%s\nhandle=\nstate=starting\ndispatch=\ncreated_at=%s\n' "$ROLE" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$P/.dsv-worker" 2>/dev/null || true
+
+# The marker and Orca's per-worktree config are untracked by design. Without this the
+# worktree is 'dirty', `git worktree remove` refuses, and a settle that printed DONE
+# leaves the directory on disk - which is exactly what happened to two probe worktrees.
+# info/exclude is per-worktree and untracked, so it never reaches the repo.
+GD="$(git -C "$P" rev-parse --git-common-dir 2>/dev/null || true)"
+case "$GD" in /*|[A-Za-z]:*) ;; *) [ -n "$GD" ] && GD="$P/$GD" ;; esac
+if [ -n "$GD" ]; then
+  mkdir -p "$GD/info" 2>/dev/null || true
+  for PAT in .dsv-worker opencode.json; do
+    grep -qxF "$PAT" "$GD/info/exclude" 2>/dev/null || printf '%s\n' "$PAT" >> "$GD/info/exclude"
+  done
+fi
 
 # Model pin AND permission model. The permission block is what stops a worker from
 # stalling on an approval prompt:
@@ -96,7 +134,7 @@ P=$(printf '%s' "$RAW" | node -e \
 #     lease-pair allows sit before the positional force and `+refspec` denies. A lease pair
 #     that also carries a plain `--force`, or a `+refspec`, still hits a later deny — the
 #     allow only decides when nothing below it matches.
-if [ "$PLAN" = "--plan" ]; then
+if [ "$PLAN" = "--plan" ] || [ "$READONLY" = "--readonly" ]; then
   # A Reviewer is read-only by contract; enforce it here instead of trusting prose.
   printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "opencode-go/deepseek-v4.1-flash",\n  "permission": {\n    "external_directory": "deny",\n    "edit": "deny",\n    "write": "deny",\n    "*": "allow",\n    "bash": { "*": "deny", "orca *": "allow", "gh *": "allow", "curl *": "allow", "git log *": "allow", "git show *": "allow", "git diff *": "allow", "ls *": "allow", "cat *": "allow", "grep *": "allow", "rg *": "allow", "head *": "allow", "tail *": "allow", "wc *": "allow" }\n  }\n}\n' > "$P/opencode.json"
 else
@@ -112,7 +150,23 @@ if [ -n "$WORKTREE_ONLY" ]; then
   exit 0
 fi
 
-orca terminal create --worktree "id:$REPO_ID::$P" --title "$ROLE" --command "$CMD" --json >/dev/null
+# The JSON body is the only place a failure says WHY. `>/dev/null` threw it away, so every
+# failure - wrong repo id, a title or worktree Orca would not accept - surfaced only as the
+# 75-second "the agent terminal never registered" timeout below, with no cause on the log.
+# Capture it and print it verbatim when the call fails, and also when it exits 0 carrying an
+# error object: `orca worktree create` above returns exactly that shape (it is why an empty
+# PATH used to read as a successful spawn), so exit status alone is not the failure signal.
+TERM_JSON="$(orca terminal create --worktree "id:$REPO_ID::$P" --title "$ROLE" --command "$CMD" --json 2>&1)" || {
+  echo "spawn.sh: orca terminal create failed for $ROLE ($P) - raw output:" >&2
+  printf '%s\n' "$TERM_JSON" >&2
+  exit 4
+}
+case "$TERM_JSON" in
+  *'"error"'*|*'"ok":false'*)
+    echo "spawn.sh: orca terminal create reported an error for $ROLE ($P) - raw output:" >&2
+    printf '%s\n' "$TERM_JSON" >&2
+    exit 4 ;;
+esac
 
 sleep 6
 
@@ -130,6 +184,9 @@ for _ in $(seq 1 25); do
   sleep 3
 done
 [ -z "$H" ] && { echo "NO_TERMINAL_HANDLE for $ROLE (path $P) — the agent terminal never registered; inspect: orca terminal list" >&2; exit 2; }
+
+# dispatch without guessing from names.
+printf 'role=%s\nhandle=%s\nstate=starting\ndispatch=\ncreated_at=%s\n' "$ROLE" "${H:-}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$P/.dsv-worker" 2>/dev/null || true
 
 echo "PATH=$P"
 echo "HANDLE=$H"

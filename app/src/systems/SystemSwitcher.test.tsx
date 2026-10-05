@@ -136,6 +136,19 @@ describe("SystemSwitcher coverage memo", () => {
     expect(host!.querySelector(".app-topbar-cov")?.textContent).toBe("10%");
   });
 
+  it("exposes the full active name through title and aria-label", async () => {
+    // Issue #90: `.app-sysbtn-name` ellipsises, so a long name had no
+    // affordance for the clipped text, and the generic trigger label hid it
+    // from AT too.
+    const systems = [system("aurora", 22)];
+    await render(systems, { ...systems[0], name: "A Very Long Enterprise System Name" });
+    const trigger = host!.querySelector<HTMLButtonElement>(".app-sysbtn")!;
+    expect(trigger.getAttribute("title")).toBe("A Very Long Enterprise System Name");
+    expect(trigger.getAttribute("aria-label")).toBe(
+      "Active design system: A Very Long Enterprise System Name",
+    );
+  });
+
   it("tracks a changed active even while the systems reference is stable", async () => {
     const systems = [system("aurora", 22), system("chatgpt", 44)];
     await render(systems, systems[1]);

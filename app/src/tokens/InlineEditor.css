@@ -1,15 +1,12 @@
 /* Inline token editor (Radix Popover anchored to the row — no custom
    fixed-position floating input). .tok-update sizing adapts to its container:
-   right-aligned in demo rows, full-width in swatches, compact in tables. */
+   in its own grid cell in token rows, full-width in swatches, compact in
+   tables. */
 
 .tok-update {
   height: 26px;
   font-size: var(--font-size-xs);
   flex: none;
-}
-
-.tok-row-demo .tok-update {
-  margin-left: auto;
 }
 
 .tok-swatch .tok-update {

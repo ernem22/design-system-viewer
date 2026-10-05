@@ -243,14 +243,17 @@ dispatch and worktree state and nothing may keep a second copy of it. What may b
 scripted is the *stateless sequencing* of those calls, so a model turn is not
 spent on it:
 
-    tools/orchestration/spawn.sh  <role> [base-branch] [--plan]  → PATH, HANDLE
-    tools/orchestration/reap.sh   <role> [dispatch-id]           → release, close, rm
+    tools/orchestration/spawn.sh  <role> [base-branch] [--readonly]  → PATH, HANDLE
+    tools/orchestration/settle.sh <dispatch-id> [--dry-run] [--kill-ghosts] → release, close, rm
     tools/orchestration/packet.sh <pr> [run-id] [task-id ...]    → the merge packet
     tools/orchestration/watch.sh  [run-id] [max-seconds]         → exit on settlement
     tools/orchestration/attention.sh [run-id]                    → who waits on a human, and on what
 
-`spawn.sh` reads nothing and stores nothing; `reap.sh` asks Orca for the worktree
-rather than caching the path. `packet.sh` prints the packet shape below, with each
+`spawn.sh` reads nothing and stores nothing; `settle.sh` asks Orca for the worktree
+rather than caching the path, and is the only reaper - `reap.sh` was deleted once
+`settle.sh` had replaced every caller (it parsed a text table, and on failure it printed a
+silent `false` while leaving the worktree in place, twice measured).
+`packet.sh` prints the packet shape below, with each
 role's verdict *chain* (`fail -> pass`), so a superseded fail cannot hide and an
 unsuperseded one cannot pass silently. A gate whose verdict cannot be tied to the
 PR's head prints `NOT verified on this head` — that is a re-run, not a merge.
@@ -817,21 +820,23 @@ issue in one turn's context.
     re-reviewed and re-tested, never re-tested on the Fixer's word
 ```
 
-**`Closes #<n>` does not close anything in this pipeline.** GitHub auto-closes
-a linked issue only when the PR merges into the repository's **default
-branch**. This repo's default is `main`, and every pipeline PR merges into
-`refactor/full-react-migration`, so the link never fires. Verified: PRs #44,
-#45 and #46 each carry `Closes #15` / `Closes #21` / `Closes #23`, all three
-merged, and all three issues are still open and still labelled `needs-test`.
+**`Closes #<n>` now closes the issue on merge.** This changed, and the older text here said
+the opposite — kept visible because the stale version is why the behaviour went unnoticed.
+
+GitHub auto-closes a linked issue only when the PR merges into the repository's **default
+branch**. This repo's default is now `refactor/full-react-migration` (it was `main` when the
+old paragraph was written), and every pipeline PR merges into that same branch, so the link
+fires. Measured: #151 and #90 both auto-closed on merge.
 
 Consequences Hermes must honour:
 
-- Closing the issue after a merge is **Hermes's explicit step**, not a
-  side-effect. Keep `Closes #<n>` in the PR body for traceability, but treat
-  `gh issue close <n>` as part of the merge action.
-- The open-issue backlog is therefore only as accurate as that step. A
-  permanently-inflated backlog makes the queue-empty stop condition
-  unreachable, because completed work still looks unclaimed.
+- Put `Closes #<n>` in the PR body and let the merge close it. Do **not** also run
+`gh issue close <n>` by hand — it is now redundant.
+- If an issue is still open after a merge, check the PR body first: a body reconstructed
+through `gh pr view --json body` can lose the trailer.
+- The open-issue backlog is therefore only as accurate as that trailer. A
+permanently-inflated backlog makes the queue-empty stop condition
+unreachable, because completed work still looks unclaimed.
 
 Labels in use: `human-merge` (**set by the user on the issue**; the only thing
 that holds a PR back), `in-progress` (a Coder holds it), `needs-review` (PR
@@ -1065,7 +1070,7 @@ Reviewer:
 
 ```
 status: pass | fail
-reason: <short reason, only if fail>
+reason: <REQUIRED if fail: what is wrong, with file:line>
 fix_required: <short actionable instruction, only if fail>
 ```
 
@@ -1076,12 +1081,21 @@ status: pass | fail
 observed: <what actually happened, one line, as it was observed>
 before: <the same assertion against the base commit, or: not-run (<reason>)>
 evidence: <the URL / DOM state / console result the observation came from>
+reason: <REQUIRED if fail: what is wrong, with file:line>
 fix_required: <short actionable instruction, only if fail>
 ```
 
 A Tester `pass` with no `observed:` and no `before:` line is not a pass — it is
 an unverifiable claim, the same class as a missing `worker_done`, and it goes
 back to the Tester rather than forward to a merge.
+
+**A `fail` with no `reason:` is not a fail — it is unparseable.** It applies to
+both roles, and it is not decoration: a fail that names nothing cannot be acted
+on, because the Fixer has nothing to fix, so the cycle is spent on a verdict that
+says only "no". Measured twice in one week — PR #135's reviewer fail and PR
+#163's tester fail both carried `status: fail` with no reason, and both cost a
+whole dispatch before anyone could act. The gate rejects such a block the same
+way it rejects a broken fence: it does not count as a verdict at all.
 
 Failure:
 
@@ -1684,6 +1698,90 @@ the rules do not have to carry their narrative.
 | A worker abandoned with `worker-abandon` kept heartbeating; Orca rejected it `dispatch_capability_invalid` | The process is still alive after an abandon — close its terminal and remove its worktree explicitly |
 | One `npm ci` took 80s alone and 4.5 minutes with three siblings on the same box | Concurrency is not free: installs and builds contend, so a wider wave has a wall-clock ceiling and disk pressure makes it worse |
 
+## The closing layer: watcher, sweep, stall detection, capacity gate
+
+**A fresh session reading only this file would not know any of this exists.** It is
+load-bearing and it was undocumented. Every claim below is behaviour the scripts implement;
+the script headers carry the measured history.
+
+### `watch-settlements.sh` — the fast path
+
+One waiter per Run (see the waiter rule above). `tools/orchestration/watch-settlements.sh`
+blocks on `orca orchestration check --wait` and wakes the coordinator the moment a settlement
+lands instead of polling. Three things matter operationally:
+
+- **It survives restarts.** The lock is a *directory* (`${LOCALAPPDATA}/Temp/dsv-watch.lock/`
+  holding `pid`, `child`, `child_started`, `child_cmd`) and it is held with `$BASHPID`, not
+  `$$` — `$$` inside a subshell returns the *parent's* pid, so the old lock recorded a pid
+  that was still alive, every later start judged the lock stale, and six watchers ran at once.
+- **It falls back to polling when the slot is busy.** `orca.exe` refuses a second waiter while
+  one is active; the watcher used to exit on that refusal, so the coordinator simply stopped
+  being woken. It now logs `falling back to polling every 30s (no wait) until the slot frees`.
+- **A `_keepalive` payload is not an error.** `check --wait` emits `{"_keepalive":true,…}`
+  while idle; treating it as a parse failure killed the watcher after five tries.
+
+### `supervise.sh` — stall detection, recovery, and the independent sweep
+
+`tools/orchestration/supervise.sh --act --interval 120` does two jobs.
+
+**1. The sweep (the independent closing guarantee).** Every pass it settles dispatches that
+are finished but not closed. This is deliberately not the watcher's job: the watcher is a
+fast-path optimisation, the sweep is the guarantee, so nothing stays open longer than one
+sweep interval even when a wake is missed. Measured: the sweep caught wakes the watcher missed.
+
+**2. Stall detection and the `--act` recovery chain.** `stall-check.sh` decides whether a
+worker is alive, and the decision is deliberately conservative:
+
+- **Liveness is ground truth, not `worker.state`.** A dispatch reading `state=failed` while its
+  TUI is alive is a normal, measured state (coder-125b, tester-135) — `worker.state` alone is
+  not evidence. The check asks whether the dispatch's terminal still exists; only a missing
+  terminal means dead.
+- **A frozen counter is not proof of a stall.** A counter frozen for 40+ minutes was measured on
+  workers that were genuinely alive and working. The real signature is a frozen counter **plus**
+  a real tool line (`⠋/⠹ <command>` from `worker-read --dispatch <id> --source auto --json`)
+  **plus** `worker-show` liveness.
+- **An unreadable worker is not a frozen one.** If both readings come back empty the verdict is
+  `UNKNOWN` and nothing is touched. Known consequence: a genuinely dead TUI also reads
+  `UNKNOWN`, so recovery does not currently fire for a real TUI death (open gap).
+
+Before touching anything, `recover()` asks **who stopped it** (`stablyai/orca#23713`:
+`worker-list`'s scope contradicts its own help, and a stopped attempt is not necessarily a
+retryable one). It refuses to retry a worker a human stopped. Then, in order: retry cap →
+recovery budget → role validity → **only then** cleanup → spawn.
+
+**Cleanup runs after every guard, not before.** A rejected recovery must leave the old worker
+completely untouched: closing its terminal and removing its worktree before the guards ran
+destroyed the evidence of the very dispatch recovery had just declined to retry. Fixed and
+probed (#186) — a cap-rejected recovery now leaves terminal and worktree intact. `settle.sh`
+also runs before the blunt `orca terminal close` + `rm -rf` fallback, because `settle.sh`'s own
+worktree resolution needs the terminal still registered.
+
+### `wait-capacity.sh` — the real dispatch gate
+
+`start.sh` calls `tools/orchestration/wait-capacity.sh --min <mb> --timeout <s>` **before**
+every `worker-start`. It is the gate, not an advisory: it reads
+`D:/code/orca-supervisor/src/capacity.js` (read-only) and blocks until the machine can afford
+the worker. Measured on this host: the gate held a dispatch 14 times in one day, waiting up to
+772 MB. On timeout the dispatch does not proceed — it is reported.
+
+### The current safety state of `--act`
+
+`--act` is **off**. It stays off until all five of the following are proven together in one
+combined probe pass, not piecemeal:
+
+| # | What | State |
+|---|------|-------|
+| 1 | Liveness ground truth (terminal existence over `worker.state`) | merged (#180) |
+| 2 | Seen-set + age filter on the recovery scan | merged (#180) |
+| 3 | RUN/POLL fixes (derive the run; return to `--wait` after polling) | merged (#180) |
+| 4 | Leak + `2>&1` + force-remove fixes | merged (#182, #184) |
+| 5 | A rejected recovery must not touch the old worker | merged (#186) |
+
+Proven so far: a guard-rejected recovery leaves the old worker untouched (measured, #186).
+Still outstanding: two sequential recoveries of the same logical worker with only one
+worktree+TUI alive at any time, and `settle.sh`'s real path running rather than falling back to
+`rm -rf`. The live run stays on the normal manual path until that pass succeeds.
+
 ## Known Gaps
 
 Real, unfixed, and not to be papered over.
@@ -1704,14 +1802,17 @@ Real, unfixed, and not to be papered over.
   and silently never collected" trap is gone. What remains is volume: 5 files /
   39 tests against 99 non-test source files, one component test. Growing that is
   Coder work in the normal issue flow, not a coordinator-side edit.
-- **Attribution and cleanup are prose-enforced.** The role tag, the
-  `orca-<role>` author and the release/rm/branch-delete sequence are all
-  mechanically checkable and all currently depend on a model reading this file.
-  A `commit-msg` hook (versioned under `.githooks/`, enabled once with
-  `git config core.hooksPath .githooks`) would make the first two mechanical.
-  Not installed yet: adding a hook that rejects commits mid-run would surface
-  to a worker as an unexplained commit failure, so it needs a quiet moment and
-  a Task spec that mentions it.
+- **Attribution is half mechanical now.** The `Co-authored-by: orca-<role>` trailer on the
+  squash commit is enforced by `tools/orchestration/merge-body.sh`, which refuses to build a
+  merge body without it; it has been used in a real merge (#162, the first trailer-bearing
+  merge after a run of 31 without one). What is still prose-enforced is the **role tag in the
+  subject** (`[coder]`/`[reviewer]`/…): `merge-body.sh` writes the trailer, not the tag, so a
+  worker that omits the tag still lands. A `commit-msg` hook (versioned under `.githooks/`,
+  enabled once with `git config core.hooksPath .githooks`) would make the tag mechanical.
+  Not installed yet: adding a hook that rejects commits mid-run would surface to a worker as an
+  unexplained commit failure, so it needs a quiet moment and a Task spec that mentions it.
+  Cleanup (release/rm/branch-delete) is no longer prose either — it is `settle.sh`, scripted
+  and idempotent.
 - ~~Branch protection is not enabled.~~ **Resolved.**
   `refactor/full-react-migration` is protected with required context `app`,
   `strict: false`, and `enforce_admins: true` — verified live. Because the

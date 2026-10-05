@@ -54,7 +54,14 @@ export function TokenToolbar({
             aria-label="Filter tokens"
             onChange={(e) => setFilter(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Escape") setFilter("");
+              if (e.key === "Escape") {
+                // Clearing the filter is this field's own Escape; consume it so
+                // it never bubbles to a layout-level keydown (the docked
+                // Preview inspector, force-mounted on the other tab) and closes
+                // a panel the user cannot even see.
+                e.preventDefault();
+                setFilter("");
+              }
             }}
           />
           {filter && (
@@ -118,7 +125,9 @@ export function TokenToolbar({
           </AlertDialog.Trigger>
           <AlertDialog.Portal>
             <AlertDialog.Overlay className="tok-dialog-overlay" />
-            <AlertDialog.Content className="tok-dialog">
+            {/* Radix supplies role="alertdialog" + labelling atomically;
+                aria-modal marks the rest of the page inert to AT. */}
+            <AlertDialog.Content className="tok-dialog" aria-modal="true">
               <AlertDialog.Title className="tok-dialog-title">Delete “{system.name}”?</AlertDialog.Title>
               <AlertDialog.Description className="tok-dialog-desc">
                 This cannot be undone.
