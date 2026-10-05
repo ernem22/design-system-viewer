@@ -38,6 +38,7 @@
 .dsv-drawer-overlay {
   position: fixed; inset: 0; background: var(--color-scrim); z-index: var(--z-modal);
   animation: dsv-fade var(--motion-enter);
+  overscroll-behavior: contain;
 }
 .dsv-drawer {
   position: fixed; top: 0; right: 0; bottom: 0; z-index: var(--z-modal);
@@ -45,8 +46,18 @@
   border-left: var(--border-width-thin) solid var(--color-border-subtle);
   box-shadow: var(--shadow-xl); display: flex; flex-direction: column;
   animation: dsv-drawer-in var(--motion-modal);
+  overscroll-behavior: contain;
 }
 @keyframes dsv-drawer-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+/* Entrance motion drops out for reduced-motion users — the drawer and its
+   scrim appear without sliding or fading. */
+@media (prefers-reduced-motion: reduce) {
+  .dsv-drawer-overlay,
+  .dsv-drawer {
+    animation: none;
+  }
+}
 
 /* ── shared panel head/body (docked props panel + mobile dialog) ── */
 .dsv-drawer-head {
@@ -65,7 +76,7 @@
 /* reset button rendered inside the padded body (empty state) rather than
    between head and body — full-bleed margins don't apply there. */
 .dsv-drawer-reset--inline { width: 100%; margin: var(--space-3) 0 0; }
-.dsv-drawer-body { flex: 1; overflow-y: auto; padding: var(--space-2) var(--space-4) var(--space-4); }
+.dsv-drawer-body { flex: 1; overflow-y: auto; padding: var(--space-2) var(--space-4) var(--space-4); overscroll-behavior: contain; }
 .dsv-drawer-group { margin-top: var(--space-4); }
 .dsv-drawer-group-label {
   font-size: 10.5px; font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: var(--letter-spacing-wide);
@@ -88,6 +99,11 @@
   background: none; border: none; color: inherit; opacity: 0.7; cursor: pointer; padding: 1px;
 }
 .dsv-token-row-undo:hover { opacity: 1; color: var(--color-danger-text); }
+.dsv-token-row-undo:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  opacity: 1;
+}
 .dsv-token-row-edited {
   display: inline-flex; align-items: center; gap: var(--space-1);
   background: var(--color-warning-subtle); color: var(--color-warning-text);
@@ -120,8 +136,14 @@
   flex: 1; min-width: 0; border: none; background: none; font: inherit; color: var(--color-text);
   height: var(--input-height-sm); outline: none;
 }
+/* The input itself carries outline: none, so the visible focus ring lives on
+   the wrapping search box while focus is inside it. */
+.dsv-token-picker-search:focus-within {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
 .dsv-token-picker-search input::placeholder { color: var(--color-text-disabled); }
-.dsv-token-picker-list { display: flex; flex-direction: column; gap: 1px; max-height: 13rem; overflow-y: auto; }
+.dsv-token-picker-list { display: flex; flex-direction: column; gap: 1px; max-height: 13rem; overflow-y: auto; overscroll-behavior: contain; }
 .dsv-token-picker-item {
   appearance: none; display: flex; align-items: center; gap: var(--space-2);
   background: none; border: none; border-radius: var(--radius-sm); cursor: pointer;

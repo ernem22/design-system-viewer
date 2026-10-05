@@ -4,7 +4,7 @@
 // The drawer/dialog shell itself lives in preview/PreviewProps.tsx (it needs
 // App-owned patchToken plumbing); everything content-level lives here next
 // to the <Demo> header that hosts the trigger.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { tokensForDemo } from "../lib/tokenUsage.ts";
@@ -62,6 +62,18 @@ function SwapPicker({
 }) {
   const [q, setQ] = useState("");
   const bareKind = kindOf(name);
+  const searchRef = useRef<HTMLInputElement>(null);
+  // Focusing the search field on open pops the on-screen keyboard, so only
+  // steal focus on devices with a fine pointer — touch users tap in instead.
+  useEffect(() => {
+    if (
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(hover: hover) and (pointer: fine)").matches
+    ) {
+      searchRef.current?.focus();
+    }
+  }, []);
   const candidates = useMemo(() => {
     const query = q.trim().toLowerCase();
     return ALL_TOKENS.filter((t) => t.name !== name && kindOf(t.name) === bareKind).filter(
@@ -75,7 +87,7 @@ function SwapPicker({
       <div className="dsv-token-picker-search">
         <Icon name="search" size={14} />
         <input
-          autoFocus
+          ref={searchRef}
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -83,7 +95,7 @@ function SwapPicker({
           aria-label="Search tokens"
         />
       </div>
-      <div className="dsv-token-picker-list" role="listbox">
+      <div className="dsv-token-picker-list" role="group" aria-label="Matching tokens">
         {shown.length === 0 && <div className="dsv-token-picker-empty dsv-muted">No matches</div>}
         {shown.map((t) => (
           <button key={t.name} type="button" className="dsv-token-picker-item" onClick={() => onPick(t.name)}>
@@ -194,6 +206,7 @@ function TokenRow({
               type="button"
               className="dsv-token-row-undo"
               title={`Stop using ${swappedTo} here`}
+              aria-label={`Stop using ${swappedTo} here`}
               onClick={() => clearSwap(scopeId, name)}
             >
               <Icon name="x" size={10} />
@@ -211,6 +224,7 @@ function TokenRow({
               type="button"
               className="dsv-token-row-undo"
               title={`Revert ${name}'s value`}
+              aria-label={`Revert ${name}'s value`}
               onClick={() => clearValueEdit(name)}
             >
               <Icon name="x" size={10} />
