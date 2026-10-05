@@ -75,8 +75,8 @@ live_with() { local K="$1" V="$2" F N=0; for F in $(live); do [ "$(kv "$K" "$F")
 say() { printf '%s dispatch: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" | tee -a "$LOG" >&2; }
 # EVENTS for the manager (Hermes): one line each in events.log, `<time> <kind> key=value ...`.
 # The dispatcher does not wait for anyone to read them; hermes-watch.sh wakes Hermes on the ones
-# that need attention. Kinds: up started finished kept no-pr no-push unknown start-failed
-# verdict-refused leftover gave-up.
+# that need attention. Kinds: up started finished delivered kept no-pr no-push unknown start-failed
+# start-refused verdict-refused merge-refused conflict leftover gave-up.
 event() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$S/events.log"; }
 acting() { [ -f "$S/dispatch.enabled" ]; }
 hdr() { sed -n "1,/^---\$/s/^$1:[[:space:]]*//p" "$2" | head -1; }
@@ -139,6 +139,11 @@ finish_running() {
   case "$OUTC" in
     succeeded)
       post_verdict "$FILE" "$TASK" || OUTC="verdict-refused"
+      DELIVERED_PR=""; DELIVERED_SHA=""
+      if [ "$OUTC" = "succeeded" ] && [ -n "$(kv KEPT "$RUNNING")" ] && deliver "$FILE" "$TASK" "$(kv KEPT "$RUNNING")"; then
+        # delivered: the tree now holds nothing that is not on the remote, so it can go
+        bash "$HERE/worker.sh" close "$DISP" >/dev/null 2>&1 && sed -i '/^KEPT=/d' "$RUNNING"
+      fi
       [ "$OUTC" = "succeeded" ] && OUTC="$(report_status "$FILE" "$TASK")"
       record "$FILE" "$OUTC" ;;
     *)
@@ -194,6 +199,8 @@ report_status() {
   REP="$S/report-$TASK.txt"
   orca orchestration task-list --run "$(cat "$S/dispatch.run" 2>/dev/null)" --json </dev/null 2>/dev/null | node "$HERE_NATIVE/lib/task-result.cjs" "$TASK" > "$REP" 2>/dev/null
   ST="$(sed -n 's/^[[:space:]]*status:[[:space:]]*\([a-z]*\).*/\1/p' "$REP" | head -1)"
+  # a report without a status line, whose work the dispatcher delivered, is judged by that delivery
+  [ -z "$ST" ] && [ -n "${DELIVERED_PR:-}${DELIVERED_SHA:-}" ] && ST=succeeded
   case "$ST" in
     blocked|unreproducible|failed) say "$TASK reported status: $ST"; echo "$ST"; return;;
     succeeded) ;;
@@ -204,12 +211,12 @@ report_status() {
   # A success is checked against GitHub, not taken from the report: measured 2026-10-05, nine Coders
   # settled "succeeded" and not one branch or PR existed.
   if [ "$ROLE" = "coder" ]; then
-    PRN="$(sed -n 's/^[[:space:]]*pr:[[:space:]]*#\{0,1\}\([0-9][0-9]*\).*/\1/p' "$REP" | head -1)"
+    PRN="${DELIVERED_PR:-$(sed -n 's/^[[:space:]]*pr:[[:space:]]*#\{0,1\}\([0-9][0-9]*\).*/\1/p' "$REP" | head -1)}"
     if [ -z "$PRN" ] || [ "$(gh pr view "$PRN" --repo "$REPO_SLUG" --json state --jq .state 2>/dev/null)" != "OPEN" ]; then
       say "$TASK reported succeeded but names no open PR (pr: '${PRN:-none}'); recorded as no-pr"; echo no-pr; return
     fi
   else
-    SHA="$(sed -n 's/^[[:space:]]*commit:[[:space:]]*\([0-9a-fA-F]\{7,40\}\).*/\1/p' "$REP" | head -1)"
+    SHA="${DELIVERED_SHA:-$(sed -n 's/^[[:space:]]*commit:[[:space:]]*\([0-9a-fA-F]\{7,40\}\).*/\1/p' "$REP" | head -1)}"
     PRN="$(hdr pr "$FILE")"
     case "$(gh pr view "$PRN" --repo "$REPO_SLUG" --json headRefOid --jq .headRefOid 2>/dev/null)" in
       "$SHA"*) [ -n "$SHA" ] || { say "$TASK: fixer names no commit; recorded as no-push"; echo no-push; return; } ;;
@@ -217,6 +224,64 @@ report_status() {
     esac
   fi
   echo succeeded
+}
+
+# DELIVERY is mechanical, so the dispatcher does it, not the model. Measured 2026-10-05: a Coder on
+# muse-spark-1.3 wrote and tested the change in nine trees, committed in one and pushed in none; the
+# work was then deleted with the trees. A Coder/Fixer that settled succeeded and left work in its
+# kept tree gets it committed (app/ only, the role's own git identity), pushed, and - for a Coder -
+# a PR opened with its report as the body. A report that says blocked/failed/unreproducible is not
+# delivered. Sets DELIVERED_PR (coder) or DELIVERED_SHA (fixer); returns non-zero if nothing went out.
+deliver() {
+  local FILE="$1" TASK="$2" P="$3" ROLE ST REP N TITLE BR BASEBR PRN URL BODY
+  ROLE="$(hdr role "$FILE")"; case "$ROLE" in coder|fixer) ;; *) return 1;; esac
+  [ -d "$P" ] || { say "deliver: $P is gone"; return 1; }
+  REP="$S/report-$TASK.txt"
+  orca orchestration task-list --run "$(cat "$S/dispatch.run" 2>/dev/null)" --json </dev/null 2>/dev/null \
+    | node "$HERE_NATIVE/lib/task-result.cjs" "$TASK" > "$REP" 2>/dev/null
+  ST="$(sed -n 's/^[[:space:]]*status:[[:space:]]*\([a-z]*\).*/\1/p' "$REP" | head -1)"
+  case "$ST" in blocked|failed|unreproducible) say "deliver: $TASK reported $ST; its tree is kept, not delivered"; return 1;; esac
+  ( cd "$P" && bash "$HERE/identity.sh" "$ROLE" ) >/dev/null 2>&1 || { say "deliver: identity.sh $ROLE failed in $P"; return 1; }
+  BASEBR="$(hdr base "$FILE")"; BASEBR="${BASEBR#origin/}"
+  if [ "$ROLE" = "coder" ]; then
+    N="$(hdr issue "$FILE")"
+    TITLE="$(gh issue view "$N" --repo "$REPO_SLUG" --json title --jq .title 2>/dev/null | sed 's/^\[[a-z]*\] *//')"
+    [ -n "$TITLE" ] || TITLE="issue $N"
+    TITLE="[coder] $TITLE (#$N)"
+  else
+    N="$(hdr pr "$FILE")"; TITLE="[fixer] apply the verdict's findings (#$N)"
+  fi
+  if [ -n "$(git -C "$P" status --porcelain --untracked-files=normal -- app 2>/dev/null)" ]; then
+    git -C "$P" add -A -- app && git -C "$P" commit -q -m "$TITLE" \
+      -m "Committed by the dispatcher: the worker settled succeeded and left this work uncommitted ($TASK)." \
+      || { say "deliver: commit failed in $P"; return 1; }
+  fi
+  [ "$(git -C "$P" rev-list --count HEAD --not --remotes=origin 2>/dev/null || echo 0)" -gt 0 ] \
+    || { say "deliver: nothing in $P that is not already on the remote"; return 1; }
+  if [ "$ROLE" = "fixer" ]; then
+    # fast-forward onto the PR branch only; a refused push means the PR moved on, and is reported
+    git -C "$P" push -q origin "HEAD:refs/heads/$BASEBR" 2>&1 | sed 's/^/dispatch: deliver: /' >&2
+    [ "${PIPESTATUS[0]}" -eq 0 ] || { say "deliver: push to $BASEBR refused"; return 1; }
+    DELIVERED_SHA="$(git -C "$P" rev-parse HEAD)"
+    event "delivered role=fixer spec=$(basename "$FILE" | sed 's/^active-//') pr=$N commit=${DELIVERED_SHA:0:7}"
+    return 0
+  fi
+  BR="$(git -C "$P" rev-parse --abbrev-ref HEAD)"
+  git -C "$P" push -q -u origin "HEAD:refs/heads/$BR" 2>&1 | sed 's/^/dispatch: deliver: /' >&2
+  [ "${PIPESTATUS[0]}" -eq 0 ] || { say "deliver: push of $BR refused"; return 1; }
+  PRN="$(gh pr list --repo "$REPO_SLUG" --head "$BR" --state open --json number --jq '.[0].number // empty' 2>/dev/null)"
+  if [ -z "$PRN" ]; then
+    BODY="$S/deliver-$TASK.md"
+    { echo "Closes #$N"; echo; echo "## Worker report"; echo; cat "$REP"; echo
+      echo "_Delivered by the dispatcher: the worker ($TASK, $(kv MODEL "$RUNNING")) settled succeeded without opening a PR. The Reviewer and Tester gate it as usual._"; } > "$BODY"
+    URL="$(gh pr create --repo "$REPO_SLUG" --base "$BASEBR" --head "$BR" --title "$TITLE" --body-file "$BODY" 2>&1)" \
+      || { say "deliver: gh pr create failed: $(printf '%s' "$URL" | tr '\n' ' ' | cut -c1-200)"; return 1; }
+    PRN="$(printf '%s' "$URL" | grep -oE '/pull/[0-9]+' | grep -oE '[0-9]+' | tail -1)"
+  fi
+  [ -n "$PRN" ] || { say "deliver: no PR number for $BR"; return 1; }
+  DELIVERED_PR="$PRN"
+  event "delivered role=coder spec=$(basename "$FILE" | sed 's/^active-//') pr=$PRN branch=$BR"
+  return 0
 }
 
 record() {
@@ -337,7 +402,10 @@ close_pass() {
   echo "$NOW" > "$STAMP"
   local ARG=(); acting || ARG=(--dry-run)
   bash "$HERE/close.sh" "${ARG[@]+"${ARG[@]}"}" 2>&1 | grep -E 'MERGED|refused|BLOCKED|issue #|merged [0-9]|held' \
-    | sed 's/^/close: /' | while IFS= read -r l; do say "$l"; done
+    | sed 's/^/close: /' | while IFS= read -r l; do
+        say "$l"
+        case "$l" in *"merge was refused"*) event "merge-refused $(printf '%s' "$l" | sed 's/^close: //' | cut -c1-200)";; esac
+      done
 }
 
 # The queue is topped up from GitHub by specgen.sh (needs.sh -> one spec per need) at most every

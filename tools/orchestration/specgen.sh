@@ -166,8 +166,44 @@ DO NOT POST TO THE PR: the dispatcher posts your verdict from this body.
 $WORKER_DONE_RULES"
 }
 
+gen_conflict() {   # pr head branch - the PR conflicts with the base: merge the base in, nothing else
+  local pr="$1" head="${2:0:7}" br="$3"
+  write_spec "100-fixer-$pr-$head.spec" "name: fixer-$pr-$head
+base: origin/$br
+role: fixer
+title: Fixer PR #$pr @ $head (merge conflict)
+pr: $pr
+head: $head
+deadline: 3600" "PR #$pr (branch \`$br\`, head $head) conflicts with \`$BASE\`. Merge the base into it and resolve the
+conflicts; change nothing else.
+
+STEPS: \`git fetch origin $BASE\`, then \`git merge origin/$BASE\` (a merge commit: never rebase, never
+--force). Resolve each conflict keeping the intent of BOTH sides; where both changed the same logic and
+one must lose, stop and report \`status: blocked\` with \`reason:\` naming the file and the two intents.
+Then \`npm --prefix app run test\`, \`lint\` and \`build\` must pass.
+
+DELIVERY: \`bash tools/orchestration/identity.sh fixer\` first, commit the merge, then
+\`git push origin HEAD:$br\` (fast-forward only, never --force). No new PR, no labels.
+
+OUTPUT - worker_done body:
+
+status: succeeded | failed | blocked
+role: fixer
+task: <task id from your preamble>
+reason: <one line; required for blocked and failed>
+commit: <sha you pushed>
+tests: pass | fail
+pr: $pr
+fixed: merge conflict with $BASE (<files resolved>)
+
+$WORKER_DONE_RULES"
+}
+
 gen_fixer() {   # pr head branch
   local pr="$1" head="${2:0:7}" br="$3" FIND
+  if [ "$(gh pr view "$pr" --repo "$REPO" --json mergeable --jq .mergeable 2>/dev/null)" = "CONFLICTING" ]; then
+    gen_conflict "$pr" "$head" "$br"; return
+  fi
   FIND="$(findings_of "$pr" "$2")"
   if [ -z "$FIND" ]; then say "#$pr @ $head: gate failure but no readable fail verdict (reason:) on this head - no fixer spec"; return; fi
   write_spec "100-fixer-$pr-$head.spec" "name: fixer-$pr-$head

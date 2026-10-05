@@ -32,6 +32,7 @@ Keep-alive: Task Scheduler -> `bootstrap.sh` -> `launch-dispatcher.sh`, every 5 
 |---|---|
 | `up` | dispatcher started |
 | `started`, `finished` | a worker started / settled (routine, never wakes Hermes) |
+| `delivered` | the dispatcher committed/pushed a worker's left-over work (and opened the Coder's PR) (routine) |
 | `kept` | a Coder/Fixer tree holds work that is not on the remote; it was NOT removed (`path=`) |
 | `no-pr` | a Coder said succeeded but names no open PR |
 | `no-push` | a Fixer's commit is not its PR's head |
@@ -40,6 +41,7 @@ Keep-alive: Task Scheduler -> `bootstrap.sh` -> `launch-dispatcher.sh`, every 5 
 | `start-failed` | `worker.sh start` failed (not a refusal) |
 | `start-refused` | a start was refused (memory/base/port); at most one per 30 min |
 | `leftover` | a close could not be confirmed after 10 tries |
+| `merge-refused` | `close.sh` found the gate green but GitHub refused the merge (CI red, protection) |
 | `gave-up` | a spec failed on every attempt |
 
 Hermes never reads Orca's mailbox for the dispatcher's Run: its terminal is fenced off it
@@ -61,8 +63,9 @@ per process (measured 2026-09-28).
 
 | Wake | Hermes calls / does |
 |---|---|
-| `kept` | reads `git -C <path> status --short` and `git -C <path> log --oneline -3 --not --remotes`, reports to the user. Delivery (commit/push/PR of kept work) has no hand yet: the user decides |
-| `no-pr` | if a `kept` line names the same dispatch, as above; otherwise nothing: `needs.sh` re-queues the issue after `RETRY_TTL` |
+| `kept` | the work was NOT delivered (the report said blocked/failed/unreproducible, or delivery failed: see the `dispatch: deliver:` lines). Reads `git -C <path> status --short`; reports to the user. The tree stays until the user decides |
+| `no-pr` | nothing if a `delivered` line follows for the same spec; otherwise `needs.sh` re-queues the issue after `RETRY_TTL`; reports if it repeats |
+| `merge-refused` | reads the PR's checks (`gh pr checks <n>`); reports the reason. A red CI is work for a Fixer, which the gate failing produces |
 | `no-push`, `unknown` | reads `report-<task>.txt`; reports if the same spec repeats |
 | `verdict-refused` | reads the `dispatch: verdict:` lines in `dispatch.log` and `report-<task>.txt`; reports the reason |
 | `start-failed` | reads the tail of `done/<spec>.start-failed`; reports |
@@ -95,6 +98,25 @@ Open: `worker-start --worktree new-child` lets Orca create the tree itself, but 
 model from `opencode.json`, which must exist before the agent starts; a new-child started the agent
 before that file existed (measured earlier). Not used until that is solved.
 
+## Delivery (the dispatcher's, not the model's)
+
+Committing, pushing and opening a PR are mechanical, so a hand does them. Measured 2026-10-05: a
+Coder on `muse-spark-1.3` wrote and tested its change in nine trees, committed in one and pushed in
+none, and the work was deleted with the trees. Now, when a Coder or Fixer settles `succeeded` and its
+tree holds work that is not on the remote (`kept`), `dispatch.sh` `deliver`:
+
+- skips it if the report says `blocked`, `failed` or `unreproducible` (the tree stays kept);
+- sets the role's git identity (`identity.sh`), commits only `app/`, pushes;
+- Coder: opens the PR (`[coder] <issue title> (#n)`, body = `Closes #n` + the worker's report);
+- Fixer: pushes fast-forward onto the PR branch (never force);
+- then closes the now clean tree. The PR is gated by the Reviewer and Tester like any other.
+
+## Merge conflicts
+
+`needs.sh` reads each open PR's `mergeable`. A `CONFLICTING` PR gets a Fixer whose spec is: merge the
+base in (a merge commit, never rebase/force), keep both sides' intent, stop as `blocked` when one
+intent must lose, test/lint/build, push fast-forward.
+
 ## Merging
 
 `close.sh` merges a PR only when the gate passed with a Reviewer and a Tester. A PR that changes
@@ -103,8 +125,6 @@ nothing under `app/src` (tooling, docs) gets "gate not applicable" and is **not*
 
 ## Open decisions
 
-- Who delivers a Coder's work: the model (it did with `deepseek-v4.1-flash`; `muse-spark-1.3` wrote
-  the code but committed once in nine and never pushed) or a dispatcher hand.
 - The legacy scripts (`spawn.sh`, `start.sh`, `settle.sh`, `handle.sh`, `supervise.sh`,
   `watch-settlements.sh`, `stall-check.sh`, `lib/reconcile.py` and their helpers) are called by nothing
   live: archive or delete.
