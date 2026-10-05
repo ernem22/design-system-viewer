@@ -1,26 +1,41 @@
 /* Single token root. Every themed value in the app resolves from here —
    components and shell must use bare var(--token), never a fallback.
    A system layer later overwrites these same names on :root (single view)
-   or on a scope node (compare columns). */
+   or on a scope node (compare columns).
+
+   Three tiers (issue #128). Tier 1 primitives hold the only raw literals in
+   this file; tier 2 semantic roles alias tier 1 (a role is never a copy of a
+   primitive's value); tier 3 component tokens alias tier 2 or the shared
+   size/radius/control scales. Every `var()` alias here computes the same
+   value the literal it replaces did, so retheming a primitive now moves every
+   semantic role that derives from it without editing the role. A system layer
+   still overwrites the same names on :root, so a loaded system is unaffected. */
 
 :root {
+  /* Base Primitives (tier 1 — the raw literals the roles derive from.
+     --shadow-color holds rgb channel values, so every translucent
+     overlay/scrim/shadow recipe shares one source instead of a hardcoded
+     rgb(15 23 42 / …) per token). */
+  --color-white: #ffffff;
+  --shadow-color: 15 23 42;
+
   /* Surface / Elevation */
   --color-bg: #f6f7f9;
-  --color-surface: #ffffff;
-  --color-surface-raised: #ffffff;
-  --color-surface-overlay: #ffffff;
+  --color-surface: var(--color-white);
+  --color-surface-raised: var(--color-surface);
+  --color-surface-overlay: var(--color-surface);
   --color-surface-sunken: #eceef1;
   --color-surface-inverse: #1a1d21;
 
   /* Text */
   --color-text: #1a1d21;
-  --color-text-secondary: #4b5563;
-  --color-text-muted: #6b7280;
-  --color-text-disabled: #9ca3af;
-  --color-text-link: #4f46e5;
-  --color-text-inverse: #ffffff;
-  --color-text-link-hover: #4338ca;
-  --color-text-on-accent: #ffffff;
+  --color-text-secondary: var(--color-neutral-600);
+  --color-text-muted: var(--color-neutral-500);
+  --color-text-disabled: var(--color-neutral-400);
+  --color-text-link: var(--color-brand-500);
+  --color-text-inverse: var(--color-white);
+  --color-text-link-hover: var(--color-brand-600);
+  --color-text-on-accent: var(--color-on-accent);
 
   /* Border / Divider */
   --color-border: #d8dbe0;
@@ -29,33 +44,34 @@
   --color-divider: #e2e4e8;
 
   /* Accent / Brand */
-  --color-accent: #4f46e5;
-  --color-accent-hover: #4338ca;
-  --color-accent-active: #3730a3;
-  --color-accent-subtle: #eef2ff;
-  --color-accent-muted: #c7d2fe;
-  --color-accent-border: #a5b4fc;
-  --color-accent-text: #4338ca;
-  --color-on-accent: #ffffff;
+  --color-accent: var(--color-brand-500);
+  --color-accent-hover: var(--color-brand-600);
+  --color-accent-active: var(--color-brand-700);
+  --color-accent-subtle: var(--color-brand-50);
+  --color-accent-muted: var(--color-brand-200);
+  --color-accent-border: var(--color-brand-300);
+  --color-accent-text: var(--color-brand-600);
+  --color-on-accent: var(--color-white);
   --color-accent-secondary: #0ea5e9;
   --color-accent-secondary-subtle: #f0f9ff;
 
   /* Disabled / Inert */
-  --color-surface-disabled: #e5e7eb;
-  --color-border-disabled: #d1d5db;
-  --color-icon-disabled: #9ca3af;
+  --color-surface-disabled: var(--color-neutral-200);
+  --color-border-disabled: var(--color-neutral-300);
+  --color-icon-disabled: var(--color-neutral-400);
 
-  /* Form / Input */
-  --color-input-bg: #ffffff;
-  --color-input-border: #d8dbe0;
-  --color-input-border-focus: #a5b4fc;
-  --color-input-placeholder: #9ca3af;
-  --color-input-bg-hover: #f9fafb;
-  --color-input-bg-disabled: #e5e7eb;
+  /* Form / Input — input-specific roles only; the shared surface/border/text
+     roles carry the rest (issue #128: the input colour set duplicated them). */
+  --color-input-bg: var(--color-surface);
+  --color-input-border: var(--color-border);
+  --color-input-border-focus: var(--color-brand-300);
+  --color-input-placeholder: var(--color-neutral-400);
+  --color-input-bg-hover: var(--color-neutral-50);
+  --color-input-bg-disabled: var(--color-neutral-200);
   --color-input-border-hover: #b7bcc4;
   --color-input-border-error: #fca5a5;
-  --color-input-text: #1a1d21;
-  --color-input-icon: #6b7280;
+  --color-input-text: var(--color-text);
+  --color-input-icon: var(--color-neutral-500);
 
   /* Brand Scale (primitive) */
   --color-brand-50: #eef2ff;
@@ -84,7 +100,7 @@
   --color-neutral-1000: #000000;
 
   /* Data Visualization */
-  --color-chart-1: #4f46e5;
+  --color-chart-1: var(--color-brand-500);
   --color-chart-2: #0ea5e9;
   --color-chart-3: #16a34a;
   --color-chart-4: #d97706;
@@ -93,16 +109,16 @@
   --color-chart-7: #db2777;
   --color-chart-8: #65a30d;
   --color-chart-grid: #e8eaed;
-  --color-chart-axis: #9ca3af;
+  --color-chart-axis: var(--color-neutral-400);
   --color-chart-tooltip-bg: #1a1d21;
 
   /* Interaction */
-  --color-focus-ring: #818cf8;
-  --color-hover-overlay: rgb(15 23 42 / 0.04);
-  --color-active-overlay: rgb(15 23 42 / 0.08);
-  --color-selected: #eef2ff;
+  --color-focus-ring: var(--color-brand-400);
+  --color-hover-overlay: rgb(var(--shadow-color) / 0.04);
+  --color-active-overlay: rgb(var(--shadow-color) / 0.08);
+  --color-selected: var(--color-brand-50);
   --color-selected-subtle: #f5f8ff;
-  --color-pressed-overlay: rgb(15 23 42 / 0.12);
+  --color-pressed-overlay: rgb(var(--shadow-color) / 0.12);
 
   /* Semantic State */
   --color-success: #16a34a;
@@ -110,30 +126,31 @@
   --color-success-muted: #bbf7d0;
   --color-success-border: #86efac;
   --color-success-text: #15803d;
-  --color-on-success: #ffffff;
+  --color-on-success: var(--color-white);
   --color-warning: #d97706;
   --color-warning-subtle: #fffbeb;
   --color-warning-muted: #fde68a;
   --color-warning-border: #fcd34d;
   --color-warning-text: #b45309;
-  --color-on-warning: #ffffff;
+  --color-on-warning: var(--color-white);
   --color-danger: #dc2626;
   --color-danger-subtle: #fef2f2;
   --color-danger-muted: #fecaca;
   --color-danger-border: #fca5a5;
   --color-danger-text: #b91c1c;
-  --color-on-danger: #ffffff;
+  --color-on-danger: var(--color-white);
   --color-info: #0284c7;
   --color-info-subtle: #f0f9ff;
   --color-info-muted: #bae6fd;
   --color-info-border: #7dd3fc;
   --color-info-text: #0369a1;
-  --color-on-info: #ffffff;
+  --color-on-info: var(--color-white);
 
-  /* Alpha / Overlay */
-  --color-scrim: rgb(15 23 42 / 0.5);
-  --color-shadow: rgb(15 23 42 / 0.12);
-  --color-tint-subtle: rgb(79 70 229 / 0.04);
+  /* Alpha / Overlay — every translucent ink derives from --shadow-color (the
+     elevation/scrim source) or --color-accent (the interaction tint). */
+  --color-scrim: rgb(var(--shadow-color) / 0.5);
+  --color-shadow: rgb(var(--shadow-color) / 0.12);
+  --color-tint-subtle: color-mix(in srgb, var(--color-accent) 4%, transparent);
 
   /* Font Family */
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -141,11 +158,13 @@
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --font-display: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
-  /* Display Size */
-  --font-size-display-xs: 2.25rem;
-  --font-size-display-sm: 3rem;
-  --font-size-display-md: 3.75rem;
-  --font-size-display-lg: 4.5rem;
+  /* Display Size — a display step is the base type step at display weight, so
+     it aliases the base scale instead of re-listing its rem literals. xl is
+     the one genuine extra step (no 8xl exists). */
+  --font-size-display-xs: var(--font-size-4xl);
+  --font-size-display-sm: var(--font-size-5xl);
+  --font-size-display-md: var(--font-size-6xl);
+  --font-size-display-lg: var(--font-size-7xl);
   --font-size-display-xl: 6rem;
 
   /* Font Size */
@@ -302,10 +321,10 @@
   --composition-overlap-sm: 1rem;
   --composition-overlap-md: 2rem;
   --composition-overlap-lg: 4rem;
-  --composition-aspect-wide: 16 / 9;
-  --composition-aspect-standard: 4 / 3;
-  --composition-aspect-square: 1 / 1;
-  --composition-aspect-portrait: 3 / 4;
+  --composition-aspect-wide: var(--media-aspect-wide);
+  --composition-aspect-standard: var(--media-aspect-standard);
+  --composition-aspect-square: var(--media-aspect-square);
+  --composition-aspect-portrait: var(--media-aspect-portrait);
 
   /* Media */
   --media-radius: 0.75rem;
@@ -317,9 +336,9 @@
   --media-aspect-standard: 4 / 3;
   --media-aspect-square: 1 / 1;
   --media-aspect-portrait: 3 / 4;
-  --media-overlay: rgb(15 23 42 / 0.35);
-  --media-overlay-subtle: rgb(15 23 42 / 0.18);
-  --media-overlay-strong: rgb(15 23 42 / 0.6);
+  --media-overlay: rgb(var(--shadow-color) / 0.35);
+  --media-overlay-subtle: rgb(var(--shadow-color) / 0.18);
+  --media-overlay-strong: rgb(var(--shadow-color) / 0.6);
 
   /* Sizes */
   --size-icon-xs: 0.75rem;
@@ -366,16 +385,17 @@
   --icon-gap-sm: 0.5rem;
   --icon-gap-md: 0.75rem;
 
-  /* Shadow / Elevation */
-  --shadow-xs: 0 1px 2px rgb(15 23 42 / 0.04);
-  --shadow-sm: 0 1px 3px rgb(15 23 42 / 0.08), 0 1px 2px rgb(15 23 42 / 0.04);
-  --shadow-md: 0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06);
-  --shadow-lg: 0 10px 15px -3px rgb(15 23 42 / 0.1), 0 4px 6px -4px rgb(15 23 42 / 0.06);
-  --shadow-xl: 0 20px 25px -5px rgb(15 23 42 / 0.1), 0 8px 10px -6px rgb(15 23 42 / 0.06);
-  --shadow-2xl: 0 25px 50px -12px rgb(15 23 42 / 0.18);
-  --shadow-inner: inset 0 2px 4px rgb(15 23 42 / 0.05);
-  --shadow-focus: 0 0 0 3px rgb(129 140 248 / 0.35);
-  --shadow-outline: 0 0 0 2px rgb(79 70 229 / 0.45);
+  /* Shadow / Elevation — the ink is --shadow-color and the focus recipes
+     derive from the shared focus role, so retheming the ring moves them. */
+  --shadow-xs: 0 1px 2px rgb(var(--shadow-color) / 0.04);
+  --shadow-sm: 0 1px 3px rgb(var(--shadow-color) / 0.08), 0 1px 2px rgb(var(--shadow-color) / 0.04);
+  --shadow-md: 0 4px 6px -1px rgb(var(--shadow-color) / 0.08), 0 2px 4px -2px rgb(var(--shadow-color) / 0.06);
+  --shadow-lg: 0 10px 15px -3px rgb(var(--shadow-color) / 0.1), 0 4px 6px -4px rgb(var(--shadow-color) / 0.06);
+  --shadow-xl: 0 20px 25px -5px rgb(var(--shadow-color) / 0.1), 0 8px 10px -6px rgb(var(--shadow-color) / 0.06);
+  --shadow-2xl: 0 25px 50px -12px rgb(var(--shadow-color) / 0.18);
+  --shadow-inner: inset 0 2px 4px rgb(var(--shadow-color) / 0.05);
+  --shadow-focus: 0 0 0 3px color-mix(in srgb, var(--color-focus-ring) 35%, transparent);
+  --shadow-outline: 0 0 0 2px color-mix(in srgb, var(--color-accent) 45%, transparent);
 
   /* Glow / Light Effects */
   --glow-sm: 0 0 8px rgb(99 102 241 / 0.25);
@@ -389,14 +409,15 @@
   --blur-lg: 16px;
   --blur-xl: 24px;
 
-  /* Gradient */
-  --gradient-brand: linear-gradient(135deg, #4f46e5, #7c3aed);
-  --gradient-brand-subtle: linear-gradient(135deg, #eef2ff, #f5f3ff);
-  --gradient-surface: linear-gradient(180deg, #ffffff, #f6f7f9);
-  --gradient-surface-subtle: linear-gradient(180deg, #ffffff, #eceef1);
-  --gradient-glow: radial-gradient(circle, rgb(129 140 248 / 0.35), transparent 70%);
-  --gradient-fade: linear-gradient(180deg, transparent, rgb(15 23 42 / 0.5));
-  --gradient-hero: linear-gradient(135deg, #4f46e5, #0ea5e9);
+  /* Gradient — the brand stops resolve from the brand/surface primitives and
+     roles instead of re-listing them. */
+  --gradient-brand: linear-gradient(135deg, var(--color-brand-500), #7c3aed);
+  --gradient-brand-subtle: linear-gradient(135deg, var(--color-brand-50), #f5f3ff);
+  --gradient-surface: linear-gradient(180deg, var(--color-white), #f6f7f9);
+  --gradient-surface-subtle: linear-gradient(180deg, var(--color-white), #eceef1);
+  --gradient-glow: radial-gradient(circle, color-mix(in srgb, var(--color-focus-ring) 35%, transparent), transparent 70%);
+  --gradient-fade: linear-gradient(180deg, transparent, rgb(var(--shadow-color) / 0.5));
+  --gradient-hero: linear-gradient(135deg, var(--color-brand-500), var(--color-accent-secondary));
 
   /* Opacity */
   --opacity-hover: 0.8;
@@ -538,7 +559,7 @@
 
   /* Component / Avatar */
   --avatar-ring-width: 2px;
-  --avatar-ring-color: #ffffff;
+  --avatar-ring-color: var(--color-surface);
   --avatar-group-overlap: 0.5rem;
 
   /* Component / Divider */
@@ -546,7 +567,7 @@
   --divider-spacing: 0.75rem;
 
   /* Component / Overlay */
-  --overlay-opacity: 0.5;
+  --overlay-opacity: var(--opacity-overlay);
   --overlay-blur: 8px;
   --overlay-radius: 0.75rem;
 
