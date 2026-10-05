@@ -145,3 +145,23 @@ for pr in $(gh pr list --repo "$REPO" --state open --json number --jq '.[].numbe
 done
 
 [ "$DRY" = "--dry-run" ] || echo "close.sh: merged $merged PR(s)"
+
+# ---- release `held` issues whose dependency is closed -------------------------------------------
+# A slice that must wait for another card carries `held` and says so in its body: "`held` until
+# ... (#N) merges" / "held until #N merges". Nobody removed the label by hand when #N landed, so the
+# slice sat forever (measured 2026-10-05, #214-#216 waiting on #213). The body names the dependency;
+# when #N is closed (a merged PR, or an issue this script closed after its PR merged), the label goes.
+for n in $(gh issue list --repo "$REPO" --label held --state open --json number --jq '.[].number' 2>/dev/null); do
+  dep="$(gh issue view "$n" --repo "$REPO" --json body --jq .body 2>/dev/null \
+    | grep -oiE 'held`?\*{0,2} until [^#]{0,60}#[0-9]+\)? merges' | grep -oE '#[0-9]+' | head -1 | tr -d '#')"
+  [ -n "$dep" ] || continue
+  st="$(gh issue view "$dep" --repo "$REPO" --json state --jq .state 2>/dev/null)"
+  [ "$st" = "CLOSED" ] || continue
+  if [ "$DRY" = "--dry-run" ]; then echo "#$n: would release held (#$dep is closed)"; continue; fi
+  if gh issue edit "$n" --repo "$REPO" --remove-label held >/dev/null 2>&1; then
+    gh issue comment "$n" --repo "$REPO" --body "Released: \`held\` removed because #$dep is closed. The pipeline picks this card up on its next pass." >/dev/null 2>&1
+    echo "#$n: released held (#$dep is closed)"
+  else
+    echo "#$n: could not remove held (#$dep is closed)"
+  fi
+done
