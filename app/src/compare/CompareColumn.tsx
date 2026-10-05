@@ -50,7 +50,7 @@ export function CompareColumn({
   return (
     <section className="cmp-col" style={columnStyle}>
       <h3 className="cmp-col-head">
-        <span className="cmp-swatch" style={{ background: "var(--color-accent)" }} />
+        <span className="cmp-swatch" aria-hidden="true" style={{ background: "var(--color-accent)" }} />
         {name}
         <span className="cmp-cov">{pct != null ? `${pct}%` : ""}</span>
       </h3>

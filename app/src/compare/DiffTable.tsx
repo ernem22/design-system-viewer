@@ -119,9 +119,11 @@ export function DiffTable({ cols }: { cols: DesignSystem[] }) {
       <table className="cmp-diff-table">
         <thead>
           <tr>
-            <th>token</th>
+            <th scope="col">token</th>
             {cols.map((s) => (
-              <th key={s.slug}>{s.name}</th>
+              <th key={s.slug} scope="col">
+                {s.name}
+              </th>
             ))}
           </tr>
         </thead>
@@ -129,7 +131,9 @@ export function DiffTable({ cols }: { cols: DesignSystem[] }) {
           {sections.map(({ label, rows }) => (
             <Fragment key={label}>
               <tr className="cmp-diff-cat">
-                <td colSpan={cols.length + 1}>{label}</td>
+                <th colSpan={cols.length + 1} scope="rowgroup">
+                  {label}
+                </th>
               </tr>
               {rows.map(({ name, vals, same, categories: cats }) => (
                 <tr key={name} className={same ? "" : "is-diff"}>
@@ -152,7 +156,7 @@ export function DiffTable({ cols }: { cols: DesignSystem[] }) {
                       ) : (
                         <span className="cmp-diff-cell">
                           {isColor(v) && <span className="cmp-diff-chip" style={{ background: v }} />}
-                          <code>{v}</code>
+                          <code spellCheck={false}>{v}</code>
                         </span>
                       )}
                     </td>
