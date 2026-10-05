@@ -229,7 +229,7 @@ close_pass() {
   [ $(( NOW - $(cat "$STAMP" 2>/dev/null || echo 0) )) -ge "${CLOSE_EVERY:-300}" ] || return 0
   echo "$NOW" > "$STAMP"
   local ARG=(); acting || ARG=(--dry-run)
-  bash "$HERE/close.sh" "${ARG[@]+"${ARG[@]}"}" 2>&1 | grep -E 'MERGED|refused|BLOCKED|issue #|merged [0-9]' \
+  bash "$HERE/close.sh" "${ARG[@]+"${ARG[@]}"}" 2>&1 | grep -E 'MERGED|refused|BLOCKED|issue #|merged [0-9]|held' \
     | sed 's/^/close: /' | while IFS= read -r l; do say "$l"; done
 }
 
