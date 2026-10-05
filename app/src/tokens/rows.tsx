@@ -8,7 +8,7 @@ import "./rows.css";
 export function RefBadge({ value }: { value: string }) {
   if (!isRef(value)) return null;
   return (
-    <span className="tok-ref" title="references another token">
+    <span className="tok-ref" title="references another token" role="img" aria-label="references another token">
       →ref
     </span>
   );
@@ -31,6 +31,19 @@ export interface RendererProps extends RowCallbacks {
 const varOf = (name: string) => `var(${name})`;
 
 /**
+ * Keyboard activator for pickable rows and swatches: Enter or Space picks
+ * the token. Events from the inner Update button or form fields keep their
+ * native behaviour.
+ */
+function pickKeyDown(e: React.KeyboardEvent, onPick: () => void): void {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const target = e.target as HTMLElement | null;
+  if (target && target.closest("button, input, select, textarea, a")) return;
+  e.preventDefault();
+  onPick();
+}
+
+/**
  * The one token row. Name, value and the Update affordance sit in fixed grid
  * columns so they line up between every group; the optional `demo` is the only
  * thing that varies by kind — flat groups (no visual preview) pass nothing and
@@ -50,10 +63,13 @@ export const TokenRow = memo(function TokenRow({
     <div
       className="tok-row"
       data-token={token.name}
-      aria-selected={token.name === selectedName || undefined}
+      role="option"
+      aria-selected={token.name === selectedName}
+      tabIndex={0}
       title="click to copy — double-click or Update to edit"
       onClick={() => onPick(token)}
       onDoubleClick={() => onEdit(token)}
+      onKeyDown={(e) => pickKeyDown(e, () => onPick(token))}
     >
       <b className="tok-row-name">{token.name}</b>
       <span className="tok-row-value">
@@ -84,7 +100,7 @@ const TokenRows = memo(function TokenRows({
   onSave,
 }: RendererProps & { render?: (t: Token) => React.ReactNode }) {
   return (
-    <div className="tok-rows">
+    <div className="tok-rows" role="listbox" aria-label="Tokens">
       {tokens.map((t) => (
         <TokenRow
           key={t.name}
@@ -105,16 +121,19 @@ const TokenRows = memo(function TokenRows({
 export const ColorGrid = memo(function ColorGrid(props: RendererProps) {
   const { tokens, selectedName, onPick, editingName, onEdit, onSave } = props;
   return (
-    <div className="tok-swatches">
+    <div className="tok-swatches" role="listbox" aria-label="Tokens">
       {tokens.map((t) => (
         <div
           key={t.name}
           className="tok-swatch"
           data-token={t.name}
-          aria-selected={t.name === selectedName || undefined}
+          role="option"
+          aria-selected={t.name === selectedName}
+          tabIndex={0}
           title="click to copy — double-click or Update to edit"
           onClick={() => onPick(t)}
           onDoubleClick={() => onEdit(t)}
+          onKeyDown={(e) => pickKeyDown(e, () => onPick(t))}
         >
           <div className="tok-chip" style={{ "--val": varOf(t.name) } as CSSProperties} />
           <div className="tok-swatch-name">

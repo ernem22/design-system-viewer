@@ -13,6 +13,15 @@ interface ReferenceGroup {
   tokens: string[];
 }
 
+/** Enter/Space on a schema row picks it; inner Update/Add controls keep native keys. */
+function schemaKeyDown(e: React.KeyboardEvent, onPick: () => void): void {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const target = e.target as HTMLElement | null;
+  if (target && target.closest("button, input, select, textarea, a")) return;
+  e.preventDefault();
+  onPick();
+}
+
 /**
  * Schema checklist (old schemaView): every REFERENCE group with ✓/✗ per
  * token + the "Outside Schema" section for extras. Row click selects +
@@ -49,7 +58,7 @@ export function SchemaView({
           <span>{count}</span>
         </h2>
         <div className="tok-tablewrap">
-          <table className="tok-raw">
+          <table className="tok-raw" role="grid" aria-label={g.label}>
             <tbody>
               {names.map((name) => {
                 const value = valueMap.get(name);
@@ -59,10 +68,12 @@ export function SchemaView({
                   <tr
                     key={name}
                     data-token={name}
-                    aria-selected={selected?.name === name || undefined}
+                    aria-selected={selected?.name === name}
+                    tabIndex={0}
                     title={hit ? "click to copy — double-click or Update to edit" : "missing — Add to create it"}
                     onClick={() => onPick(token)}
                     onDoubleClick={() => onEdit(token)}
+                    onKeyDown={(e) => schemaKeyDown(e, () => onPick(token))}
                   >
                     <td className={hit ? "tok-yes" : "tok-no"}>
                       {hit ? "✓" : "✗"} {name}

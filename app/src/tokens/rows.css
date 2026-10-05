@@ -108,6 +108,10 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tok-swatch-value {
@@ -164,7 +168,17 @@
 .tok-num {
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
   background: var(--color-surface-raised);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
+}
+
+/* Keyboard focus must be visible without changing the resting look:
+   reuse the selected accent outline for rows, swatches and schema rows. */
+.tok-row:focus-visible,
+.tok-swatch:focus-visible,
+.tok-raw tr[data-token]:focus-visible {
+  outline: 2px solid var(--color-accent-border);
+  outline-offset: 1px;
 }
