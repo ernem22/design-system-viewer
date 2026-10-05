@@ -4,6 +4,7 @@
 #
 #   dispatch.sh            loop forever (one instance; a second one exits 0)
 #   dispatch.sh --once     one pass, then exit
+#   dispatch.sh --stop     ask the running dispatcher to exit between passes; waits until it has
 #   dispatch.sh --status   print the queue, the running worker and the last results
 #   dispatch.sh --bind     bind THIS terminal to the dispatcher's Run first, then loop (launcher's form)
 #
@@ -110,7 +111,8 @@ on_exit() {
   local RC=$? CMD="${BASH_COMMAND:-?}"
   [ "$(cat "$S/dispatch.lock" 2>/dev/null)" = "$$" ] && rm -f "$S/dispatch.lock"
   say "exiting (pid $$, rc $RC, last command: ${CMD:0:200})"
-  event "down pid=$$ rc=$RC"
+  # rc 0 is a stop that was asked for (--stop); anything else is an exit nobody asked for
+  if [ "$RC" -eq 0 ]; then event "stopped pid=$$"; else event "down pid=$$ rc=$RC"; fi
 }
 
 # ---- finish the running dispatch (resume after any restart) ---------------------------------
@@ -148,7 +150,12 @@ finish_running() {
   case "$OUTC" in succeeded|failed|cancelled) ;; *) CLOSE_ARGS+=(--stop) ;; esac
   local CRC=0
   local COUT
-  COUT="$(bash "$HERE/worker.sh" close "${CLOSE_ARGS[@]}")" || CRC=$?
+  # A tree already closed and KEPT (by a dispatcher that ended before it delivered) is not closed
+  # again: measured 2026-10-05, coder-18 - the old dispatcher kept and pushed it, was stopped before
+  # `gh pr create`, and the new one's second close found nothing unpushed and removed the tree.
+  if [ -n "$(kv KEPT "$RUNNING")" ]; then CRC=0; COUT=""
+  else COUT="$(bash "$HERE/worker.sh" close "${CLOSE_ARGS[@]}")" || CRC=$?
+  fi
   # 7 = closed, but the tree holds work that is not on the remote: kept for the manager, not removed
   if [ "$CRC" -eq 7 ]; then
     local KEPT; KEPT="$(printf '%s\n' "$COUT" | sed -n 's/^KEPT=//p')"
@@ -228,7 +235,9 @@ post_verdict() {
 # the dispatch succeeded, the work did not. Recorded under that status, so needs.sh can tell a
 # blocked issue (retried later) from a delivered one (measured 2026-10-05: coder-116 blocked on files
 # held by #170 would otherwise have been recorded as succeeded and never retried).
-report_status() {
+report_stop_asked() { [ -f "$S/dispatch.stop" ] || return 0; rm -f "$S/dispatch.stop"; say "stop requested; exiting between passes"; exit 0; }
+
+status() {
   local FILE="$1" TASK="$2" ROLE ST REP PRN SHA
   ROLE="$(hdr role "$FILE")"
   case "$ROLE" in coder|fixer) ;; *) echo succeeded; return;; esac
@@ -293,8 +302,17 @@ deliver() {
       -m "Committed by the dispatcher: the worker settled succeeded and left this work uncommitted ($TASK)." \
       || { say "deliver: commit failed in $P"; return 1; }
   fi
-  [ "$(git -C "$P" rev-list --count HEAD --not --remotes=origin 2>/dev/null || echo 0)" -gt 0 ] \
-    || { say "deliver: nothing in $P that is not already on the remote"; return 1; }
+  # Nothing unpushed can also mean an interrupted delivery already pushed it (coder-18, 2026-10-05):
+  # then the Coder's branch on origin IS this HEAD, and only the PR is missing.
+  local PUSHED="" HEADSHA; HEADSHA="$(git -C "$P" rev-parse HEAD 2>/dev/null)"
+  if [ "$(git -C "$P" rev-list --count HEAD --not --remotes=origin 2>/dev/null || echo 0)" -eq 0 ]; then
+    if [ "$ROLE" = "coder" ]; then
+      BR="$(git -C "$P" rev-parse --abbrev-ref HEAD)"
+      [ -n "$HEADSHA" ] && [ "$(git -C "$P" ls-remote origin "refs/heads/$BR" 2>/dev/null | cut -f1)" = "$HEADSHA" ] && PUSHED=1
+    fi
+    [ -n "$PUSHED" ] || { say "deliver: nothing in $P that is not already on the remote"; return 1; }
+    say "deliver: $BR already holds $HEADSHA on origin; opening its PR"
+  fi
   if [ "$ROLE" = "fixer" ]; then
     # fast-forward onto the PR branch only; a refused push means the PR moved on, and is reported
     git -C "$P" push -q origin "HEAD:refs/heads/$BASEBR" 2>&1 | sed 's/^/dispatch: deliver: /' >&2
@@ -304,8 +322,10 @@ deliver() {
     return 0
   fi
   BR="$(git -C "$P" rev-parse --abbrev-ref HEAD)"
-  git -C "$P" push -q -u origin "HEAD:refs/heads/$BR" 2>&1 | sed 's/^/dispatch: deliver: /' >&2
-  [ "${PIPESTATUS[0]}" -eq 0 ] || { say "deliver: push of $BR refused"; return 1; }
+  if [ -z "$PUSHED" ]; then
+    git -C "$P" push -q -u origin "HEAD:refs/heads/$BR" 2>&1 | sed 's/^/dispatch: deliver: /' >&2
+    [ "${PIPESTATUS[0]}" -eq 0 ] || { say "deliver: push of $BR refused"; return 1; }
+  fi
   PRN="$(gh pr list --repo "$REPO_SLUG" --head "$BR" --state open --json number --jq '.[0].number // empty' 2>/dev/null)"
   if [ -z "$PRN" ]; then
     BODY="$S/deliver-$TASK.md"
@@ -508,6 +528,8 @@ bind_run() {
     || { say "bind: run-current is not $WANT after binding"; exit 4; }
 }
 
+stop_asked() { [ -f "$S/dispatch.stop" ] || return 0; rm -f "$S/dispatch.stop"; say "stop requested; exiting between passes"; exit 0; }
+
 status() {
   echo "enabled: $(acting && echo yes || echo 'no (dry run)')"
   local F; echo "running ($(live_count)$([ "$MAX_WORKERS" -gt 0 ] && echo " of max $MAX_WORKERS")):"
@@ -519,13 +541,23 @@ status() {
 case "${1:-}" in
   --status) status ;;
   --once) lock; pass ;;
+  --stop)
+      # Stop the running dispatcher BETWEEN passes, never inside one. 2026-10-05: a `kill` landed between
+      # coder-18's close and its delivery; the pushed work was left without a PR and its tree removed.
+      P0="$(cat "$S/dispatch.lock" 2>/dev/null)"
+      [ -n "$P0" ] && kill -0 "$P0" 2>/dev/null || { echo "STOPPED (no dispatcher was running)"; rm -f "$S/dispatch.stop"; exit 0; }
+      touch "$S/dispatch.stop"; echo "asked pid $P0 to stop after its current pass"
+      for _ in $(seq 1 "${STOP_WAIT:-300}"); do kill -0 "$P0" 2>/dev/null || { echo "STOPPED (pid $P0)"; exit 0; }; sleep 1; done
+      echo "STILL RUNNING after ${STOP_WAIT:-300}s (pid $P0): its pass has not ended; look at dispatch.log"; exit 1 ;;
   --bind) lock
       # bash's own errors (e.g. "unbound variable") go to stderr only; keep a copy on disk so a
       # dispatcher that ends by itself leaves its reason behind, not just in a closed terminal.
       exec 2> >(tee -a "$S/dispatch.err" >&2)
       bind_run; say "dispatcher up (pid $$, Run $(cat "$S/dispatch.run"), $(acting && echo acting || echo 'dry run'))"; event "up pid=$$"
-      while :; do pass; sleep "$INTERVAL"; done ;;
+      rm -f "$S/dispatch.stop"
+      while :; do pass; stop_asked; sleep "$INTERVAL"; stop_asked; done ;;
   "") lock; say "dispatcher up (pid $$, $(acting && echo acting || echo 'dry run'))"
-      while :; do pass; sleep "$INTERVAL"; done ;;
+      rm -f "$S/dispatch.stop"
+      while :; do pass; stop_asked; sleep "$INTERVAL"; stop_asked; done ;;
   *) sed -n '2,8p' "$0" >&2; exit 2 ;;
 esac

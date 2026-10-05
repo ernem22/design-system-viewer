@@ -23,6 +23,13 @@ Hands in the live path: `dispatch.sh` (start/poll/close/record), `worker.sh` (on
 (post a verdict), `prep-tester.sh` + `serve.sh` (Tester build/preview), `wait-capacity.sh` (memory).
 Keep-alive: Task Scheduler -> `bootstrap.sh` -> `launch-dispatcher.sh`, every 5 minutes.
 
+Stopping or switching the dispatcher's code: never `kill` it. A kill lands inside a pass (measured
+2026-10-05: between coder-18's close and its PR). Instead, in `D:/code/dsv-dispatcher`:
+
+1. check out the new commit;
+2. run `bash tools/orchestration/dispatch.sh --stop`. It asks the dispatcher to exit between passes and waits; it prints `STOPPED`, or `STILL RUNNING` after 300 s;
+3. after `STOPPED`, start the new code with `bootstrap.sh`, or let the next 5-minute tick do it.
+
 ## Events
 
 `dispatch.sh` appends one line per event to `$LOCALAPPDATA/orca-orchestration/design-system-viewer/events.log`:
@@ -31,6 +38,7 @@ Keep-alive: Task Scheduler -> `bootstrap.sh` -> `launch-dispatcher.sh`, every 5 
 | Kind | Meaning |
 |---|---|
 | `up` | dispatcher started |
+| `stopped` | the dispatcher exited because `--stop` asked it to (routine) |
 | `started`, `finished` | a worker started / settled (routine, never wakes Hermes) |
 | `delivered` | the dispatcher committed/pushed a worker's left-over work (and opened the Coder's PR) (routine) |
 | `kept` | a Coder/Fixer tree holds work that is not on the remote; it was NOT removed (`path=`) |
