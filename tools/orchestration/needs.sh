@@ -30,7 +30,10 @@ known() {
     case "$f" in *.rejected|*.start-failed) continue;; esac
     # a blocked result holds the need for BLOCKED_TTL minutes only (default 240): what blocked it -
     # typically another open PR holding the files - is expected to move, and nobody re-queues it
-    case "$f" in *.blocked) young "$f" "${BLOCKED_TTL:-240}" || continue;; esac
+    # ...and only until the base branch moves: what blocks a card is almost always another open PR,
+    # and its merge is what unblocks it (measured 2026-10-05: #213 blocked on #170, #170 merged, and
+    # #213 still sat out the rest of its 4 hours with the queue empty)
+    case "$f" in *.blocked) young "$f" "${BLOCKED_TTL:-240}" && ! newer_base "$f" || continue;; esac
     # Only a delivered result (succeeded) or a human-facing one (unreproducible) holds a need for good.
     # Every other ending holds it for RETRY_TTL minutes (default 180), then the need is owed again.
     # Measured 2026-10-05: two Testers each for #203 and #170 ended verdict-refused, the old rule
@@ -51,6 +54,13 @@ known() {
 }
 
 young() { [ -n "$(find "$1" -mmin -"$2" 2>/dev/null)" ]; }   # file, minutes
+# the base branch's head commit is newer than the file (a merge landed after that result)
+BASE_AT=""
+newer_base() {
+  [ -n "$BASE_AT" ] || BASE_AT="$(gh api "repos/$REPO/commits/$BASE" --jq '.commit.committer.date' 2>/dev/null \
+    | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const t=Date.parse(s.trim());console.log(isNaN(t)?0:Math.floor(t/1000))})')"
+  [ "${BASE_AT:-0}" -gt "$(stat -c %Y "$1" 2>/dev/null || echo 0)" ]
+}
 
 refused_count() {   # role pr head -> number of verdict-refused results for it
   local n=0 f
