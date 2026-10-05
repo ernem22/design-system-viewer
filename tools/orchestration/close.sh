@@ -100,6 +100,12 @@ for pr in $(gh pr list --repo "$REPO" --state open --json number --jq '.[].numbe
   [ "${behind:-0}" -gt 0 ] && note=" [BEHIND $BASE by $behind commits — rebase before the next wave]"
 
   case "$gate" in
+    *"gate not applicable"*)
+      # A PR that changes nothing under app/src passes the gate with no Reviewer and no Tester. Measured
+      # 2026-10-05: #212, #218, #219, #228 and #229 (all tooling) were merged here within minutes,
+      # before anyone ran them on the host. Such a PR is merged by hand after it is verified there.
+      echo "#$pr: NOT MERGED - no app/src change (tooling/docs); merged by hand after host verification"
+      ;;
     success*)
       if [ "$DRY" = "--dry-run" ]; then
         echo "#$pr: READY — gate success, ci: $ci"
