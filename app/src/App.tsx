@@ -32,6 +32,7 @@ import { CompareRail } from "./compare/CompareRail.tsx";
 import { CompareProps } from "./compare/CompareProps.tsx";
 import { useCompareView, DEFAULT_COMPONENT_ID } from "./compare/useCompareView.ts";
 import { PreviewProps, PreviewScopeDialog } from "./preview/PreviewProps.tsx";
+import { PreviewSystems } from "./preview/PreviewSystems.tsx";
 import { PreviewNotes } from "./preview/PreviewNotes.tsx";
 import { initialSectionHash, readViewUrl, scrollToSection, writeViewUrl } from "./lib/urlState.ts";
 import "./gallery/gallery.css";
@@ -314,11 +315,14 @@ function App() {
         />
       ),
       rail: (
-        <Rail
-          groups={railGroups}
-          searching={searching}
-          syncSection={sectionSyncArmed && tab === "preview"}
-        />
+        <>
+          <PreviewSystems systems={systems} activeSlug={activeSlug} onSelect={setActiveSlug} />
+          <Rail
+            groups={railGroups}
+            searching={searching}
+            syncSection={sectionSyncArmed && tab === "preview"}
+          />
+        </>
       ),
       propsPanel: <PreviewProps system={active} dark={darkOn} active={tab === "preview" && propsOpen} />,
     },
