@@ -262,6 +262,15 @@ report_status() {
   else
     SHA="${DELIVERED_SHA:-$(sed -n 's/^[[:space:]]*commit:[[:space:]]*\([0-9a-fA-F]\{7,40\}\).*/\1/p' "$REP" | head -1)}"
     PRN="$(hdr pr "$FILE")"
+    # A report without a commit: line is judged by the PR itself: the head moved off the commit the
+    # spec was written for, and only this Fixer writes to the PR while it runs (blocked_by). Measured
+    # 2026-10-05, fixer-237: it merged the base in and pushed 2609933, and its report named no commit,
+    # so it was recorded no-push.
+    if [ -z "$SHA" ]; then
+      local NOW0 HEAD0; HEAD0="$(hdr head "$FILE")"
+      NOW0="$(gh pr view "$PRN" --repo "$REPO_SLUG" --json headRefOid --jq .headRefOid 2>/dev/null)"
+      [ -n "$HEAD0" ] && [ -n "$NOW0" ] && case "$NOW0" in "$HEAD0"*) ;; *) SHA="$NOW0"; say "$TASK: no commit: line; #$PRN moved from $HEAD0 to ${NOW0:0:7}";; esac
+    fi
     case "$(gh pr view "$PRN" --repo "$REPO_SLUG" --json headRefOid --jq .headRefOid 2>/dev/null)" in
       "$SHA"*) [ -n "$SHA" ] || { say "$TASK: fixer names no commit; recorded as no-push"; echo no-push; return; } ;;
       *) say "$TASK: fixer commit '${SHA:-none}' is not the head of #$PRN; recorded as no-push"; echo no-push; return;;
