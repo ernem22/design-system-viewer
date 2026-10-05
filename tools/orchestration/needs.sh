@@ -90,7 +90,7 @@ emit() {   # role ref head why [branch]
 }
 
 # ---- issues labelled agent with no open PR claiming them -> coder ----------------------------
-PRS_JSON="$(gh pr list --repo "$REPO" --base "$BASE" --state open --json number,title,body,headRefOid,headRefName --limit 200 2>/dev/null)" \
+PRS_JSON="$(gh pr list --repo "$REPO" --base "$BASE" --state open --json number,title,body,headRefOid,headRefName,mergeable --limit 200 2>/dev/null)" \
   || { echo "needs.sh: cannot list PRs (gh)" >&2; exit 4; }
 CLAIMED="$(printf '%s' "$PRS_JSON" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const n=new Set();for(const p of JSON.parse(s)){for(const m of ((p.title||"")+"\n"+(p.body||"")).matchAll(/(?:\(#|(?:Closes|Fixes|Resolves) #)(\d+)/g))n.add(m[1])}console.log([...n].join(" "))})')"
 
@@ -111,9 +111,15 @@ for n in $ISSUES; do
 done
 
 # ---- open PRs: the gate's own status says who is owed ------------------------------------------
-printf '%s' "$PRS_JSON" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{for(const p of JSON.parse(s))console.log(p.number+" "+p.headRefOid+" "+p.headRefName)})' \
-| while read -r pr head ref; do
+printf '%s' "$PRS_JSON" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{for(const p of JSON.parse(s))console.log(p.number+" "+p.headRefOid+" "+p.headRefName+" "+(p.mergeable||"UNKNOWN"))})' \
+| while read -r pr head ref mergeable; do
   [ -n "$pr" ] || continue
+  # A PR in conflict with its base cannot merge whatever its verdicts say: a Fixer merges the base in.
+  # (Nothing handled this; #142 sat conflicted until resolved by hand, 2026-10-05.)
+  if [ "$mergeable" = "CONFLICTING" ]; then
+    known fixer pr "$pr" "$head" || emit fixer "#$pr" "$head" "merge conflict with $BASE" "$ref"
+    continue
+  fi
   gate="$(gh api "repos/$REPO/commits/$head/status" \
     --jq '[.statuses[]|select(.context=="pipeline/verdict")]|.[0]|"\(.state // "none")|\(.description // "")"' 2>/dev/null)" \
     || { echo "needs.sh: gate lookup failed for #$pr; skipped this pass" >&2; continue; }

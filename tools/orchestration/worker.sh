@@ -308,7 +308,7 @@ cmd_close() {
   # agent never committed or pushed them. Such a tree is kept (rc 7) and reported, not removed.
   if grep -qE '^role=(coder|fixer)-' "$P/$MARK" 2>/dev/null; then
     local DIRTY AHEAD
-    DIRTY="$(git -C "$P" status --porcelain --untracked-files=normal 2>/dev/null | grep -c .)"
+    DIRTY="$(git -C "$P" status --porcelain --untracked-files=normal -- app 2>/dev/null | grep -c .)"
     AHEAD="$(git -C "$P" rev-list --count HEAD --not --remotes=origin 2>/dev/null || echo 0)"
     if [ "${DIRTY:-0}" -gt 0 ] || [ "${AHEAD:-0}" -gt 0 ]; then
       say "close: $DISP released; $P KEPT - $DIRTY uncommitted path(s), $AHEAD unpushed commit(s)"
