@@ -63,7 +63,7 @@
   border-bottom: var(--border-width-thin) solid var(--color-divider);
 }
 .cmp-swatch { width: var(--size-icon-sm); height: var(--size-icon-sm); border-radius: var(--radius-sm); border: var(--border-width-thin) solid var(--color-border-strong); flex: none; }
-.cmp-cov { margin-left: auto; font-size: var(--font-size-xs); font-weight: var(--font-weight-regular); color: var(--color-text-muted); font-family: var(--font-mono); }
+.cmp-cov { margin-left: auto; font-size: var(--font-size-xs); font-weight: var(--font-weight-regular); color: var(--color-text-muted); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .cmp-col-body { padding: var(--space-4); }
 .cmp-stack { display: flex; flex-direction: column; gap: var(--space-3); }
 
@@ -80,17 +80,20 @@
 .cmp-diff-bar { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-3); font-size: var(--font-size-sm); }
 .cmp-diff-bar b { color: var(--color-text); }
 .cmp-diff-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
-.cmp-diff-table th {
+/* Scoped to thead: the category rows are th[scope="rowgroup"] in tbody and
+   must not inherit the sticky column-header treatment. */
+.cmp-diff-table thead th {
   position: sticky; top: 0; text-align: left; z-index: 1;
+  scroll-margin-top: var(--space-4);
   background: var(--color-surface); color: var(--color-text-muted);
   font-size: var(--font-size-xs); font-weight: var(--font-weight-medium);
   padding: var(--space-2) var(--space-3); border-bottom: var(--border-width-thin) solid var(--color-border-subtle);
 }
-.cmp-diff-table td { padding: var(--space-2) var(--space-3); border-bottom: var(--border-width-thin) solid var(--color-border-subtle); vertical-align: top; }
-.cmp-diff-cat td {
+.cmp-diff-table td { padding: var(--space-2) var(--space-3); border-bottom: var(--border-width-thin) solid var(--color-border-subtle); vertical-align: top; font-variant-numeric: tabular-nums; }
+.cmp-diff-cat th {
   background: var(--color-surface-sunken); color: var(--color-text-muted);
   font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: var(--letter-spacing-wide);
-  font-weight: var(--font-weight-semibold); padding: var(--space-1-5) var(--space-3);
+  font-weight: var(--font-weight-semibold); padding: var(--space-1-5) var(--space-3); text-align: left;
 }
 .cmp-diff-name { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-secondary); white-space: nowrap; }
 tr.is-diff .cmp-diff-name { color: var(--color-text); }
