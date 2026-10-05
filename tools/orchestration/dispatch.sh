@@ -59,7 +59,9 @@ mkdir -p "$Q" "$DONE" "$RUN_DIR" 2>/dev/null || true
 #   * a model's request quota: at most MODEL_CAP_<model> live workers per model (default 2);
 #   * a Tester's port: never two Testers on one port;
 #   * one writer per PR: never two Coders on one issue or two Fixers on one PR.
-MAX_WORKERS="${DISPATCH_MAX:-4}"
+# 0 = no ceiling. Memory is the brake (worker.sh refuses below WATCH_MIN_MB); a fixed count was a
+# guess that held unrelated workers back (2026-10-05).
+MAX_WORKERS="${DISPATCH_MAX:-0}"
 REPO_SLUG="${DSV_REPO:-ernem22/design-system-viewer}"
 role_cfg() { case "$1" in coder|fixer) echo write;; reviewer) echo readonly;; tester) echo tester;; esac; }
 model_of() {   # spec file -> the model it will run on (its model: header, else its role's config)
@@ -67,7 +69,9 @@ model_of() {   # spec file -> the model it will run on (its model: header, else 
   [ -n "$M" ] || M="$(node "$HERE_NATIVE/lib/jget.cjs" model < "$HERE/roles/$(role_cfg "$(hdr role "$1")").opencode.json" 2>/dev/null)"
   echo "$M"
 }
-model_cap() { local V; V="MODEL_CAP_$(printf '%s' "$1" | tr -c 'A-Za-z0-9' '_')"; echo "${!V:-${MODEL_CAP:-2}}"; }
+# 0 = no cap. A per-model cap is set only from a measured quota (MODEL_CAP_<model>=n); the old default
+# of 2 was a guess, and with Coder, Fixer and Tester on one model it made a Tester wait for Coders.
+model_cap() { local V; V="MODEL_CAP_$(printf '%s' "$1" | tr -c 'A-Za-z0-9' '_')"; echo "${!V:-${MODEL_CAP:-0}}"; }
 live() { ls -1 "$RUN_DIR"/*.env 2>/dev/null; }   # one file per live worker
 live_count() { live | grep -c . ; }
 live_with() { local K="$1" V="$2" F N=0; for F in $(live); do [ "$(kv "$K" "$F")" = "$V" ] && N=$((N+1)); done; echo "$N"; }
@@ -97,15 +101,33 @@ lock() {
 # ---- finish the running dispatch (resume after any restart) ---------------------------------
 finish_running() {
   [ -f "$RUNNING" ] || return 0
-  local DISP FILE DEADLINE_AT NOW LEFT OUTC TASK ATTEMPT
+  local DISP FILE DEADLINE_AT NOW LEFT OUTC="" TASK ATTEMPT
   DISP="$(kv DISPATCH "$RUNNING")"; FILE="$(kv FILE "$RUNNING")"; TASK="$(kv TASK "$RUNNING")"
   DEADLINE_AT="$(kv DEADLINE_AT "$RUNNING")"; ATTEMPT="$(kv ATTEMPT "$RUNNING")"
   NOW="$(date +%s)"; LEFT=$(( ${DEADLINE_AT:-$NOW} - NOW )); [ "$LEFT" -lt 1 ] && LEFT=1
   # said once per dispatch, not on every poll
   if [ -z "$(kv SAID "$RUNNING")" ]; then say "running: $DISP ($(basename "$FILE")), up to ${LEFT}s left"; echo "SAID=1" >> "$RUNNING"; fi
-  OUTC="$(bash "$HERE/worker.sh" wait "$DISP" --deadline "$LEFT" --poll "${DISPATCH_POLL:-45}" | sed -n 's/^OUTCOME=//p')"
-  [ "$OUTC" = "pending" ] && return 1
-  [ -n "$OUTC" ] || { say "wait gave no outcome for $DISP; will look again next pass"; return 1; }
+  # Every live worker is read from ONE `worker-list` per pass (read_workers), so the pass no longer
+  # waits up to 45 s per worker in turn (4 workers = 3 min before anything new could start). Only a
+  # worker missing from that list falls back to worker.sh wait, briefly.
+  local ROW OUT LIVE EX
+  ROW="$(grep -m1 "^$DISP " "$S/workers.now" 2>/dev/null)"
+  if [ -n "$ROW" ]; then
+    OUT="$(printf '%s' "$ROW" | cut -d' ' -f2)"; LIVE="$(printf '%s' "$ROW" | cut -d' ' -f3)"
+    if [ -n "$OUT" ] && [ "$OUT" != "in_progress" ] && [ "$OUT" != "-" ]; then OUTC="$OUT"
+    elif [ "$LIVE" = "exited" ]; then
+      # two reads in a row, so one stale read cannot end a worker
+      EX=$(( $(kv EXITED "$RUNNING" || echo 0) + 1 )); sed -i '/^EXITED=/d' "$RUNNING"; echo "EXITED=$EX" >> "$RUNNING"
+      [ "$EX" -ge 2 ] && OUTC="exited"
+    else sed -i '/^EXITED=/d' "$RUNNING"
+    fi
+    [ -z "${OUTC:-}" ] && [ "$NOW" -ge "${DEADLINE_AT:-$NOW}" ] && OUTC="timeout"
+    [ -n "${OUTC:-}" ] || return 1
+  else
+    OUTC="$(bash "$HERE/worker.sh" wait "$DISP" --deadline "$LEFT" --poll "${DISPATCH_POLL:-10}" | sed -n 's/^OUTCOME=//p')"
+    [ "$OUTC" = "pending" ] && return 1
+    [ -n "$OUTC" ] || { say "wait gave no outcome for $DISP; will look again next pass"; return 1; }
+  fi
 
   local CLOSE_ARGS=("$DISP")
   case "$OUTC" in succeeded|failed|cancelled) ;; *) CLOSE_ARGS+=(--stop) ;; esac
@@ -301,8 +323,9 @@ record() {
 blocked_by() {
   local F="$1" ROLE M P K
   ROLE="$(hdr role "$F")"; M="$(model_of "$F")"
-  [ "$(live_count)" -ge "$MAX_WORKERS" ] && { echo "$MAX_WORKERS workers live"; return; }
-  [ -n "$M" ] && [ "$(live_with MODEL "$M")" -ge "$(model_cap "$M")" ] && { echo "model $M at its cap"; return; }
+  [ "$MAX_WORKERS" -gt 0 ] && [ "$(live_count)" -ge "$MAX_WORKERS" ] && { echo "$MAX_WORKERS workers live"; return; }
+  local CAP; CAP="$(model_cap "$M")"
+  [ -n "$M" ] && [ "$CAP" -gt 0 ] && [ "$(live_with MODEL "$M")" -ge "$CAP" ] && { echo "model $M at its cap"; return; }
   P="$(hdr serve "$F")"
   [ -n "$P" ] && [ "$(live_with SERVE "$P")" -gt 0 ] && { echo "port $P in use"; return; }
   case "$ROLE" in
@@ -423,8 +446,21 @@ fill_queue() {
 
 # Each pass: poll every live worker (close the settled ones), merge what the gate passed, top the
 # queue up from GitHub, then start whatever is ready.
+# one Orca read for every live worker: "<dispatchId> <outcome> <liveness>" per line in workers.now
+# (fields measured on the host 2026-10-05: workers[].dispatchId, projection.outcome,
+# projection.liveness.verdict). An unreadable list leaves the file empty, and each worker falls back.
+read_workers() {
+  : > "$S/workers.now"
+  live >/dev/null || return 0
+  orca orchestration worker-list --run "$(cat "$S/dispatch.run" 2>/dev/null)" --json </dev/null 2>/dev/null \
+    | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const i=s.indexOf("{");const j=JSON.parse(s.slice(i));
+        for(const w of ((j.result||{}).workers||[])){const p=w.projection||{};
+          console.log([w.dispatchId,p.outcome||"-",(p.liveness||{}).verdict||"-"].join(" "))}}catch(e){}})' > "$S/workers.now" 2>/dev/null
+}
+
 pass() {
   local F
+  read_workers
   # the one-worker dispatcher kept its live worker in running.env: adopt it
   if [ -f "$S/running.env" ]; then
     F="$RUN_DIR/$(basename "$(kv FILE "$S/running.env")").env"
@@ -459,7 +495,7 @@ bind_run() {
 
 status() {
   echo "enabled: $(acting && echo yes || echo 'no (dry run)')"
-  local F; echo "running ($(live_count) of max $MAX_WORKERS):"
+  local F; echo "running ($(live_count)$([ "$MAX_WORKERS" -gt 0 ] && echo " of max $MAX_WORKERS")):"
   for F in $(live) "$S/running.env"; do [ -f "$F" ] && { echo "  [$(basename "$F" .env)]"; sed 's/^/    /' "$F"; }; done
   echo "queue:"; ls -1 "$Q" 2>/dev/null | sed 's/^/  /'
   echo "last results:"; ls -1t "$DONE" 2>/dev/null | head -10 | sed 's/^/  /'

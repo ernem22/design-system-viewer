@@ -8,23 +8,27 @@ each one when it settles, posts its verdict and merges what the gate passed.
 
 ## Parallel workers and models (2026-10-05)
 
-There is no slot and no "one at a time". A queued spec starts when none of these holds:
+There is no slot and no "one at a time". A queued spec starts unless something real holds it:
 
 | Limit | Default | Why |
 |---|---|---|
-| `DISPATCH_MAX` live workers | 4 | ceiling for the 7.5 GB host |
-| free memory (`WATCH_MIN_MB`) | 600 MB | `worker.sh start` refuses (rc 3) and the spec stays queued |
-| `MODEL_CAP_<model>` live workers on one model | 2 (`MODEL_CAP`) | the OpenCode Go request quota is per model |
+| free memory (`WATCH_MIN_MB`) | 600 MB | `worker.sh start` refuses (rc 3) and the spec stays queued; one `start-refused` event per 30 min |
 | a Tester's `serve:` port in use | - | specgen gives each PR its own port (`8600 + pr % 100`) |
 | a Coder on the same issue / a Fixer on the same PR | - | two writers on one branch collide |
+| `DISPATCH_MAX` live workers | 0 (none) | optional ceiling |
+| `MODEL_CAP_<model>` live workers on one model | 0 (none) | set only from a measured quota |
+
+A blocked spec never holds the ones behind it: the queue is walked in name order and each ready spec starts.
+Live workers are read with ONE `orca orchestration worker-list --run <Run>` per pass (`workers.now`);
+a worker missing from it falls back to `worker.sh wait --poll 10`.
 
 Models are set per role in `roles/*.opencode.json` and can be overridden per spec with `model:`:
 
 | Role | Model | Why |
 |---|---|---|
-| Coder, Fixer | `deepseek-v4.1-flash` | measured: delivered #203, #206, #210, #211. `muse-spark-1.3-contributor` was tried on 2026-10-05 and settled nine Coders "succeeded" in 7-20 min with an empty report and no branch or PR; it is not used for writing |
-| Reviewer | `deepseek-v4-pro` | confirms the Coder's work: a different model family, so it does not share the Coder's blind spots; large quota |
-| Tester | `deepseek-v4.1-flash` | runs commands and observes: fast, cheap, proven on this repo |
+| Coder, Fixer | `muse-spark-1.3-contributor` | writes the change well (2026-10-05: nine Coders reproduced, fixed and tested); it skips commit/push/PR, which the dispatcher now does (`deliver`, roles.md) |
+| Reviewer | `deepseek-v4-pro` | a different family confirms the work; its verdict reached the gate on #231 |
+| Tester | `deepseek-v4.1-flash` | runs commands and observes; proven on this repo |
 
 Each result in `done/` carries `MODEL=`, so success per role and model can be counted.
 
