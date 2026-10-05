@@ -233,7 +233,7 @@ export default function FoundationBody() {
           <div className="dsv-touch-demo">
             <button
               className="dsv-btn dsv-btn--outline dsv-btn--sm dsv-touch-demo-btn"
-              aria-label="Small button stretched to touch minimum"
+              aria-label="sm control, small button stretched to touch minimum"
             >
               sm control
             </button>

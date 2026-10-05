@@ -14,7 +14,7 @@ function CalendarDemo() {
   const month = base.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const lead = (new Date(year, month, 1).getDay() + 6) % 7; // Monday-first
-  const title = base.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const title = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(base);
   const isJune = offset === 0;
   const pick = (d: number) => setSel(d);
   return (
@@ -106,11 +106,11 @@ function ComboboxDemo() {
             </span>
           ))}
         </div>
-        <Popover.Trigger asChild>
-          <div className="dsv-input-wrap dsv-input-wrap--prefix" style={{ cursor: "text" }}>
-            <span className="dsv-adorn dsv-adorn--prefix">
-              <Icon name="search" size={14} />
-            </span>
+        <div className="dsv-input-wrap dsv-input-wrap--prefix" style={{ cursor: "text" }}>
+          <span className="dsv-adorn dsv-adorn--prefix">
+            <Icon name="search" size={14} />
+          </span>
+          <Popover.Trigger asChild>
             <input
               className="dsv-input"
               placeholder="Search options…"
@@ -118,8 +118,8 @@ function ComboboxDemo() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
-          </div>
-        </Popover.Trigger>
+          </Popover.Trigger>
+        </div>
         <Popover.Portal container={portalContainer}>
           <Popover.Content
             className="dsv-menu"
@@ -127,15 +127,27 @@ function ComboboxDemo() {
             align="start"
             style={{ minWidth: 260 }}
             onOpenAutoFocus={(e) => e.preventDefault()}
+            role="listbox"
+            aria-label="Suggestions"
           >
             {opts.length === 0 && <div className="dsv-menu-label">No matches</div>}
             {opts.map((o) => (
               <div
                 key={o}
                 className="dsv-menu-item"
+                role="option"
+                aria-selected="false"
+                tabIndex={0}
                 onClick={() => {
                   setPicked((p) => [...p, o]);
                   setQ("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setPicked((p) => [...p, o]);
+                    setQ("");
+                  }
                 }}
               >
                 <Icon name="plus" size={14} /> {o}
@@ -291,13 +303,26 @@ function TreeDemo() {
 
 function DropzoneDemo() {
   const [st, setSt] = useState("idle");
+  const toggle = () => setSt((s) => (s === "done" ? "idle" : "done"));
   return (
     <div style={{ minWidth: 260 }}>
       <div
         className={`dsv-dropzone ${st === "over" ? "is-over" : ""} ${st === "done" ? "is-done" : ""}`}
+        role="button"
+        tabIndex={0}
+        aria-label="Upload files"
+        aria-pressed={st === "done"}
         onMouseEnter={() => st === "idle" && setSt("over")}
         onMouseLeave={() => st === "over" && setSt("idle")}
-        onClick={() => setSt(st === "done" ? "idle" : "done")}
+        onFocus={() => st === "idle" && setSt("over")}
+        onBlur={() => st === "over" && setSt("idle")}
+        onClick={toggle}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            toggle();
+          }
+        }}
       >
         {st === "done" ? "✓ report.pdf uploaded" : st === "over" ? "Drop to upload" : "Drag files here or browse"}
         <div className="dsv-muted" style={{ fontSize: "var(--font-size-xs)", marginTop: "var(--space-1)" }}>
@@ -423,7 +448,7 @@ export default function PatternsBody() {
           <tbody>
             {SHORTCUTS.map(([label, keys]) => (
               <tr key={label}>
-                <td>{label}</td>
+                <th scope="row" style={{ fontWeight: "inherit", textAlign: "left", padding: "var(--space-2) var(--space-3)", borderBottom: "var(--border-width-thin) solid var(--color-border-subtle)" }}>{label}</th>
                 <td style={{ textAlign: "right" }}>
                   {keys.map((k) => (
                     <kbd key={k} className="dsv-kbd" style={{ marginLeft: 4 }}>

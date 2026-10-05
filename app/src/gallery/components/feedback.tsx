@@ -38,7 +38,7 @@ export default function FeedbackBody() {
   return (
     <>
       <Demo title="Progress">
-        <Progress.Root className="dsv-progress" value={progress}>
+        <Progress.Root className="dsv-progress" value={progress} aria-label="Upload progress" aria-valuetext={`${progress}%`}>
           {/* width is the one genuinely dynamic value here — everything else
              in this gallery is a static class reading design-system tokens */}
           <Progress.Indicator className="dsv-progress-indicator" style={{ width: `${progress}%` }} />

@@ -171,7 +171,7 @@ export default function OverlaysBody() {
       <Demo title="Context Menu (right-click)">
         <ContextMenu.Root>
           <ContextMenu.Trigger asChild>
-            <div className="dsv-card dsv-card--dashed">Right-click here</div>
+            <button type="button" className="dsv-card dsv-card--dashed" style={{ font: "inherit", color: "inherit" }}>Right-click here</button>
           </ContextMenu.Trigger>
           <ContextMenu.Portal container={portalContainer}>
             <ContextMenu.Content className="dsv-menu">

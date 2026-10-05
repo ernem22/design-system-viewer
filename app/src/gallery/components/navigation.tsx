@@ -104,13 +104,13 @@ export default function NavigationBody() {
       <Demo title="Toolbar">
         <Toolbar.Root className="dsv-toolbar" aria-label="Formatting">
           <Toolbar.ToggleGroup type="multiple" aria-label="Text style">
-            <Toolbar.ToggleItem className="dsv-toggle" value="bold">
+            <Toolbar.ToggleItem className="dsv-toggle" value="bold" aria-label="Bold">
               <Icon name="bold" size={14} />
             </Toolbar.ToggleItem>
-            <Toolbar.ToggleItem className="dsv-toggle" value="italic">
+            <Toolbar.ToggleItem className="dsv-toggle" value="italic" aria-label="Italic">
               <Icon name="italic" size={14} />
             </Toolbar.ToggleItem>
-            <Toolbar.ToggleItem className="dsv-toggle" value="underline">
+            <Toolbar.ToggleItem className="dsv-toggle" value="underline" aria-label="Underline">
               <Icon name="underline" size={14} />
             </Toolbar.ToggleItem>
           </Toolbar.ToggleGroup>
