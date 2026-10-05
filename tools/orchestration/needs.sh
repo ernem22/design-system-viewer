@@ -28,6 +28,9 @@ known() {
     # a finished attempt that failed to start or was rejected does not satisfy the need - for every
     # role: a coder spec that failed to start must not hide its issue forever
     case "$f" in *.rejected|*.start-failed) continue;; esac
+    # a blocked result holds the need for BLOCKED_TTL minutes only (default 240): what blocked it -
+    # typically another open PR holding the files - is expected to move, and nobody re-queues it
+    case "$f" in *.blocked) [ -n "$(find "$f" -mmin -"${BLOCKED_TTL:-240}" 2>/dev/null)" ] || continue;; esac
     if [ -n "$head" ]; then
       sed -n '1,/^---$/p' "$f" | grep -qiE "^head:[[:space:]]*${head:0:7}" || continue
       # a worker whose verdict could not be posted is retried, at most twice per role and head:

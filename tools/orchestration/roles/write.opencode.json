@@ -36,7 +36,10 @@
       "rm -r -f *": "deny",
       "rm -f -r *": "deny",
       "rm -r *": "deny",
-      "rm -R *": "deny"
+      "rm -R *": "deny",
+      "orca orchestration ask*": "deny",
+      "orca orchestration send *--type question*": "deny",
+      "orca orchestration send *--type=question*": "deny"
     }
   }
 }

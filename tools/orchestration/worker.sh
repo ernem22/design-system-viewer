@@ -55,6 +55,9 @@ context() {
 
 # worktree id is "<repo-id>::<path>"
 wt_path() { printf '%s' "${1#*::}"; }
+# 0 = the terminal is listed OR the list could not be read (unknown is not absent, hunter H-007)
+listed() { local TL; TL="$(o terminal list --json)"; case "$TL" in *'"ok":true'*|*'"ok": true'*) ;; *) return 0;; esac
+  printf '%s' "$TL" | grep -q "\"$1\""; }
 
 # ---- start ---------------------------------------------------------------------------------
 cmd_start() {
@@ -236,7 +239,22 @@ cmd_close() {
       [ -n "$OUT" ] && [ "$OUT" != "in_progress" ] && break
       sleep 3
     done
-    [ "$OUT" != "in_progress" ] || { say "close: $DISP did not stop"; exit 6; }
+    # worker-stop does not reach an agent blocked on its own question (measured 2026-10-05,
+    # coder-116: "did not stop" on every pass while it waited for an answer nobody sends). For our
+    # own tree the agent's terminal is closed instead; the release below then finds it gone.
+    if [ "$OUT" = "in_progress" ] && [ -n "$OURS" ] && [ -n "$H" ]; then
+      say "close: $DISP did not stop; closing its agent terminal $H"
+      o terminal close --terminal "$H" --json >/dev/null
+      for _ in 1 2 3 4 5 6 7 8 9 10; do
+        OUT="$(o orchestration worker-show --dispatch "$DISP" --json | jget result.projection.outcome)"
+        [ -n "$OUT" ] && [ "$OUT" != "in_progress" ] && break
+        listed "$H" || break
+        sleep 3
+      done
+      listed "$H" && { say "close: $DISP terminal $H is still listed (or the list is unreadable)"; exit 6; }
+    elif [ "$OUT" = "in_progress" ]; then
+      say "close: $DISP did not stop"; exit 6
+    fi
   fi
 
   # 2. Release: Orca closes the terminal it owns. Retried once with a fresh request id on
