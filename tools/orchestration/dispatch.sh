@@ -60,6 +60,7 @@ mkdir -p "$Q" "$DONE" "$RUN_DIR" 2>/dev/null || true
 #   * a Tester's port: never two Testers on one port;
 #   * one writer per PR: never two Coders on one issue or two Fixers on one PR.
 MAX_WORKERS="${DISPATCH_MAX:-4}"
+REPO_SLUG="${DSV_REPO:-ernem22/design-system-viewer}"
 role_cfg() { case "$1" in coder|fixer) echo write;; reviewer) echo readonly;; tester) echo tester;; esac; }
 model_of() {   # spec file -> the model it will run on (its model: header, else its role's config)
   local M; M="$(hdr model "$1")"
@@ -173,12 +174,36 @@ post_verdict() {
 # blocked issue (retried later) from a delivered one (measured 2026-10-05: coder-116 blocked on files
 # held by #170 would otherwise have been recorded as succeeded and never retried).
 report_status() {
-  local FILE="$1" TASK="$2" ROLE ST
+  local FILE="$1" TASK="$2" ROLE ST REP PRN SHA
   ROLE="$(hdr role "$FILE")"
   case "$ROLE" in coder|fixer) ;; *) echo succeeded; return;; esac
-  ST="$(orca orchestration task-list --json </dev/null 2>/dev/null | node "$HERE_NATIVE/lib/task-result.cjs" "$TASK" 2>/dev/null \
-    | sed -n 's/^[[:space:]]*status:[[:space:]]*\([a-z]*\).*/\1/p' | head -1)"
-  case "$ST" in blocked|unreproducible|failed) say "$TASK reported status: $ST"; echo "$ST";; *) echo succeeded;; esac
+  # kept for diagnosis, like a reviewer's report
+  REP="$S/report-$TASK.txt"
+  orca orchestration task-list --json </dev/null 2>/dev/null | node "$HERE_NATIVE/lib/task-result.cjs" "$TASK" > "$REP" 2>/dev/null
+  ST="$(sed -n 's/^[[:space:]]*status:[[:space:]]*\([a-z]*\).*/\1/p' "$REP" | head -1)"
+  case "$ST" in
+    blocked|unreproducible|failed) say "$TASK reported status: $ST"; echo "$ST"; return;;
+    succeeded) ;;
+    # an unreadable report is not a success (measured 2026-10-05: unread reports were recorded as
+    # succeeded, and a succeeded Coder hid its issue)
+    *) say "$TASK: no readable status in its report ($REP); recorded as unknown"; echo unknown; return;;
+  esac
+  # A success is checked against GitHub, not taken from the report: measured 2026-10-05, nine Coders
+  # settled "succeeded" and not one branch or PR existed.
+  if [ "$ROLE" = "coder" ]; then
+    PRN="$(sed -n 's/^[[:space:]]*pr:[[:space:]]*#\{0,1\}\([0-9][0-9]*\).*/\1/p' "$REP" | head -1)"
+    if [ -z "$PRN" ] || [ "$(gh pr view "$PRN" --repo "$REPO_SLUG" --json state --jq .state 2>/dev/null)" != "OPEN" ]; then
+      say "$TASK reported succeeded but names no open PR (pr: '${PRN:-none}'); recorded as no-pr"; echo no-pr; return
+    fi
+  else
+    SHA="$(sed -n 's/^[[:space:]]*commit:[[:space:]]*\([0-9a-fA-F]\{7,40\}\).*/\1/p' "$REP" | head -1)"
+    PRN="$(hdr pr "$FILE")"
+    case "$(gh pr view "$PRN" --repo "$REPO_SLUG" --json headRefOid --jq .headRefOid 2>/dev/null)" in
+      "$SHA"*) [ -n "$SHA" ] || { say "$TASK: fixer names no commit; recorded as no-push"; echo no-push; return; } ;;
+      *) say "$TASK: fixer commit '${SHA:-none}' is not the head of #$PRN; recorded as no-push"; echo no-push; return;;
+    esac
+  fi
+  echo succeeded
 }
 
 record() {
