@@ -55,13 +55,11 @@ mkdir -p "$Q" "$DONE" "$RUN_DIR" 2>/dev/null || true
 # WORKERS RUN WHILE THERE IS WORK (2026-10-05: one worker at a time gave 3 product PRs in ~15 h).
 # Every queued spec starts as soon as nothing real stops it; each live worker has its own
 # $RUN_DIR/<spec>.env. The only limits are real resources:
-#   * DISPATCH_MAX workers in all (default 4): a ceiling for this 7.5 GB host;
-#   * memory: worker.sh start refuses (rc 3, the spec stays queued) below WATCH_MIN_MB free;
-#   * a model's request quota: at most MODEL_CAP_<model> live workers per model (default 2);
+#   * memory, counted for what workers WILL hold (need_mb below): no fixed worker count;
+#   * a model's request quota: at most MODEL_CAP_<model> live workers per model (default 0 = none);
 #   * a Tester's port: never two Testers on one port;
 #   * one writer per PR: never two Coders on one issue or two Fixers on one PR.
-# 0 = no ceiling. Memory is the brake (worker.sh refuses below WATCH_MIN_MB); a fixed count was a
-# guess that held unrelated workers back (2026-10-05).
+# DISPATCH_MAX (default 0 = none) stays only as an optional manual ceiling.
 MAX_WORKERS="${DISPATCH_MAX:-0}"
 REPO_SLUG="${DSV_REPO:-ernem22/design-system-viewer}"
 role_cfg() { case "$1" in coder|fixer) echo write;; reviewer) echo readonly;; tester) echo tester;; esac; }
@@ -336,7 +334,7 @@ deliver() {
   PRN="$(gh pr list --repo "$REPO_SLUG" --head "$BR" --state open --json number --jq '.[0].number // empty' 2>/dev/null)"
   if [ -z "$PRN" ]; then
     BODY="$S/deliver-$TASK.md"
-    { echo "Closes #$N"; echo; echo "## Worker report"; echo; cat "$REP"; echo
+    { echo "Closes #$N"; echo; echo "## Worker report"; echo; report_text "$REP"; echo
       echo "_Delivered by the dispatcher: the worker ($TASK, $(kv MODEL "$RUNNING")) settled succeeded without opening a PR. The Reviewer and Tester gate it as usual._"; } > "$BODY"
     URL="$(gh pr create --repo "$REPO_SLUG" --base "$BASEBR" --head "$BR" --title "$TITLE" --body-file "$BODY" 2>&1)" \
       || { say "deliver: gh pr create failed: $(printf '%s' "$URL" | tr '\n' ' ' | cut -c1-200)"; return 1; }
@@ -346,6 +344,15 @@ deliver() {
   DELIVERED_PR="$PRN"
   event "delivered role=coder spec=$(basename "$FILE" | sed 's/^active-//') pr=$PRN branch=$BR"
   return 0
+}
+
+# The report as a reader wants it: task-result.cjs prints EVERY string of Orca's result, so a report
+# without status:/commit: lines comes with Orca's own fields mixed in (measured 2026-10-05, #235's body:
+# worker_report, succeeded, msg_..., term_... twice, an ISO time). Those lines are dropped here only;
+# verdict-post.sh reads the unfiltered report.
+report_text() {
+  grep -vE '^[[:space:]]*(worker_report|succeeded|failed|blocked|msg_[0-9a-f]+|term_[0-9a-f-]+|[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z)[[:space:]]*$' "$1" \
+    | sed '/./,$!d'
 }
 
 record() {
@@ -395,6 +402,22 @@ start_ready() {
   done
 }
 
+# MEMORY decides how many workers run, not a count. Measured 2026-10-05 on this 7.5 GB host: one
+# opencode worker holds 1.2-1.6 GB private once working, but starts small - so "is 600 MB free now"
+# let a 5th and 6th worker in, free RAM fell to 56 MB, and bash could no longer fork (0xC000012D).
+# A start therefore needs room for itself (WORKER_MB) PLUS the growth still owed by live workers:
+# live x WORKER_MB minus what opencode already holds. Closing other programs lets more workers in
+# by itself. With nothing live the old floor (WATCH_MIN_MB) applies, so the pipeline never stalls.
+need_mb() {
+  local N W OC RES; N="$(live_count)"; W="${WORKER_MB:-1500}"
+  [ "$N" -gt 0 ] || { echo "${WATCH_MIN_MB:-600}"; return; }
+  OC="$(powershell -NoProfile -Command "[int]((Get-Process opencode -ErrorAction SilentlyContinue | Measure-Object PrivateMemorySize64 -Sum).Sum/1MB)" 2>/dev/null | tr -dc '0-9')"
+  # unreadable -> assume no live worker has grown yet (the safe side)
+  RES=$(( N * W - ${OC:-0} )); [ "$RES" -lt 0 ] && RES=0
+  say "memory: $N live, opencode holds ${OC:-unread} MB, growth still owed ${RES} MB -> a start needs $(( W + RES )) MB free"
+  echo $(( W + RES ))
+}
+
 start_one() {
   local FILE="$1" MODEL; MODEL="$(model_of "$1")"
   local NAME BASE ROLE TITLE DEADLINE SERVE RTASK ROF ATTEMPT
@@ -430,6 +453,7 @@ start_one() {
   # with workers live, a memory shortfall must not hold this loop (and their polling) for 15 minutes:
   # refuse fast (rc 3, the spec stays queued) and look again next pass
   local CAPT="${WATCH_CAP_TIMEOUT:-900}"; [ "$(live_count)" -gt 0 ] && CAPT=10
+  local NEED; NEED="$(need_mb)"; ARGS+=(--min "$NEED")
   OUT="$(WATCH_CAP_TIMEOUT="$CAPT" bash "$HERE/worker.sh" "${ARGS[@]}")"; RC=$?
   rm -f "$SPEC"
   local DISP TASK
