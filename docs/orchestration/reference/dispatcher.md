@@ -20,7 +20,7 @@ Models are set per role in `roles/*.opencode.json` and can be overridden per spe
 
 | Role | Model | Why |
 |---|---|---|
-| Coder, Fixer | `muse-spark-1.3-contributor` | writes the code: the strongest agentic coder, fewer tool calls and tokens per task |
+| Coder, Fixer | `deepseek-v4.1-flash` | measured: delivered #203, #206, #210, #211. `muse-spark-1.3-contributor` was tried on 2026-10-05 and settled nine Coders "succeeded" in 7-20 min with an empty report and no branch or PR; it is not used for writing |
 | Reviewer | `deepseek-v4-pro` | confirms the Coder's work: a different model family, so it does not share the Coder's blind spots; large quota |
 | Tester | `deepseek-v4.1-flash` | runs commands and observes: fast, cheap, proven on this repo |
 
