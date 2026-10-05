@@ -55,17 +55,12 @@ mkdir -p "$Q" "$DONE" "$RUN_DIR" 2>/dev/null || true
 # WORKERS RUN WHILE THERE IS WORK (2026-10-05: one worker at a time gave 3 product PRs in ~15 h).
 # Every queued spec starts as soon as nothing real stops it; each live worker has its own
 # $RUN_DIR/<spec>.env. The only limits are real resources:
-#   * DISPATCH_MAX workers in all (default 3, MEASURED - see below);
-#   * memory: worker.sh start refuses (rc 3, the spec stays queued) below WATCH_MIN_MB free;
+#   * memory, counted for what workers WILL hold (need_mb below): no fixed worker count;
 #   * a model's request quota: at most MODEL_CAP_<model> live workers per model (default 0 = none);
 #   * a Tester's port: never two Testers on one port;
 #   * one writer per PR: never two Coders on one issue or two Fixers on one PR.
-# Why 3 (measured 2026-10-05 on this 7.5 GB host): one opencode worker holds 1.2-1.6 GB private once
-# it is working, but starts small, so the free-memory check at start time let a 5th and 6th in. With 4
-# live, free RAM was 15-580 MB; with 5-6 live, 56 MB, and bash could no longer fork (0xC000012D),
-# which failed a start (rc 4) and can end the dispatcher itself. Raise it only after measuring again
-# (e.g. after closing other programs): DISPATCH_MAX=n in the environment of dispatcher.cmd.
-MAX_WORKERS="${DISPATCH_MAX:-3}"
+# DISPATCH_MAX (default 0 = none) stays only as an optional manual ceiling.
+MAX_WORKERS="${DISPATCH_MAX:-0}"
 REPO_SLUG="${DSV_REPO:-ernem22/design-system-viewer}"
 role_cfg() { case "$1" in coder|fixer) echo write;; reviewer) echo readonly;; tester) echo tester;; esac; }
 model_of() {   # spec file -> the model it will run on (its model: header, else its role's config)
@@ -407,6 +402,22 @@ start_ready() {
   done
 }
 
+# MEMORY decides how many workers run, not a count. Measured 2026-10-05 on this 7.5 GB host: one
+# opencode worker holds 1.2-1.6 GB private once working, but starts small - so "is 600 MB free now"
+# let a 5th and 6th worker in, free RAM fell to 56 MB, and bash could no longer fork (0xC000012D).
+# A start therefore needs room for itself (WORKER_MB) PLUS the growth still owed by live workers:
+# live x WORKER_MB minus what opencode already holds. Closing other programs lets more workers in
+# by itself. With nothing live the old floor (WATCH_MIN_MB) applies, so the pipeline never stalls.
+need_mb() {
+  local N W OC RES; N="$(live_count)"; W="${WORKER_MB:-1500}"
+  [ "$N" -gt 0 ] || { echo "${WATCH_MIN_MB:-600}"; return; }
+  OC="$(powershell -NoProfile -Command "[int]((Get-Process opencode -ErrorAction SilentlyContinue | Measure-Object PrivateMemorySize64 -Sum).Sum/1MB)" 2>/dev/null | tr -dc '0-9')"
+  # unreadable -> assume no live worker has grown yet (the safe side)
+  RES=$(( N * W - ${OC:-0} )); [ "$RES" -lt 0 ] && RES=0
+  say "memory: $N live, opencode holds ${OC:-unread} MB, growth still owed ${RES} MB -> a start needs $(( W + RES )) MB free"
+  echo $(( W + RES ))
+}
+
 start_one() {
   local FILE="$1" MODEL; MODEL="$(model_of "$1")"
   local NAME BASE ROLE TITLE DEADLINE SERVE RTASK ROF ATTEMPT
@@ -442,6 +453,7 @@ start_one() {
   # with workers live, a memory shortfall must not hold this loop (and their polling) for 15 minutes:
   # refuse fast (rc 3, the spec stays queued) and look again next pass
   local CAPT="${WATCH_CAP_TIMEOUT:-900}"; [ "$(live_count)" -gt 0 ] && CAPT=10
+  local NEED; NEED="$(need_mb)"; ARGS+=(--min "$NEED")
   OUT="$(WATCH_CAP_TIMEOUT="$CAPT" bash "$HERE/worker.sh" "${ARGS[@]}")"; RC=$?
   rm -f "$SPEC"
   local DISP TASK
