@@ -81,3 +81,14 @@
 .dsv-pressable { transition: transform var(--motion-press), opacity var(--motion-press); }
 
 .dsv-pressable:active { transform: scale(var(--motion-scale-active)); opacity: var(--opacity-active); }
+
+/* Issue 220: honour prefers-reduced-motion. All four animations here are
+   infinite, so they stop and leave their static state. */
+@media (prefers-reduced-motion: reduce) {
+  .dsv-dur-dot,
+  .dsv-dur-fill,
+  .dsv-skeleton,
+  .dsv-bounce-dot {
+    animation: none;
+  }
+}
