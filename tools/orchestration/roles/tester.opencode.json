@@ -34,7 +34,10 @@
       "npx --yes playwright *": "allow",
       "rg *--pre*": "deny",
       "git * --output*": "deny",
-      "git * --ext-diff*": "deny"
+      "git * --ext-diff*": "deny",
+      "orca orchestration ask*": "deny",
+      "orca orchestration send *--type question*": "deny",
+      "orca orchestration send *--type=question*": "deny"
     }
   }
 }

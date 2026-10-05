@@ -104,6 +104,7 @@ finish_running() {
   case "$OUTC" in
     succeeded)
       post_verdict "$FILE" "$TASK" || OUTC="verdict-refused"
+      [ "$OUTC" = "succeeded" ] && OUTC="$(report_status "$FILE" "$TASK")"
       record "$FILE" "$OUTC" ;;
     *)
       if [ "${ATTEMPT:-1}" -lt "$MAX_ATTEMPTS" ]; then
@@ -141,6 +142,19 @@ post_verdict() {
   RC="${PIPESTATUS[0]}"
   [ "$RC" -eq 0 ] && say "posted $ROLE verdict for #$PR from $TASK" || say "verdict-post refused $TASK (rc $RC); report kept at $REP"
   return "$RC"
+}
+
+# A Coder or Fixer settles `succeeded` with `status: blocked` (or unreproducible / failed) in its body:
+# the dispatch succeeded, the work did not. Recorded under that status, so needs.sh can tell a
+# blocked issue (retried later) from a delivered one (measured 2026-10-05: coder-116 blocked on files
+# held by #170 would otherwise have been recorded as succeeded and never retried).
+report_status() {
+  local FILE="$1" TASK="$2" ROLE ST
+  ROLE="$(hdr role "$FILE")"
+  case "$ROLE" in coder|fixer) ;; *) echo succeeded; return;; esac
+  ST="$(orca orchestration task-list --json </dev/null 2>/dev/null | node "$HERE_NATIVE/lib/task-result.cjs" "$TASK" 2>/dev/null \
+    | sed -n 's/^[[:space:]]*status:[[:space:]]*\([a-z]*\).*/\1/p' | head -1)"
+  case "$ST" in blocked|unreproducible|failed) say "$TASK reported status: $ST"; echo "$ST";; *) echo succeeded;; esac
 }
 
 record() {

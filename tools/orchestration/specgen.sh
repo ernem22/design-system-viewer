@@ -64,8 +64,10 @@ held_files() {
 WORKER_DONE_RULES='Send worker_done once, from this terminal. **Do not retype the command: your dispatch
 preamble prints it verbatim, including the `--dispatch-capability dcap_...` token.** Check it
 carries `--task-id`, `--dispatch-id` and `--outcome=succeeded` (equals sign; the space form is
-rejected). If something is genuinely ambiguous, ask with `--type question` using the command
-shape from your preamble - never a retyped one.'
+rejected). Never ask a question (`--type question`): nobody answers it - there is no coordinator,
+and a worker waiting on an answer sits until its deadline (measured 2026-10-05, coder-116: two
+attempts, ~50 min). If something is ambiguous or blocks you, settle with `status: blocked` and a
+`reason:` line saying exactly what and why.'
 
 write_spec() {   # file, header, body
   local F="$Q/$1"
@@ -182,7 +184,7 @@ $FIND
 
 STEP 0 - reproduce each finding on $head before fixing it, and record the observed value. A finding
 you cannot reproduce is reported as unreproducible, never silently \"fixed\". Keep every existing test
-green; if you believe a test is wrong, ask instead of changing what it asserts.
+green; if you believe a test is wrong, report `status: blocked` with the reason instead of changing what it asserts.
 
 Do not re-scope, re-design or \"improve while you are in there\".
 
@@ -221,6 +223,9 @@ and its \`Verify:\` line exactly; do not widen it.
 
 STEP 0 - reproduce the claim on the parent commit before changing anything, and record the exact
 steps and the observed value. If you cannot reproduce it, STOP and report \`status: unreproducible\`.
+\`unreproducible\` means the claim does not hold on the parent commit - nothing else. If the remaining
+work needs a file held by an open PR listed above, or depends on an open PR, report \`status: blocked\`
+with \`reason: needs <files> held by #<pr>\`; an open PR is not "already delivered".
 
 EVIDENCE - real numbers in the PR body: \`npm --prefix app run test\` counts before/after; \`build\`
 succeeds; \`lint\` clean; a test that fails on the parent and passes on yours, named, with its
@@ -235,6 +240,7 @@ OUTPUT - worker_done body:
 status: succeeded | failed | blocked | unreproducible
 role: coder
 task: <task id from your preamble>
+reason: <one line; required for blocked, failed and unreproducible>
 commit: <sha you pushed>
 tests: pass | fail
 pr: <number>

@@ -76,9 +76,11 @@ TWO OPERATIONAL RULES, both learned from a real failure:
     terminal output — the coordinator can read a retained terminal — and say in it
     that the settlement was empty.
 
-If the issue leaves a requirement genuinely ambiguous, ask instead of guessing — with
-`--type question`, using the command shape from your dispatch preamble again
-(`--to <coordinator terminal handle from your preamble>`, plus `--task-id`,
-`--dispatch-id` and the capability token), never a retyped one.
+If the issue leaves a requirement genuinely ambiguous, do not guess and do not ask: no
+coordinator answers questions, and a worker waiting on an answer sits until its deadline
+(measured 2026-10-05, coder-116). Settle with `status: blocked` and a `reason:` line.
+If the remaining work needs a file held by an open PR, that is `blocked`
+(`reason: needs <files> held by #<pr>`), not `unreproducible` — an open PR has not
+delivered anything yet.
 
-then wait. Never invent a requirement.
+Never invent a requirement.
