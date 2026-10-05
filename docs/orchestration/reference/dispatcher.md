@@ -1,8 +1,30 @@
 # Dispatcher (worker.sh + dispatch.sh)
 
 The pipeline's control plane. No model decides anything in it. Hermes writes spec text into a
-queue. The dispatcher starts those specs one at a time, waits each one out, closes it, posts its
-verdict and merges what the gate passed.
+queue. The dispatcher starts every spec that nothing real blocks, polls the live workers, closes
+each one when it settles, posts its verdict and merges what the gate passed.
+
+## Parallel workers and models (2026-10-05)
+
+There is no slot and no "one at a time". A queued spec starts when none of these holds:
+
+| Limit | Default | Why |
+|---|---|---|
+| `DISPATCH_MAX` live workers | 4 | ceiling for the 7.5 GB host |
+| free memory (`WATCH_MIN_MB`) | 600 MB | `worker.sh start` refuses (rc 3) and the spec stays queued |
+| `MODEL_CAP_<model>` live workers on one model | 2 (`MODEL_CAP`) | the OpenCode Go request quota is per model |
+| a Tester's `serve:` port in use | - | specgen gives each PR its own port (`8600 + pr % 100`) |
+| a Coder on the same issue / a Fixer on the same PR | - | two writers on one branch collide |
+
+Models are set per role in `roles/*.opencode.json` and can be overridden per spec with `model:`:
+
+| Role | Model | Why |
+|---|---|---|
+| Coder, Fixer | `muse-spark-1.3-contributor` | writes the code: the strongest agentic coder, fewer tool calls and tokens per task |
+| Reviewer | `deepseek-v4-pro` | confirms the Coder's work: a different model family, so it does not share the Coder's blind spots; large quota |
+| Tester | `deepseek-v4.1-flash` | runs commands and observes: fast, cheap, proven on this repo |
+
+Each result in `done/` carries `MODEL=`, so success per role and model can be counted.
 
 ## Who does what
 
@@ -71,7 +93,7 @@ Header fields:
 | File | Meaning |
 |---|---|
 | `dispatch.enabled` | present: act; absent: every pass logs what it WOULD start (shadow mode, kill switch) |
-| `running.env` | the one live dispatch; a pass finishes it before starting anything (restart-safe) |
+| `running/<spec>.env` | one per live worker; every pass polls each (restart-safe). A legacy `running.env` is adopted |
 | `active-<spec>` | the spec of the running worker |
 | `done/<spec>.<outcome>` | spec + result footer; outcome is one of the values below |
 | `report-<task>.txt` | the worker's own report, as handed to `verdict-post.sh` |
@@ -106,7 +128,7 @@ bash tools/orchestration/dispatch.sh --status
 bash tools/orchestration/needs.sh
 ```
 
-`close.sh` runs between workers, before the next one starts, at most every `CLOSE_EVERY` seconds (300). It runs with
+`close.sh` runs every `CLOSE_EVERY` seconds (120) and right after a worker finishes. It runs with
 `--dry-run` while `dispatch.enabled` is absent. Its merges are pinned with `--match-head-commit`.
 
 ## Keeping it alive (H-002)

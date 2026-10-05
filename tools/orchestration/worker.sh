@@ -61,7 +61,7 @@ listed() { local TL; TL="$(o terminal list --json)"; case "$TL" in *'"ok":true'*
 
 # ---- start ---------------------------------------------------------------------------------
 cmd_start() {
-  local NAME="" BASE="" SPEC="" TITLE="" READONLY="" CONFIG="" MIN="${WATCH_MIN_MB:-600}" TASK="" RETRY_OF="" SERVE=""
+  local NAME="" BASE="" SPEC="" TITLE="" READONLY="" CONFIG="" MIN="${WATCH_MIN_MB:-600}" TASK="" RETRY_OF="" SERVE="" MODEL=""
   local pos=()
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -71,6 +71,7 @@ cmd_start() {
       --task) TASK="${2:?--task needs an id}"; shift 2;;
       --retry-of) RETRY_OF="${2:?--retry-of needs a dispatch}"; shift 2;;
       --serve) SERVE="${2:?--serve needs a port}"; shift 2;;
+      --model) MODEL="${2:?--model needs a model id}"; shift 2;;
       --deadline|--interval) shift 2;;   # belong to wait; tolerated so `run` can pass everything
       -*) say "start: unknown flag $1"; exit 2;;
       *) pos+=("$1"); shift;;
@@ -138,6 +139,12 @@ cmd_start() {
   [ -n "$CONFIG" ] && CFG="$HERE/roles/$CONFIG.opencode.json"
   [ -f "$CFG" ] || { say "start: no role config $CFG"; rollback; exit 4; }
   cp "$CFG" "$P/opencode.json" || { say "start: cannot pin $P/opencode.json"; rollback; exit 4; }
+  if [ -n "$MODEL" ]; then
+    node -e 'const f=process.argv[1],j=JSON.parse(require("fs").readFileSync(f,"utf8"));j.model=process.argv[2];require("fs").writeFileSync(f,JSON.stringify(j,null,2)+"\n")' \
+      "$(cygpath -m "$P/opencode.json" 2>/dev/null || printf '%s' "$P/opencode.json")" "$MODEL" \
+      || { say "start: cannot set model $MODEL"; rollback; exit 4; }
+  fi
+  echo "MODEL=$(node "$HERE_NATIVE/lib/jget.cjs" model < "$P/opencode.json")"
 
   # 2b. A Tester needs the PR's build served before it starts (it writes nothing itself).
   if [ -n "$SERVE" ]; then
@@ -184,11 +191,14 @@ cmd_start() {
 # An unreadable reply is UNKNOWN and never ends the wait early (hunter H-007).
 cmd_wait() {
   local DISP="${1:-}"; shift || true
-  local DEADLINE=3600 INTERVAL=15
+  local DEADLINE=3600 INTERVAL=15 POLL=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --deadline) DEADLINE="${2:?}"; shift 2;;
       --interval) INTERVAL="${2:?}"; shift 2;;
+      # --poll N: look for at most N seconds, then answer OUTCOME=pending (the dispatcher polls each
+      # slot in turn instead of blocking on one worker until it settles)
+      --poll) POLL="${2:?}"; shift 2;;
       *) shift;;
     esac
   done
@@ -211,6 +221,7 @@ cmd_wait() {
     if [ $((NOW - T0)) -ge "$DEADLINE" ]; then
       say "wait: $DISP passed its ${DEADLINE}s deadline"; echo "OUTCOME=timeout"; return 0
     fi
+    [ -n "$POLL" ] && [ $((NOW - T0)) -ge "$POLL" ] && { echo "OUTCOME=pending"; return 0; }
     sleep "$INTERVAL"
   done
 }

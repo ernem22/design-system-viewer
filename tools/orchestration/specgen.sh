@@ -77,6 +77,9 @@ write_spec() {   # file, header, body
 
 gen_tester() {   # pr head branch
   local pr="$1" head="${2:0:7}" br="$3" n; n="$(issue_of "$pr")"
+  # a port per PR, so Testers of different PRs can run at the same time (the dispatcher still never
+  # starts two Testers on one port)
+  local PORT=$(( ${DSV_TEST_PORT_BASE:-8600} + pr % 100 ))
   write_spec "200-tester-$pr-$head.spec" "name: tester-$pr-$head
 base: origin/$br
 role: tester

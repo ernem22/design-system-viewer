@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The dispatcher: runs queued worker specs one at a time through worker.sh. No model decides
+# The dispatcher: runs queued worker specs through worker.sh, as many at once as resources allow. No model decides
 # anything here; Hermes only WRITES specs into the queue.
 #
 #   dispatch.sh            loop forever (one instance; a second one exits 0)
@@ -26,16 +26,16 @@
 #   ---
 #   <spec body>
 #
-# LEVEL-TRIGGERED: the only state is files. $S/running.env names the one live dispatch; on start a
-# pass first finishes THAT (wait out its deadline, close it), so a restart of this script, of Orca
-# or of the machine resumes instead of starting a second worker beside the first.
+# LEVEL-TRIGGERED: the only state is files. $S/running/<spec>.env names each live dispatch; every
+# pass polls each one (worker.sh wait --poll) and closes it once settled, so a restart of this
+# script, of Orca or of the machine resumes every worker instead of starting duplicates.
 #
 # VERDICTS: a reviewer/tester never posts to the PR (its config cannot). When it settles succeeded,
 # the dispatcher reads the worker's own report from Orca and posts it with verdict-post.sh
 # --from-settlement, which copies the lines verbatim and refuses an incomplete block (hunter H-005:
 # a verdict a worker could post under the owner's login is a verdict anyone could forge).
 #
-# MERGES: between workers, at most every CLOSE_EVERY seconds (default 300), close.sh merges what the
+# MERGES: at most every CLOSE_EVERY seconds (default 120, and at once after a worker finishes), close.sh merges what the
 # pipeline/verdict gate passed, pinned to the head it read (--dry-run while not acting).
 #
 # RESULTS: $S/done/<file>.<outcome>, the spec plus a footer with dispatch, task, outcome, attempts.
@@ -47,9 +47,29 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 HERE_NATIVE="$(cygpath -m "$HERE" 2>/dev/null || printf '%s' "$HERE")"
 cd "$HERE/../.." || exit 2
 S="${LOCALAPPDATA:-$HOME}/orca-orchestration/design-system-viewer"
-Q="$S/queue"; DONE="$S/done"; RUNNING="$S/running.env"; LOG="$S/dispatch.log"
-INTERVAL="${DISPATCH_INTERVAL:-30}"; MAX_ATTEMPTS="${DISPATCH_MAX_ATTEMPTS:-3}"
-mkdir -p "$Q" "$DONE" 2>/dev/null || true
+Q="$S/queue"; DONE="$S/done"; RUN_DIR="$S/running"; RUNNING=""; LOG="$S/dispatch.log"
+INTERVAL="${DISPATCH_INTERVAL:-30}"; MAX_ATTEMPTS="${DISPATCH_MAX_ATTEMPTS:-2}"
+mkdir -p "$Q" "$DONE" "$RUN_DIR" 2>/dev/null || true
+
+# WORKERS RUN WHILE THERE IS WORK (2026-10-05: one worker at a time gave 3 product PRs in ~15 h).
+# Every queued spec starts as soon as nothing real stops it; each live worker has its own
+# $RUN_DIR/<spec>.env. The only limits are real resources:
+#   * DISPATCH_MAX workers in all (default 4): a ceiling for this 7.5 GB host;
+#   * memory: worker.sh start refuses (rc 3, the spec stays queued) below WATCH_MIN_MB free;
+#   * a model's request quota: at most MODEL_CAP_<model> live workers per model (default 2);
+#   * a Tester's port: never two Testers on one port;
+#   * one writer per PR: never two Coders on one issue or two Fixers on one PR.
+MAX_WORKERS="${DISPATCH_MAX:-4}"
+role_cfg() { case "$1" in coder|fixer) echo write;; reviewer) echo readonly;; tester) echo tester;; esac; }
+model_of() {   # spec file -> the model it will run on (its model: header, else its role's config)
+  local M; M="$(hdr model "$1")"
+  [ -n "$M" ] || M="$(node "$HERE_NATIVE/lib/jget.cjs" model < "$HERE/roles/$(role_cfg "$(hdr role "$1")").opencode.json" 2>/dev/null)"
+  echo "$M"
+}
+model_cap() { local V; V="MODEL_CAP_$(printf '%s' "$1" | tr -c 'A-Za-z0-9' '_')"; echo "${!V:-${MODEL_CAP:-2}}"; }
+live() { ls -1 "$RUN_DIR"/*.env 2>/dev/null; }   # one file per live worker
+live_count() { live | grep -c . ; }
+live_with() { local K="$1" V="$2" F N=0; for F in $(live); do [ "$(kv "$K" "$F")" = "$V" ] && N=$((N+1)); done; echo "$N"; }
 
 say() { printf '%s dispatch: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" | tee -a "$LOG" >&2; }
 acting() { [ -f "$S/dispatch.enabled" ]; }
@@ -75,8 +95,10 @@ finish_running() {
   DISP="$(kv DISPATCH "$RUNNING")"; FILE="$(kv FILE "$RUNNING")"; TASK="$(kv TASK "$RUNNING")"
   DEADLINE_AT="$(kv DEADLINE_AT "$RUNNING")"; ATTEMPT="$(kv ATTEMPT "$RUNNING")"
   NOW="$(date +%s)"; LEFT=$(( ${DEADLINE_AT:-$NOW} - NOW )); [ "$LEFT" -lt 1 ] && LEFT=1
-  say "running: $DISP ($(basename "$FILE")), up to ${LEFT}s left"
-  OUTC="$(bash "$HERE/worker.sh" wait "$DISP" --deadline "$LEFT" | sed -n 's/^OUTCOME=//p')"
+  # said once per dispatch, not on every poll
+  if [ -z "$(kv SAID "$RUNNING")" ]; then say "running: $DISP ($(basename "$FILE")), up to ${LEFT}s left"; echo "SAID=1" >> "$RUNNING"; fi
+  OUTC="$(bash "$HERE/worker.sh" wait "$DISP" --deadline "$LEFT" --poll "${DISPATCH_POLL:-45}" | sed -n 's/^OUTCOME=//p')"
+  [ "$OUTC" = "pending" ] && return 1
   [ -n "$OUTC" ] || { say "wait gave no outcome for $DISP; will look again next pass"; return 1; }
 
   local CLOSE_ARGS=("$DISP")
@@ -118,6 +140,8 @@ finish_running() {
       fi ;;
   esac
   rm -f "$RUNNING"
+  # a finished worker changes what is owed: look at GitHub and merge on the next pass, not in 5 min
+  rm -f "$S/specgen.last" "$S/close.last"
 }
 
 post_verdict() {
@@ -168,10 +192,41 @@ record() {
 }
 
 # ---- start the next queued spec ---------------------------------------------------------------
-start_next() {
-  local FILE; FILE="$(ls -1 "$Q" 2>/dev/null | grep -v '^\.' | sort | head -1)"
-  [ -n "$FILE" ] || return 0
-  FILE="$Q/$FILE"
+# why a queued spec cannot start now (empty = it can)
+blocked_by() {
+  local F="$1" ROLE M P K
+  ROLE="$(hdr role "$F")"; M="$(model_of "$F")"
+  [ "$(live_count)" -ge "$MAX_WORKERS" ] && { echo "$MAX_WORKERS workers live"; return; }
+  [ -n "$M" ] && [ "$(live_with MODEL "$M")" -ge "$(model_cap "$M")" ] && { echo "model $M at its cap"; return; }
+  P="$(hdr serve "$F")"
+  [ -n "$P" ] && [ "$(live_with SERVE "$P")" -gt 0 ] && { echo "port $P in use"; return; }
+  case "$ROLE" in
+    coder) K="ISSUE"; P="$(hdr issue "$F")";;
+    fixer) K="PR"; P="$(hdr pr "$F")";;
+    *) K="";;
+  esac
+  if [ -n "$K" ] && [ -n "$P" ]; then
+    local G; for G in $(live); do
+      [ "$(kv ROLE "$G")" = "$ROLE" ] && [ "$(kv "$K" "$G")" = "$P" ] && { echo "a $ROLE already works on $P"; return; }
+    done
+  fi
+}
+
+# start every queued spec that nothing real blocks, in name order (1xx fixer < 2xx tester <
+# 3xx reviewer < 5xx coder), at most DISPATCH_STARTS per pass so the live workers keep being polled
+start_ready() {
+  local F N=0 WHY
+  for F in $(ls -1 "$Q" 2>/dev/null | grep -v '^\.' | sort); do
+    [ "$N" -ge "${DISPATCH_STARTS:-2}" ] && break
+    [ -f "$Q/$F" ] || continue
+    WHY="$(blocked_by "$Q/$F")"
+    [ -z "$WHY" ] || continue
+    start_one "$Q/$F" && N=$((N+1))
+  done
+}
+
+start_one() {
+  local FILE="$1" MODEL; MODEL="$(model_of "$1")"
   local NAME BASE ROLE TITLE DEADLINE SERVE RTASK ROF ATTEMPT
   NAME="$(hdr name "$FILE")"; BASE="$(hdr base "$FILE")"; ROLE="$(hdr role "$FILE")"
   TITLE="$(hdr title "$FILE")"; DEADLINE="$(hdr deadline "$FILE")"; SERVE="$(hdr serve "$FILE")"
@@ -199,34 +254,39 @@ start_next() {
   else ARGS+=("$SPEC" "$TITLE"); fi
   ARGS+=("${RO[@]+"${RO[@]}"}")
   [ -n "$SERVE" ] && ARGS+=(--serve "$SERVE")
+  [ -n "$(hdr model "$ACTIVE")" ] && ARGS+=(--model "$MODEL")
 
-  say "starting $ROLE '$NAME' (attempt $ATTEMPT) from $(basename "$FILE")"
-  OUT="$(bash "$HERE/worker.sh" "${ARGS[@]}")"; RC=$?
+  say "starting $ROLE '$NAME' on $MODEL (attempt $ATTEMPT, $(live_count) live) from $(basename "$FILE")"
+  # with workers live, a memory shortfall must not hold this loop (and their polling) for 15 minutes:
+  # refuse fast (rc 3, the spec stays queued) and look again next pass
+  local CAPT="${WATCH_CAP_TIMEOUT:-900}"; [ "$(live_count)" -gt 0 ] && CAPT=10
+  OUT="$(WATCH_CAP_TIMEOUT="$CAPT" bash "$HERE/worker.sh" "${ARGS[@]}")"; RC=$?
   rm -f "$SPEC"
   local DISP TASK
   DISP="$(printf '%s\n' "$OUT" | sed -n 's/^DISPATCH=//p')"; TASK="$(printf '%s\n' "$OUT" | sed -n 's/^TASK=//p')"
   if [ "$RC" -ne 0 ] || [ -z "$DISP" ]; then
     if [ "$RC" -eq 3 ]; then
       # refused before anything was created (capacity, base, port): back to the queue unchanged
-      say "start refused (rc 3); $(basename "$FILE") stays queued"; mv "$ACTIVE" "$FILE"
+      say "start refused (rc 3); $(basename "$FILE") stays queued"; mv "$ACTIVE" "$FILE"; return 1
     else
       say "start failed (rc $RC) for $(basename "$FILE")"
       { cat "$ACTIVE"; printf '\n--- result\nSTART_RC=%s\n%s\n' "$RC" "$OUT"; } > "$DONE/$(basename "$FILE").start-failed"
       rm -f "$ACTIVE"
     fi
-    return 0
+    return 1
   fi
-  printf 'DISPATCH=%s\nTASK=%s\nFILE=%s\nNAME=%s\nROLE=%s\nATTEMPT=%s\nSTARTED=%s\nDEADLINE_AT=%s\n' \
+  RUNNING="$RUN_DIR/$(basename "$FILE").env"
+  printf 'DISPATCH=%s\nTASK=%s\nFILE=%s\nNAME=%s\nROLE=%s\nATTEMPT=%s\nSTARTED=%s\nDEADLINE_AT=%s\nSERVE=%s\nISSUE=%s\nPR=%s\n' \
     "$DISP" "$TASK" "$ACTIVE" "$NAME" "$ROLE" "$ATTEMPT" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    "$(( $(date +%s) + DEADLINE ))" > "$RUNNING"
-  printf '%s\n' "$OUT" | sed -n 's/^\(WORKTREE\|PATH\|SERVING\|ASSET\)=/&/p' >> "$RUNNING"
+    "$(( $(date +%s) + DEADLINE ))" "$SERVE" "$(hdr issue "$ACTIVE")" "$(hdr pr "$ACTIVE")" > "$RUNNING"
+  printf '%s\n' "$OUT" | sed -n 's/^\(WORKTREE\|PATH\|SERVING\|ASSET\|MODEL\)=/&/p' >> "$RUNNING"
+  grep -q '^MODEL=' "$RUNNING" || echo "MODEL=$MODEL" >> "$RUNNING"
   say "dispatched $DISP for $(basename "$FILE")"
 }
 
 close_pass() {
   local STAMP="$S/close.last" NOW; NOW="$(date +%s)"
-  [ -f "$RUNNING" ] && return 0
-  [ $(( NOW - $(cat "$STAMP" 2>/dev/null || echo 0) )) -ge "${CLOSE_EVERY:-300}" ] || return 0
+  [ $(( NOW - $(cat "$STAMP" 2>/dev/null || echo 0) )) -ge "${CLOSE_EVERY:-120}" ] || return 0
   echo "$NOW" > "$STAMP"
   local ARG=(); acting || ARG=(--dry-run)
   bash "$HERE/close.sh" "${ARG[@]+"${ARG[@]}"}" 2>&1 | grep -E 'MERGED|refused|BLOCKED|issue #|merged [0-9]|held' \
@@ -240,21 +300,25 @@ close_pass() {
 # only generated once the queue drained. Name order (1xx fixer < 2xx tester < 3xx reviewer < 5xx
 # coder) then runs them first; needs.sh never re-queues a spec that is already queued.
 fill_queue() {
-  [ -f "$RUNNING" ] && return 0
   local STAMP="$S/specgen.last" NOW; NOW="$(date +%s)"
-  [ $(( NOW - $(cat "$STAMP" 2>/dev/null || echo 0) )) -ge "${SPECGEN_EVERY:-300}" ] || return 0
+  [ $(( NOW - $(cat "$STAMP" 2>/dev/null || echo 0) )) -ge "${SPECGEN_EVERY:-120}" ] || return 0
   echo "$NOW" > "$STAMP"
   bash "$HERE/specgen.sh" 2>&1 | while IFS= read -r l; do say "$l"; done
 }
 
-# close_pass runs BEFORE start_next: it only acts while no worker runs, and start_next starts one
-# whenever the queue is not empty - measured 2026-10-04, with the queue never empty #163, #135 and
-# #206 sat with a green gate for hours and nothing merged them.
+# Each pass: poll every live worker (close the settled ones), merge what the gate passed, top the
+# queue up from GitHub, then start whatever is ready.
 pass() {
-  finish_running || return 0
+  local F
+  # the one-worker dispatcher kept its live worker in running.env: adopt it
+  if [ -f "$S/running.env" ]; then
+    F="$RUN_DIR/$(basename "$(kv FILE "$S/running.env")").env"
+    mv "$S/running.env" "$F" && say "adopted running.env as $(basename "$F")"
+  fi
+  for F in $(live); do RUNNING="$F"; finish_running || true; done
   close_pass
   fill_queue
-  start_next
+  start_ready
 }
 
 # The dispatcher owns its Run: `run-use` from this terminal takes the Run from whichever terminal held
@@ -280,7 +344,8 @@ bind_run() {
 
 status() {
   echo "enabled: $(acting && echo yes || echo 'no (dry run)')"
-  echo "running:"; [ -f "$RUNNING" ] && sed 's/^/  /' "$RUNNING" || echo "  (none)"
+  local F; echo "running ($(live_count) of max $MAX_WORKERS):"
+  for F in $(live) "$S/running.env"; do [ -f "$F" ] && { echo "  [$(basename "$F" .env)]"; sed 's/^/    /' "$F"; }; done
   echo "queue:"; ls -1 "$Q" 2>/dev/null | sed 's/^/  /'
   echo "last results:"; ls -1t "$DONE" 2>/dev/null | head -10 | sed 's/^/  /'
 }
