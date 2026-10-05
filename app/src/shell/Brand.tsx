@@ -8,6 +8,7 @@
    for every system and tab — the per-system Dark switch is not. */
 
 import ViewerDarkToggle from "./ViewerDarkToggle.tsx";
+import HelpDialog from "./HelpDialog.tsx";
 
 function BrandMark() {
   return (
@@ -28,6 +29,7 @@ export default function Brand() {
         <span className="app-brand-name">Design System Viewer</span>
       </span>
       <ViewerDarkToggle />
+      <HelpDialog />
     </>
   );
 }
