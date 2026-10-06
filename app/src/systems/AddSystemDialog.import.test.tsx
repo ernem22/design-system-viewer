@@ -309,4 +309,71 @@ describe("AddSystemDialog composition", () => {
     expect(textPane()!.value).toContain("--color-bg: #fff;");
     expect(textPane()!.value).not.toContain("--fetched: 1;");
   });
+
+  // Issue #214, slice 2: the Source step seeds from an existing system. The
+  // picker copies that system's CSS into the buffer — the write still waits
+  // for Save, so this only asserts the seeded source text + status.
+  it("seeds the source from an existing system", async () => {
+    const { createRoot } = await import("react-dom/client");
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root!.render(
+        <AddSystemDialog
+          open
+          systems={[
+            {
+              slug: "aurora",
+              name: "Aurora",
+              css: "--color-bg: #0a0a0f;\n--color-text: #f0f0f3;",
+              groups: [],
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          ]}
+          onOpenChange={() => (closed += 1)}
+          onAdd={(name, css) => added.push({ name, css })}
+          onToast={() => {}}
+          onSaved={(tab) => savedTabs.push(tab)}
+        />,
+      );
+    });
+    const seed = document.querySelector<HTMLSelectElement>(
+      'select[aria-label="Start from an existing system"]',
+    )!;
+    expect(seed).not.toBeNull();
+    seed.value = "aurora";
+    await act(async () => seed.dispatchEvent(new Event("change", { bubbles: true })));
+    expect(textPane()!.value).toBe("--color-bg: #0a0a0f;\n--color-text: #f0f0f3;");
+    expect(document.querySelector(".app-import-status")?.textContent).toContain("Aurora");
+  });
+
+  // Issue #214, slice 2: a dropped JSON export opens with its CSS and name.
+  // The page drop hands the dialog raw JSON via `initialCss`; the open effect
+  // detects and parses it exactly like a paste.
+  it("opens a dropped JSON export with its css and name", async () => {
+    const { createRoot } = await import("react-dom/client");
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root!.render(
+        <AddSystemDialog
+          open
+          initialCss={JSON_EXPORT}
+          onOpenChange={() => (closed += 1)}
+          onAdd={(name, css) => added.push({ name, css })}
+          onToast={() => {}}
+          onSaved={(tab) => savedTabs.push(tab)}
+        />,
+      );
+    });
+    expect(textPane()!.value).toBe("--color-bg: #0a0a0f;\n--color-text: #f0f0f3;");
+    expect(document.querySelector(".app-import-status")?.textContent).toContain("JSON export");
+    await goToSave();
+    expect(document.querySelector<HTMLInputElement>('input[aria-label="System name"]')!.value).toBe(
+      "Aurora",
+    );
+  });
 });

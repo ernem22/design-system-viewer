@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseTokens } from "../../../src/core/parse.js";
 import {
   detectImportFormat,
   detectPrefixes,
@@ -158,5 +159,30 @@ describe("mergePreview", () => {
 
   it("counts every name in an empty target as added", () => {
     expect(mergePreview("", "--a: 1;\n--b: 2;")).toEqual({ added: 2, overridden: 0, unchanged: 0 });
+  });
+});
+
+// Issue #214, slice 2: the Tokens tab JSON export round-trips. The export is
+// `JSON.stringify(system)` (TokensView), so reading it back must yield the
+// same CSS and the same tokens — otherwise a system can leave and never come
+// back.
+describe("JSON export round-trip (#214)", () => {
+  it("export → import yields the same tokens", () => {
+    const system = {
+      name: "Aurora",
+      slug: "aurora",
+      css: "--color-bg: #0a0a0f;\n--color-text: #f0f0f3;",
+      createdAt: "2026-09-10T00:00:00.000Z",
+      updatedAt: "2026-09-10T00:00:00.000Z",
+    };
+    const exported = JSON.stringify(system, null, 2);
+    expect(detectImportFormat(exported)).toBe("system-json");
+    const imported = readSystemJson(exported);
+    expect(imported.css).toBe(system.css);
+    expect(imported.name).toBe(system.name);
+    const before = parseTokens(system.css) as unknown[];
+    const after = parseTokens(imported.css) as unknown[];
+    expect(after).toHaveLength(before.length);
+    expect(after).toEqual(before);
   });
 });

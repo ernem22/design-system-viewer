@@ -9,7 +9,8 @@ import { SectionSearch } from "./shell/SectionSearch.tsx";
 import { Toasts } from "./shell/Toasts.tsx";
 import { DropOverlay, Welcome } from "./shell/Welcome.tsx";
 import { copyLinkToView } from "./lib/copyLink.ts";
-import { readCssFile, useCssFileDrop } from "./lib/cssImport.ts";
+import { isJsonFile, readCssFile, useCssFileDrop } from "./lib/cssImport.ts";
+import { readSystemJson } from "./lib/systemImport.ts";
 import { useGoogleFonts } from "./lib/googleFonts.ts";
 import { Icon } from "./lib/icons.tsx";
 import { useToasts } from "./lib/toasts.ts";
@@ -136,8 +137,11 @@ function App() {
     [removeSystem, pushToast],
   );
 
-  // A dropped/picked .css file merges into the active system, or seeds the
-  // Add dialog when there is none yet (legacy drop behavior).
+  // A dropped/picked file merges into the active system, or seeds the
+  // Add dialog when there is none yet (legacy drop behavior). CSS arrives as
+  // text; our own JSON export arrives as raw JSON — without an active system
+  // it opens the dialog unparsed so the dialog keeps its name, with one it
+  // merges the exported CSS.
   const importCss = useCallback(
     (css: string) => {
       if (!active) {
@@ -156,14 +160,33 @@ function App() {
   const importFile = useCallback(
     (file: File | null) => {
       if (!file) {
-        pushToast("Only .css files", "warn");
+        pushToast("Only .css/.json files", "warn");
+        return;
+      }
+      if (isJsonFile(file)) {
+        file.text().then(
+          (text) => {
+            if (!active) {
+              // Raw JSON: the dialog detects and parses it on open, keeping
+              // the exported name for the collision flow.
+              openAdd(text);
+              return;
+            }
+            try {
+              importCss(readSystemJson(text).css);
+            } catch (e) {
+              pushToast(e instanceof Error ? e.message : String(e), "warn");
+            }
+          },
+          (e: unknown) => pushToast(e instanceof Error ? e.message : String(e), "warn"),
+        );
         return;
       }
       readCssFile(file).then(importCss, (e: unknown) =>
         pushToast(e instanceof Error ? e.message : String(e), "warn"),
       );
     },
-    [importCss, pushToast],
+    [active, importCss, openAdd, pushToast],
   );
   const dragging = useCssFileDrop(importFile);
 
@@ -419,7 +442,7 @@ function App() {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".css,text/css"
+        accept=".css,.json,text/css,application/json"
         hidden
         onChange={(e) => {
           const file = e.target.files?.[0];
