@@ -288,6 +288,7 @@ function App() {
           groups={tokensView.railGroups}
           searching={tokensView.searching}
           syncSection={sectionSyncArmed && tab === "tokens"}
+          active={tab === "tokens"}
         />
       ),
       propsPanel: active && <TokensProps view={tokensView} />,
@@ -321,6 +322,7 @@ function App() {
             groups={railGroups}
             searching={searching}
             syncSection={sectionSyncArmed && tab === "preview"}
+            active={tab === "preview"}
           />
         </>
       ),

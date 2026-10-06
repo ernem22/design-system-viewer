@@ -94,13 +94,20 @@ function currentId(ids: string[], activationY: number): string | null {
  *  user's next own scroll input (wheel / touch / keys), at which point live
  *  geometry takes over again; a click's own jump doesn't count as that
  *  input. Latest intent wins either way. */
-export function useScrollSpy(ids: string[]): [string | null, (id: string) => void] {
+export function useScrollSpy(ids: string[], enabled = true): [string | null, (id: string) => void] {
   const [activeId, setActiveId] = useState<string | null>(null);
   const pinnedRef = useRef<string | null>(null);
   const idsRef = useRef(ids);
   idsRef.current = ids;
 
   useEffect(() => {
+    // Inactive (forceMounted but hidden) tabs must not pay for live tracking:
+    // their output is display:none, so every rect measures ~0 and the scan
+    // would only produce meaningless noise on top of wasted DOM lookups.
+    // Bailing out before subscribing means zero recompute work while hidden;
+    // re-enabling resubscribes and schedules a fresh scan, so tracking
+    // resumes without requiring a fresh mount.
+    if (!enabled) return;
     // The panel that actually scrolls (.app-main), not the viewport: with a
     // viewport line the offset is measured against the window while the
     // content moves inside a nested scroller, so the line and the anchor
@@ -127,7 +134,7 @@ export function useScrollSpy(ids: string[]): [string | null, (id: string) => voi
       scroller.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
     };
-  }, [ids]);
+  }, [ids, enabled]);
 
   // A pinned id that no longer exists (search narrowed the rail) releases
   // the pin instead of pointing at nothing.
@@ -138,8 +145,10 @@ export function useScrollSpy(ids: string[]): [string | null, (id: string) => voi
   // The user's own scroll intent hands the highlight back to live geometry.
   // The anchor jump a click causes doesn't fire these; real input does — so
   // a click-pin survives the jump it caused but not the user's next manual
-  // scroll.
+  // scroll. Gated like the scan above: a hidden tab's unpin would recompute
+  // meaningless geometry on the shared scroller's every wheel/touch/key.
   useEffect(() => {
+    if (!enabled) return;
     const scroller = document.querySelector<HTMLElement>(".app-main");
     const unpin = () => {
       pinnedRef.current = null;
@@ -162,7 +171,7 @@ export function useScrollSpy(ids: string[]): [string | null, (id: string) => voi
       scroller?.removeEventListener("touchmove", unpin);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, []);
+  }, [enabled]);
 
   const pin = (id: string) => {
     pinnedRef.current = id;
