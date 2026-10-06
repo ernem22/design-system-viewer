@@ -23,11 +23,19 @@ known() {
   local role="$1" key="$2" val="$3" head="${4:-}" f
   for f in "$S"/queue/* "$S"/active-* "$S"/done/*; do
     [ -f "$f" ] || continue
+    # the dispatcher's re-check before a start asks "is this still owed?" of a spec that IS queued: the
+    # queued spec must not answer for itself (NEEDS_IGNORE_QUEUE=1, dispatch.sh owed())
+    [ -n "${NEEDS_IGNORE_QUEUE:-}" ] && case "$f" in "$S"/queue/*) continue;; esac
+    # an active-* file with no running/<spec>.env is a start that a dead dispatcher never finished: it
+    # holds nothing (measured 2026-10-06: #235 waited a day for a Tester behind one); the dispatcher
+    # moves it to done/<spec>.orphaned at its next pass
+    case "$f" in "$S"/active-*) [ -f "$S/running/${f##*/active-}.env" ] || continue;; esac
     sed -n '1,/^---$/p' "$f" | grep -qx "role: $role" || continue
     sed -n '1,/^---$/p' "$f" | grep -qx "$key: $val" || continue
     # a finished attempt that failed to start or was rejected does not satisfy the need - for every
     # role: a coder spec that failed to start must not hide its issue forever
-    case "$f" in *.rejected|*.start-failed) continue;; esac
+    # nor does a spec the dispatcher dropped (no longer owed when it came to start) or found orphaned
+    case "$f" in *.rejected|*.start-failed|*.dropped|*.orphaned) continue;; esac
     # a blocked result holds the need for BLOCKED_TTL minutes only (default 240): what blocked it -
     # typically another open PR holding the files - is expected to move, and nobody re-queues it
     # ...and only until the base branch moves: what blocks a card is almost always another open PR,
@@ -92,7 +100,10 @@ emit() {   # role ref head why [branch]
 # ---- issues labelled agent with no open PR claiming them -> coder ----------------------------
 PRS_JSON="$(gh pr list --repo "$REPO" --base "$BASE" --state open --json number,title,body,headRefOid,headRefName,mergeable --limit 200 2>/dev/null)" \
   || { echo "needs.sh: cannot list PRs (gh)" >&2; exit 4; }
-CLAIMED="$(printf '%s' "$PRS_JSON" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const n=new Set();for(const p of JSON.parse(s)){for(const m of ((p.title||"")+"\n"+(p.body||"")).matchAll(/(?:\(#|(?:Closes|Fixes|Resolves) #)(\d+)/g))n.add(m[1])}console.log([...n].join(" "))})')"
+# An open PR claims an issue by `(#n)` in its TITLE or a closing keyword in its body. Not by `(#n` anywhere
+# in the body: measured 2026-10-06, the body of tooling PR #273 said "(#227, tester #238)" and #227 - open,
+# no PR of its own - was taken as claimed and its queued Coder dropped.
+CLAIMED="$(printf '%s' "$PRS_JSON" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const n=new Set();for(const p of JSON.parse(s)){for(const m of (p.title||"").matchAll(/\(#(\d+)\)/g))n.add(m[1]);for(const m of (p.body||"").matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):? #(\d+)/gi))n.add(m[1])}console.log([...n].join(" "))})')"
 
 LIMIT=200
 [ "$(printf '%s' "$PRS_JSON" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).length))')" -ge "$LIMIT" ] \

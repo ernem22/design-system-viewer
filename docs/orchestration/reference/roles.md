@@ -52,6 +52,9 @@ Stopping or switching the dispatcher's code: never `kill` it. A kill lands insid
 | `merge-refused` | `close.sh` found the gate green but GitHub refused the merge (CI red, protection) |
 | `gave-up` | a spec failed on every attempt |
 | `down` | the dispatcher exited (`rc=`; the reason line is in `dispatch.log`, bash's own error in `dispatch.err`) |
+| `dropped` | a queued spec was no longer owed when its turn came (issue closed / not `agent` / held; PR head moved; spec cut short) and went to `done/<spec>.dropped` with `why=` (routine, never wakes Hermes) |
+| `orphaned` | an `active-<spec>` had no running env (a start a dead dispatcher never finished); moved to `done/<spec>.orphaned`, its work is owed again |
+| `disk-low` | the state/worktree drive has less than `DISK_MIN_MB` (2048) free; nothing starts; at most one per 30 min |
 
 Hermes never reads Orca's mailbox for the dispatcher's Run: its terminal is fenced off it
 (`check` answers `consumer_fenced`, measured 2026-10-05).
@@ -82,6 +85,8 @@ per process (measured 2026-09-28).
 | `leftover` | calls `bash tools/orchestration/worker.sh close <dispatch> --stop` once; reports the result |
 | `gave-up` | reports the spec and its last outcome to the user |
 | `down` | reads the `exiting` line in `dispatch.log` and the tail of `dispatch.err`; the launcher restarts the dispatcher within 5 min (otherwise `dispatcher-dead` follows); reports the reason |
+| `orphaned` | reads `orca orchestration worker-list` for a live worker named `name=`; reports it (it is not tracked: the user decides whether to stop it) |
+| `disk-low` | reports the free space and the largest folders under `%LOCALAPPDATA%\Temp` and the Orca workspaces; deletes nothing |
 | `dispatcher-dead` | calls `bash "$LOCALAPPDATA/orca-orchestration/design-system-viewer/bootstrap.sh" D:/code/dsv-dispatcher D:/code/design-system-viewer`; reports the launcher log |
 | `idle-with-work` | runs `dispatch.sh --status` and `needs.sh`; reports why the owed work is not queued |
 | heartbeat (exit 3) | nothing; runs the watcher again |

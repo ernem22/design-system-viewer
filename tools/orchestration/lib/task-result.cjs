@@ -37,7 +37,9 @@ process.stdin.on('data', (d) => (s += d)).on('end', () => {
       // ...or joined with "; " (measured 2026-10-05, tester #241, task_202f4d88e6fa: `status: pass; role:
       // tester; task: ...; observed: ... . before: ...`). Split only before a known field name (after "; "
       // or ". "), because an observed: value itself holds "; " between findings.
-      if (/^\s*status:\s*[a-z]+\s*;/i.test(line)) {
+      // ...or with ". " (measured 2026-10-06, tester #244, task_eb8d2c91398b: `status: pass. role: tester.
+      // task: ... before: ...`), which the "; " test missed: the whole line became the status.
+      if (/^\s*status:\s*[a-z]+\s*[;.]\s/i.test(line)) {
         for (const f of line.split(/[;.]\s+(?=(?:status|role|task|commit|tests|build|lint|observed|before|reason|fix_required|scope_ok|source|pr|head)\s*:)/i))
           if (f.trim()) lines.push(f.trim());
       } else if (/^\s*status:\s*[a-z]+\s*\|/i.test(line)) {

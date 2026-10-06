@@ -79,7 +79,7 @@ say() { printf '%s dispatch: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" | tee -
 # EVENTS for the manager (Hermes): one line each in events.log, `<time> <kind> key=value ...`.
 # The dispatcher does not wait for anyone to read them; hermes-watch.sh wakes Hermes on the ones
 # that need attention. Kinds: up started finished delivered kept no-pr no-push unknown start-failed
-# start-refused verdict-refused merge-refused conflict leftover gave-up down.
+# start-refused verdict-refused merge-refused conflict leftover gave-up down dropped orphaned disk-low.
 event() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$S/events.log"; }
 acting() { [ -f "$S/dispatch.enabled" ]; }
 hdr() { sed -n "1,/^---\$/s/^$1:[[:space:]]*//p" "$2" | head -1; }
@@ -416,7 +416,101 @@ start_ready() {
       say "memory: $AVAIL MB free, a start needs $NEED MB; nothing more starts this pass"
       refused_event "$F"; break
     fi
+    disk_ok || break
+    # A queued spec is what GitHub said when specgen wrote it, which may be minutes or hours ago: it is
+    # asked again now, and starts only if it is still owed.
+    owed "$Q/$F"
+    case $? in
+      0) ;;
+      1) drop_spec "$Q/$F" "$OWED_WHY"; continue ;;
+      *) say "owed: GitHub unreadable ($OWED_WHY); nothing starts this pass"; break ;;
+    esac
     start_one "$Q/$F" && N=$((N+1))
+  done
+}
+
+# Is this queued spec still owed? Measured 2026-10-06: Coder specs sat queued for #221 and #225 after
+# their PRs merged and the issues closed (each written within a minute of the merge, before the issue
+# list showed it closed), and a third for #248, an issue closed as not planned; any of them would have
+# started a Coder the moment memory allowed. The answer is needs.sh's own - the rule that wrote the
+# spec - computed now with the queue itself left out, so the spec cannot vouch for itself. A Coder's
+# issue is also read directly (state and labels), since a list can trail a close by a minute.
+# 0 = owed; 1 = not owed ($OWED_WHY); 2 = GitHub could not be read (keep it queued, start nothing).
+# needs.sh runs once per pass, and only once a start has passed every other check.
+OWED_PASS=""; OWED_OUT=""; OWED_ERR=""; OWED_WHY=""
+owed() {
+  local F="$1" ROLE REF HEAD N J
+  OWED_WHY=""
+  grep -qx -- '---' "$F" || { OWED_WHY="no --- line (cut short?)"; return 1; }
+  ROLE="$(hdr role "$F")"
+  case "$ROLE" in
+    coder) REF="$(hdr issue "$F")"; HEAD="-" ;;
+    reviewer|tester|fixer) REF="$(hdr pr "$F")"; HEAD="$(hdr head "$F")" ;;
+    *) OWED_WHY="role '$ROLE' unknown"; return 1 ;;
+  esac
+  [ -n "$REF" ] && [ -n "$HEAD" ] || { OWED_WHY="no issue:/pr:/head: header"; return 1; }
+  if [ "$ROLE" = "coder" ]; then
+    J="$(gh issue view "$REF" --repo "$REPO_SLUG" --json state,labels \
+      --jq '.state + " " + ([.labels[].name]|join(","))' 2>/dev/null)" || { OWED_WHY="gh issue view #$REF failed"; return 2; }
+    [ "${J%% *}" = "OPEN" ] || { OWED_WHY="issue #$REF is ${J%% *}"; return 1; }
+    case ",${J#* }," in *,agent,*) ;; *) OWED_WHY="issue #$REF has no agent label"; return 1;; esac
+    case ",${J#* }," in *,held,*|*,retired,*|*,umbrella,*) OWED_WHY="issue #$REF is held/retired/umbrella"; return 1;; esac
+  fi
+  if [ "$OWED_PASS" != "$PASS_NO" ]; then
+    OWED_PASS="$PASS_NO"
+    OWED_OUT="$(NEEDS_IGNORE_QUEUE=1 bash "$HERE/needs.sh" 2>"$S/owed.err")"; N=$?
+    # needs.sh skips a PR whose gate it cannot read and says so on stderr: an answer with a hole in it
+    # cannot tell "not owed" from "not read"
+    OWED_ERR=""; [ "$N" -ne 0 ] && OWED_ERR="needs.sh rc $N"
+    [ -z "$OWED_ERR" ] && grep -qE 'cannot|failed|skipped|limit' "$S/owed.err" 2>/dev/null && OWED_ERR="$(head -1 "$S/owed.err")"
+  fi
+  [ -z "$OWED_ERR" ] || { OWED_WHY="$OWED_ERR"; return 2; }
+  # needs.sh lines: <role> <#ref> <head7 or -> <why>
+  printf '%s\n' "$OWED_OUT" | awk -v r="$ROLE" -v f="#$REF" -v h="${HEAD:0:7}" \
+    '$1==r && $2==f && (h=="-" || substr($3,1,7)==h) {ok=1} END {exit !ok}' && return 0
+  OWED_WHY="needs.sh no longer lists $ROLE $REF${HEAD:+ @ ${HEAD:0:7}}"
+  return 1
+}
+
+# a spec that is no longer owed: kept in done/ with the reason (it holds no need: needs.sh re-queues the
+# work if it is owed again)
+drop_spec() {
+  local F="$1" WHY="$2" B; B="$(basename "$1")"
+  acting || { say "DRY RUN: would drop $B: $WHY"; return 0; }
+  { cat "$F"; printf '\n--- result\nOUTCOME=dropped\nWHY=%s\nAT=%s\n' "$WHY" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"; } > "$DONE/$B.dropped" \
+    && rm -f "$F" || { say "drop: could not write $DONE/$B.dropped; $B stays queued"; return 0; }
+  say "dropped $B: $WHY"
+  event "dropped spec=$B why=$(printf '%s' "$WHY" | tr -s ' \n' ' ' | cut -c1-160)"
+}
+
+# Disk on the state/worktree drive. Measured 2026-10-06: C: down to 0.79 GB, and a spec was written cut
+# short. A start adds a worktree (~140 MB, more with a build), so it is refused below DISK_MIN_MB.
+disk_ok() {
+  local FREE; FREE="$(df -Pm "$S" 2>/dev/null | awk 'NR==2{print $4}' | tr -dc '0-9')"
+  [ -z "$FREE" ] && return 0   # unreadable: worker.sh and Orca decide
+  [ "$FREE" -ge "${DISK_MIN_MB:-2048}" ] && return 0
+  say "disk: $FREE MB free on the state drive, a start needs ${DISK_MIN_MB:-2048} MB; nothing more starts this pass"
+  local RL="$S/disk.last"; [ $(( $(date +%s) - $(cat "$RL" 2>/dev/null || echo 0) )) -ge 1800 ] \
+    && { date +%s > "$RL"; event "disk-low free_mb=$FREE"; }
+  return 1
+}
+
+# A start moves queue/<spec> to active-<spec>, then worker.sh starts it, then running/<spec>.env is
+# written. A dispatcher that dies in between leaves active-<spec> with no env: no pass ever looks at it
+# again, and needs.sh counted it as running (measured 2026-10-06: #235 waited a day for a Tester).
+# Only one dispatcher runs and this is called between starts, so an active file without an env is
+# orphaned: kept in done/ and reported; needs.sh owes its work again. The worker it may have started is
+# not tracked: the event names it for the manager.
+recover_orphans() {
+  local A B
+  acting || return 0
+  for A in "$S"/active-*; do
+    [ -f "$A" ] || continue
+    B="${A##*/active-}"
+    [ -f "$RUN_DIR/$B.env" ] && continue
+    { cat "$A"; printf '\n--- result\nOUTCOME=orphaned\nAT=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"; } > "$DONE/$B.orphaned" && rm -f "$A" || continue
+    say "orphaned: active-$B had no running env (a start a dead dispatcher never finished)"
+    event "orphaned spec=$B name=$(hdr name "$DONE/$B.orphaned")"
   done
 }
 
@@ -540,6 +634,23 @@ fill_queue() {
   [ $(( NOW - $(cat "$STAMP" 2>/dev/null || echo 0) )) -ge "${SPECGEN_EVERY:-120}" ] || return 0
   echo "$NOW" > "$STAMP"
   bash "$HERE/specgen.sh" 2>&1 | while IFS= read -r l; do say "$l"; done
+  prune_queue
+}
+
+# The queue says only what is owed: every queued spec is asked owed() on the specgen cadence, whether or
+# not anything can start. Measured 2026-10-06 on 74566fa: with 194 MB free no start was tried, so the
+# start-time check never ran and Coder specs for closed #221/#225/#248 stayed queued.
+prune_queue() {
+  local F
+  for F in $(ls -1 "$Q" 2>/dev/null | grep -v '^\.' | sort); do
+    [ -f "$Q/$F" ] || continue
+    owed "$Q/$F"
+    case $? in
+      0) ;;
+      1) drop_spec "$Q/$F" "$OWED_WHY" ;;
+      *) say "prune: GitHub unreadable ($OWED_WHY); the queue is left as it is"; return 0 ;;
+    esac
+  done
 }
 
 # Each pass: poll every live worker (close the settled ones), merge what the gate passed, top the
@@ -556,8 +667,10 @@ read_workers() {
           console.log([w.dispatchId,p.outcome||"-",(p.liveness||{}).verdict||"-"].join(" "))}}catch(e){}})' > "$S/workers.now" 2>/dev/null
 }
 
+PASS_NO=0
 pass() {
   local F
+  PASS_NO=$((PASS_NO+1))
   read_workers
   # the one-worker dispatcher kept its live worker in running.env: adopt it
   if [ -f "$S/running.env" ]; then
@@ -565,6 +678,7 @@ pass() {
     mv "$S/running.env" "$F" && say "adopted running.env as $(basename "$F")"
   fi
   for F in $(live); do RUNNING="$F"; finish_running || true; done
+  recover_orphans
   close_pass
   fill_queue
   start_ready
