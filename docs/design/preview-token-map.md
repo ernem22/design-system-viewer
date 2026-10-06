@@ -246,7 +246,7 @@ non-Foundations element reads `--ref-*`.
 
 | | Today | After |
 |---|---|---|
-| Component sections | 12 sections, 105 demos (incl. 19 Foundation tokens and 3 Utilities) | 10 component sections with 66 demos: 83 kept sections − 18 merged/removed + 1 new (Focus & keyboard); Utilities and Foundation tokens leave |
+| Component sections | 12 sections, 105 demos (incl. 19 Foundation tokens and 3 Utilities) | 10 component sections with 66 demos: the 83 demos of the kept sections − 18 merged/removed + 1 new (Focus & keyboard); Utilities and Foundation tokens leave |
 | Foundations specimens | 19 loose demos | 12 specimens |
 | Screens | 27 | 19 |
 | v2 names shown | — | all 735 (enforced by the test in §4) |
