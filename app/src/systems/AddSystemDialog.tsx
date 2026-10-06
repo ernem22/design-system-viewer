@@ -59,6 +59,18 @@ interface Collision {
   css: string;
 }
 
+/** Stepper shell (slice 1, #213): Source → Review → Save inside the existing
+    `.tok-dialog` shell. Back never loses the parsed text (the `css` buffer
+    lives above the step), Cancel at any step writes nothing, and nothing is
+    written before Save (the write entry point only renders on step 3). */
+type Step = 1 | 2 | 3;
+
+const STEPS: { id: Step; label: string }[] = [
+  { id: 1, label: "Source" },
+  { id: 2, label: "Review" },
+  { id: 3, label: "Save" },
+];
+
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   return `${(n / 1024).toFixed(1)} KB`;
@@ -96,8 +108,10 @@ function untilAborted<T>(task: Promise<T>, signal: AbortSignal): Promise<T> {
  * everything between a one-line top bar and a one-line bottom bar.
  *
  * The ways in (upload, URL, JSON export, template, clipboard) are compact
- * triggers in that top bar, each opening only the row it needs. There is no
- * wizard: nothing is behind a step, and nothing is written until Save.
+ * triggers in that top bar, each opening only the row it needs. The three
+ * steps gate the write, not the work: step 1 holds every source trigger and
+ * both panes, step 2 shows only what exists today (the parsed token count),
+ * step 3 holds identity and the write. Nothing is written until Save.
  */
 export function AddSystemDialog({
   open,
@@ -126,6 +140,7 @@ export function AddSystemDialog({
 }) {
   const [name, setName] = useState("");
   const [css, setCss] = useState("");
+  const [step, setStep] = useState<Step>(1);
   const [status, setStatus] = useState<SourceStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState("");
@@ -171,6 +186,7 @@ export function AddSystemDialog({
     if (!open) return;
     setName("");
     setCss(initialCss ?? "");
+    setStep(1);
     setStatus(initialCss ? { kind: "Dropped file", detail: "page drop", bytes: initialCss.length } : null);
     setError(null);
     setUrl("");
@@ -356,6 +372,10 @@ export function AddSystemDialog({
   };
 
   const save = () => {
+    // The stepper shell gates the write: Save only runs on step 3. The
+    // button itself only renders there; this guard covers the keyboard
+    // shortcut reaching `save` from an earlier step.
+    if (step !== 3) return;
     const isClone = mode === "clone";
     const seedCss = isClone ? targetSystem?.css : undefined;
     if (!tokenCount && !seedCss) {
@@ -464,6 +484,7 @@ export function AddSystemDialog({
             <Dialog.Description className="app-import-sub">
               Nothing is written until you save.
             </Dialog.Description>
+            {step === 1 && (
             <div className="app-import-tools">
               <button type="button" className="tok-btn" onClick={() => cssFileRef.current?.click()}>
                 <Icon name="file" size={14} /> Upload .css
@@ -520,6 +541,7 @@ export function AddSystemDialog({
                 }}
               />
             </div>
+            )}
             {status && (
               <p className="app-import-status" role="status">
                 <b>{status.kind}</b> {status.detail} · {formatBytes(status.bytes)} · {tokenCount} tokens
@@ -529,8 +551,25 @@ export function AddSystemDialog({
               <Icon name="x" size={15} />
             </Dialog.Close>
             </div>
+            {/* Stepper shell (#213): the steps gate the write, not the work. */}
+            <ol className="app-import-steps" aria-label="Import steps">
+              {STEPS.map((s) => (
+                <li
+                  key={s.id}
+                  className="app-import-step"
+                  aria-current={step === s.id ? "step" : undefined}
+                  data-active={step === s.id}
+                  data-done={step > s.id}
+                >
+                  <span className="app-import-stepnum" aria-hidden="true">
+                    {s.id}
+                  </span>
+                  <span className="app-import-steplabel">{s.label}</span>
+                </li>
+              ))}
+            </ol>
 
-          {urlOpen && (
+          {step === 1 && urlOpen && (
             <div className="app-import-inline">
               <input
                 ref={urlRef}
@@ -553,7 +592,7 @@ export function AddSystemDialog({
             </div>
           )}
 
-          {jsonOpen && (
+          {step === 1 && jsonOpen && (
             <div className="app-import-inline app-import-inline-json">
               <textarea
                 className="tok-textarea"
@@ -584,7 +623,7 @@ export function AddSystemDialog({
             </div>
           )}
 
-          {prefixes.length > 0 && (
+          {step === 1 && prefixes.length > 0 && (
             <div className="app-import-chips">
               <span className="app-import-sub">Vendor prefix{prefixes.length > 1 ? "es" : ""}:</span>
               {prefixes.map((p) => (
@@ -606,7 +645,9 @@ export function AddSystemDialog({
 
           </header>
 
-          {/* The work: the same CSS text, seen as the schema and as text. */}
+          {/* Step 1 holds the work: the same CSS text, seen as the schema and
+              as text. Steps 2–3 only read the buffer, so Back never loses it. */}
+          {step === 1 ? (
           <div className="app-import-work">
             <section className="app-import-pane" aria-label="Schema fill">
               <div className="app-import-panehead">
@@ -637,10 +678,41 @@ export function AddSystemDialog({
               </div>
             </section>
           </div>
+          ) : step === 2 ? (
+          <div className="app-import-stepbody">
+            {/* Review shows only what exists today (the parsed token count);
+                the grouped review, swatches and suggestions belong to slices
+                3 and 4. */}
+            <section className="app-import-reviewpane" aria-label="Review">
+              <p className="app-import-reviewcount" role="status">
+                {tokenCount} token{tokenCount === 1 ? "" : "s"} ready
+              </p>
+              {status ? (
+                <p className="app-import-sub">
+                  {status.kind} · {status.detail} · {formatBytes(status.bytes)}
+                </p>
+              ) : (
+                <p className="app-import-sub">Pasted text · no source yet</p>
+              )}
+              <p className="app-import-sub">Nothing is written until you save.</p>
+            </section>
+          </div>
+          ) : (
+          <div className="app-import-stepbody">
+            <section className="app-import-savepane" aria-label="Save">
+              <p className="app-import-reviewcount" role="status">
+                {tokenCount} token{tokenCount === 1 ? "" : "s"} → {name.trim() || "Untitled"}
+              </p>
+              <p className="app-import-sub">Choose a name and how to write. Nothing is written until you save.</p>
+            </section>
+          </div>
+          )}
 
-          {/* One line of chrome: identity, the error if any, and the write. */}
+          {/* One line of chrome: identity (step 3 only), the error if any,
+              and the step navigation. The write entry point only renders on
+              step 3, so nothing can be written before it. */}
           <footer className="app-import-foot">
-            {systems && systems.length > 0 && (
+            {step === 3 && systems && systems.length > 0 && (
               <div className="app-import-mode" role="group" aria-label="Write mode">
                 {WRITE_MODES.map(([id, label]) => (
                   <button
@@ -660,7 +732,7 @@ export function AddSystemDialog({
                 ))}
               </div>
             )}
-            {mode !== "new" && systems && systems.length > 0 && (
+            {step === 3 && mode !== "new" && systems && systems.length > 0 && (
               <select
                 className="tok-input app-import-target"
                 value={target}
@@ -680,6 +752,7 @@ export function AddSystemDialog({
                 ))}
               </select>
             )}
+            {step === 3 && (
             <input
               className="tok-input app-import-name"
               value={name}
@@ -688,7 +761,8 @@ export function AddSystemDialog({
               aria-label="System name"
               onChange={(e) => setName(e.target.value)}
             />
-            {collision ? (
+            )}
+            {step === 3 && collision ? (
               <div className="app-import-collision" role="alert">
                 <span>
                   <b>{collision.existingName}</b> already exists — <code>{collision.slug}</code> is taken.
@@ -710,7 +784,7 @@ export function AddSystemDialog({
                   Cancel
                 </button>
               </div>
-            ) : review ? (
+            ) : step === 3 && review ? (
               <p className="app-import-review" role="status">
                 <span>Added {review.added}</span>
                 <span>Overridden {review.overridden}</span>
@@ -723,9 +797,26 @@ export function AddSystemDialog({
             ) : null}
             <div className="app-import-write">
               <Dialog.Close className="tok-btn">Cancel</Dialog.Close>
+              {step > 1 && (
+                <button type="button" className="tok-btn" onClick={() => setStep((s) => (s === 3 ? 2 : 1))}>
+                  Back
+                </button>
+              )}
+              {step < 3 && (
+                <button
+                  type="button"
+                  className="tok-btn tok-btn-primary"
+                  onClick={() => setStep((s) => (s === 1 ? 2 : 3))}
+                >
+                  Continue
+                </button>
+              )}
+              {step === 3 && (
               <button type="button" className="tok-btn tok-btn-primary" onClick={save}>
                 {mode === "merge" ? "Merge system" : mode === "clone" ? "Clone system" : "Save system"}
               </button>
+              )}
+              {step === 3 && (
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger className="tok-btn app-import-openin" title="Tab to open after saving">
                   {AFTER_SAVE_TABS.find(([id]) => id === afterSave)?.[1] ?? "Preview"}
@@ -749,6 +840,7 @@ export function AddSystemDialog({
                   </DropdownMenu.Content>
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
+              )}
             </div>
           </footer>
         </Dialog.Content>
