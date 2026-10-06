@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import * as Accordion from "@radix-ui/react-accordion";
 import * as Checkbox from "@radix-ui/react-checkbox";
 import { Icon } from "../lib/icons.tsx";
+import { RailGroup } from "../shell/RailGroup.tsx";
 import { SectionSearch } from "../shell/SectionSearch.tsx";
 import { systemCoveragePercent } from "../systems/store.ts";
 import type { DesignSystem } from "../systems/store.ts";
@@ -51,74 +52,60 @@ export function CompareRail({
         </div>
       )}
       <Accordion.Root type="multiple" value={effectiveOpen} onValueChange={setOpenGroups}>
-        <Accordion.Item value="systems" className="app-rail-group">
-          <Accordion.Header>
-            <Accordion.Trigger className="app-rail-group-label">
-              <Icon name="chevronDown" size={11} className="app-rail-group-chevron" />
-              <span>Systems</span>
-              <span className="app-rail-count">
-                {picked.length}/{maxColumns}
-              </span>
-            </Accordion.Trigger>
-          </Accordion.Header>
-          <Accordion.Content>
-            <div className="cmp-rail-systems">
-              {systems.map((s) => {
-                const isOn = picked.includes(s.slug);
-                const locked = !isOn && picked.length >= maxColumns;
-                const pct = systemCoveragePercent(s);
-                return (
-                  <label
-                    key={s.slug}
-                    className={`cmp-chip${isOn ? " on" : ""}`}
-                    aria-disabled={locked || undefined}
-                    title={locked ? `Max ${maxColumns} systems — unpick one first` : undefined}
+        <RailGroup value="systems" label="Systems" count={`${picked.length}/${maxColumns}`}>
+          <div className="cmp-rail-systems">
+            {systems.map((s) => {
+              const isOn = picked.includes(s.slug);
+              const locked = !isOn && picked.length >= maxColumns;
+              const pct = systemCoveragePercent(s);
+              return (
+                <label
+                  key={s.slug}
+                  className={`cmp-chip${isOn ? " on" : ""}`}
+                  data-disabled={locked || undefined}
+                  title={locked ? `Max ${maxColumns} systems — unpick one first` : undefined}
+                >
+                  <Checkbox.Root
+                    className="dsv-check"
+                    checked={isOn}
+                    disabled={locked}
+                    onCheckedChange={() => toggle(s.slug)}
+                    aria-label={s.name}
                   >
-                    <Checkbox.Root
-                      className="dsv-check"
-                      checked={isOn}
-                      disabled={locked}
-                      onCheckedChange={() => toggle(s.slug)}
-                      aria-label={s.name}
-                    >
-                      <Checkbox.Indicator>
-                        <Icon name="check" size={14} />
-                      </Checkbox.Indicator>
-                    </Checkbox.Root>
-                    <span className="cmp-dot" aria-hidden="true" />
-                    {s.name}
-                    {pct != null && <span className="cmp-pct">{pct}%</span>}
-                  </label>
+                    <Checkbox.Indicator>
+                      <Icon name="check" size={14} />
+                    </Checkbox.Indicator>
+                  </Checkbox.Root>
+                  <span className="cmp-dot" aria-hidden="true" />
+                  {s.name}
+                  {pct != null && <span className="cmp-pct">{pct}%</span>}
+                </label>
                 );
               })}
             </div>
-          </Accordion.Content>
-        </Accordion.Item>
+        </RailGroup>
 
         {mode === "component" &&
           visibleGroups.map((group) => (
-            <Accordion.Item key={group.label} value={group.label} className="app-rail-group">
-              <Accordion.Header>
-                <Accordion.Trigger className="app-rail-group-label">
-                  <Icon name="chevronDown" size={11} className="app-rail-group-chevron" />
-                  <span>{group.label}</span>
-                  <span className="app-rail-count">{group.items.length}</span>
-                </Accordion.Trigger>
-              </Accordion.Header>
-              <Accordion.Content className="app-rail-group-items">
-                {group.items.map((o) => (
-                  <button
-                    key={o.id}
-                    type="button"
-                    className="app-rail-link"
-                    aria-current={o.id === componentId ? "true" : undefined}
-                    onClick={() => setComponentId(o.id)}
-                  >
-                    {o.label}
-                  </button>
-                ))}
-              </Accordion.Content>
-            </Accordion.Item>
+            <RailGroup
+              key={group.label}
+              value={group.label}
+              label={group.label}
+              count={group.items.length}
+              contentClassName="app-rail-group-items"
+            >
+              {group.items.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  className="app-rail-link"
+                  aria-current={o.id === componentId ? "true" : undefined}
+                  onClick={() => setComponentId(o.id)}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </RailGroup>
           ))}
       </Accordion.Root>
       {mode === "component" && searching && visibleGroups.length === 0 && (

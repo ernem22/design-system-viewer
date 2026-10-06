@@ -126,8 +126,8 @@ tr.is-diff td { background: color-mix(in srgb, var(--color-warning) 8%, transpar
 .cmp-chip.on .cmp-dot { background: var(--color-accent); }
 .cmp-pct { margin-left: auto; font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-muted); background: var(--color-surface-sunken); border-radius: var(--radius-full); padding: 1px var(--space-2); }
 .cmp-chip.on .cmp-pct { color: var(--color-accent-text); background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
-.cmp-chip[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
-.cmp-chip[aria-disabled="true"]:hover { border-color: var(--color-border-subtle); color: var(--color-text-secondary); }
+.cmp-chip[data-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+.cmp-chip[data-disabled="true"]:hover { border-color: var(--color-border-subtle); color: var(--color-text-secondary); }
 
 /* Component picker rows are <button>s reusing the rail's link look — reset
    native button chrome, and mark the pick without Rail's sliding indicator. */
