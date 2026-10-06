@@ -98,13 +98,13 @@ export default function NavExtrasBody() {
 
       <Demo title="Button group">
         <div className="dsv-btn-group">
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" aria-label="Align left">
             <Icon name="alignLeft" size={14} />
           </Button>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" aria-label="Align center">
             <Icon name="alignCenter" size={14} />
           </Button>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" aria-label="Align right">
             <Icon name="alignRight" size={14} />
           </Button>
         </div>
@@ -113,19 +113,19 @@ export default function NavExtrasBody() {
             <Button variant="outline" size="sm">
               Save
             </Button>
-            <Button variant="outline" size="sm" className="dsv-icon-btn">
+            <Button variant="outline" size="sm" className="dsv-icon-btn" aria-label="More save options">
               <Icon name="chevronDown" size={14} />
             </Button>
           </div>
         </Tooltip.Provider>
         <div className="dsv-btn-group">
-          <Button variant="solid" size="lg">
+          <Button variant="solid" size="lg" aria-label="Align left">
             <Icon name="alignLeft" size={16} />
           </Button>
-          <Button variant="solid" size="lg">
+          <Button variant="solid" size="lg" aria-label="Align center">
             <Icon name="alignCenter" size={16} />
           </Button>
-          <Button variant="solid" size="lg">
+          <Button variant="solid" size="lg" aria-label="Align right">
             <Icon name="alignRight" size={16} />
           </Button>
         </div>

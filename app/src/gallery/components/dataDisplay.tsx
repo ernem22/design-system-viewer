@@ -68,12 +68,25 @@ function InteractiveTableDemo() {
           <thead>
             <tr>
               {["Package", "Version", "Size"].map((h, i) => (
-                <th key={h} onClick={() => toggleSort(i)} style={{ cursor: "pointer" }}>
+                <th
+                  key={h}
+                  scope="col"
+                  aria-sort={sort.col === i ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
+                  tabIndex={0}
+                  onClick={() => toggleSort(i)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleSort(i);
+                    }
+                  }}
+                  style={{ cursor: "pointer" }}
+                >
                   {h}
                   {sort.col === i ? (sort.dir === 1 ? " ▲" : " ▼") : ""}
                 </th>
               ))}
-              <th>
+              <th scope="col">
                 <input
                   type="checkbox"
                   checked={allOn}
@@ -144,7 +157,7 @@ const STATS: [string, string, string, string, string][] = [
   ["MRR", "$124k", "▲ 8.2%", "up", "M0,26 L12,22 L24,23 L36,14 L48,16 L60,6"],
   ["Churn", "1.9%", "▼ 0.4%", "down", "M0,8 L12,10 L24,9 L36,16 L48,15 L60,22"],
   ["NPS", "62", "▲ 5", "up", "M0,24 L12,20 L24,21 L36,14 L48,15 L60,8"],
-  ["Active", "8.412", "▲ 2.1%", "up", "M0,22 L12,18 L24,19 L36,12 L48,13 L60,5"],
+  ["Active", new Intl.NumberFormat(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(8.412), "▲ 2.1%", "up", "M0,22 L12,18 L24,19 L36,12 L48,13 L60,5"],
 ];
 
 export default function DataDisplayBody() {
@@ -156,7 +169,7 @@ export default function DataDisplayBody() {
       </Demo>
 
       <Demo title="Multi-select list (selected)">
-        <div style={{ minWidth: 220 }}>
+        <div style={{ minWidth: 220 }} role="listbox" aria-label="Features" aria-multiselectable="true">
           {(
             [
               ["Design tokens", true],
@@ -209,7 +222,7 @@ export default function DataDisplayBody() {
           <dt>Plan</dt>
           <dd>Pro (yearly)</dd>
           <dt>Renewal</dt>
-          <dd>Jan 12, 2027</dd>
+          <dd>{new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(2027, 0, 12))}</dd>
           <dt>Seats</dt>
           <dd>8 / 10</dd>
         </dl>

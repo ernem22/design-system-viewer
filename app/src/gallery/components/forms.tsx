@@ -62,16 +62,16 @@ export default function FormsBody() {
           <span className="dsv-spinner dsv-spinner--sm" /> Saving…
         </Button>
         <Button variant="soft" disabled>
-          <span className="dsv-spinner dsv-spinner--sm" /> Loading
+          <span className="dsv-spinner dsv-spinner--sm" /> Loading…
         </Button>
       </Demo>
 
       <Demo title="Input / Textarea">
         <Field label="Email" id="f-email" hint="Use work address">
-          <input id="f-email" className="dsv-input" type="email" placeholder="ada@example.com" />
+          <input id="f-email" className="dsv-input" type="email" placeholder="ada@example.com" autoComplete="email" spellCheck={false} />
         </Field>
         <Field label="Password" id="f-pass" error="At least 8 characters">
-          <input id="f-pass" className="dsv-input" type="password" aria-invalid="true" defaultValue="123" />
+          <input id="f-pass" className="dsv-input" type="password" aria-invalid="true" defaultValue="123" autoComplete="current-password" />
         </Field>
         <Field label="Note" id="f-note">
           <textarea id="f-note" className="dsv-textarea" placeholder="Short description…" />
@@ -97,7 +97,7 @@ export default function FormsBody() {
         </Field>
         <Field label="Domain" id="f-dom" hint="18 / 30">
           <div className="dsv-input-wrap dsv-input-wrap--suffix">
-            <input id="f-dom" className="dsv-input" defaultValue="acme-design-system" maxLength={30} />
+            <input id="f-dom" className="dsv-input" defaultValue="acme-design-system" maxLength={30} spellCheck={false} autoComplete="off" />
             <span className="dsv-adorn dsv-adorn--suffix dsv-counter">18/30</span>
           </div>
         </Field>
@@ -236,13 +236,13 @@ export default function FormsBody() {
           <Icon name="bold" size={14} />
         </Toggle.Root>
         <ToggleGroup.Root className="dsv-toggle-group" type="single" defaultValue="center" aria-label="Align">
-          <ToggleGroup.Item className="dsv-toggle" value="left">
+          <ToggleGroup.Item className="dsv-toggle" value="left" aria-label="Align left">
             <Icon name="alignLeft" size={14} />
           </ToggleGroup.Item>
-          <ToggleGroup.Item className="dsv-toggle" value="center">
+          <ToggleGroup.Item className="dsv-toggle" value="center" aria-label="Align center">
             <Icon name="alignCenter" size={14} />
           </ToggleGroup.Item>
-          <ToggleGroup.Item className="dsv-toggle" value="right">
+          <ToggleGroup.Item className="dsv-toggle" value="right" aria-label="Align right">
             <Icon name="alignRight" size={14} />
           </ToggleGroup.Item>
         </ToggleGroup.Root>

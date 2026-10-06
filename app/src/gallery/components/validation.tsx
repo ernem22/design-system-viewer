@@ -9,9 +9,9 @@ import "./validation.css";
 function OtpDemo() {
   const [value, setValue] = useState("");
   return (
-    <OneTimePasswordField.Root className="dsv-otp" value={value} onValueChange={setValue}>
+    <OneTimePasswordField.Root className="dsv-otp" value={value} onValueChange={setValue} aria-label="One-time password">
       {Array.from({ length: 6 }, (_, i) => (
-        <OneTimePasswordField.Input key={i} />
+        <OneTimePasswordField.Input key={i} aria-label={`Digit ${i + 1}`} />
       ))}
       <OneTimePasswordField.HiddenInput />
     </OneTimePasswordField.Root>
@@ -44,7 +44,7 @@ export default function ValidationBody() {
               </Form.Message>
             </div>
             <Form.Control asChild>
-              <input className="dsv-input" type="email" required placeholder="ada@example.com" />
+              <input className="dsv-input" type="email" required placeholder="ada@example.com" autoComplete="email" spellCheck={false} />
             </Form.Control>
           </Form.Field>
           <Form.Field name="msg" className="dsv-form-field">
@@ -74,10 +74,10 @@ export default function ValidationBody() {
 
       <Demo title="Password Toggle Field">
         <div className="dsv-field dsv-pwd-field">
-          <span className="dsv-label">Password</span>
+          <label className="dsv-label" htmlFor="v-pass">Password</label>
           <PasswordToggleField.Root>
             <div className="dsv-pwd">
-              <PasswordToggleField.Input className="dsv-input" defaultValue="hunter2" />
+              <PasswordToggleField.Input id="v-pass" className="dsv-input" autoComplete="current-password" placeholder="Enter password" />
               <PasswordToggleField.Toggle aria-label="Show/hide password">
                 <PasswordToggleField.Icon visible={<Icon name="eyeOff" size={15} />} hidden={<Icon name="eye" size={15} />} />
               </PasswordToggleField.Toggle>
