@@ -47,6 +47,14 @@ process.stdin.on('data', (d) => (s += d)).on('end', () => {
         const head = cut >= 0 ? line.slice(0, cut) : line;
         for (const f of head.split(/\s+\|\s+/)) if (f.trim()) lines.push(f.trim());
         if (cut >= 0 && line.slice(cut + 2).trim()) lines.push(line.slice(cut + 2).trim());
+      } else if (/[;.]\s+(?:observed|before|build|reason|fix_required|scope_ok)\s*:/i.test(line)) {
+        // ...and a multi-line report can still put an evidence field mid-line (measured 2026-10-06:
+        // tester #238 `observed: ... '1Source'; before: base ...`, tester #243 `build: ... observed: ...
+        // before: ...`). verdict-post reads fields at line start only, so both were refused ("missing:
+        // before") though the Tester wrote them, and each Tester ran twice. Split before those field
+        // names only: the status/role/commit lines are never taken from prose.
+        for (const f of line.split(/[;.]\s+(?=(?:observed|before|build|reason|fix_required|scope_ok)\s*:)/i))
+          if (f.trim()) lines.push(f.trim());
       } else lines.push(line);
     }
   }
