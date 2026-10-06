@@ -72,7 +72,10 @@ attempts, ~50 min). If something is ambiguous or blocks you, settle with `status
 write_spec() {   # file, header, body
   local F="$Q/$1"
   if [ -n "$DRY" ]; then say "would write $1"; printf '%s\n---\n%s\n' "$2" "$3" | head -12 >&2; return; fi
-  printf '%s\n---\n%s\n' "$2" "$3" > "$F"; say "queued $1"
+  # written aside and moved in whole: measured 2026-10-06, a full disk cut 500-coder-248.spec to 215
+  # bytes ("printf: write error: No space left on device") and it was still reported "queued"
+  if printf '%s\n---\n%s\n' "$2" "$3" > "$Q/.$1.tmp" && mv "$Q/.$1.tmp" "$F"; then say "queued $1"
+  else rm -f "$Q/.$1.tmp"; say "could not write $1 (disk full?); not queued"; fi
 }
 
 gen_tester() {   # pr head branch

@@ -23,7 +23,7 @@ S="${LOCALAPPDATA:-$HOME}/orca-orchestration/design-system-viewer"
 EV="$S/events.log"; OFF="$S/events.hermes-offset"; LOCK="$S/hermes-watch.lock"
 MAX_WAIT=3600; [ "${1:-}" = "--max-wait" ] && MAX_WAIT="${2:?--max-wait needs seconds}"
 DEAD_AFTER="${DEAD_AFTER:-600}"; IDLE_AFTER="${IDLE_AFTER:-1800}"; TICK=15
-ATTN='^[^ ]+ (kept|no-pr|no-push|unknown|start-failed|start-refused|verdict-refused|merge-refused|leftover|gave-up|down)( |$)'
+ATTN='^[^ ]+ (kept|no-pr|no-push|unknown|start-failed|start-refused|verdict-refused|merge-refused|leftover|gave-up|down|orphaned|disk-low)( |$)'
 
 # one watcher at a time; a lock left by a dead watcher is taken over
 if ! mkdir "$LOCK" 2>/dev/null; then

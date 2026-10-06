@@ -23,11 +23,19 @@ known() {
   local role="$1" key="$2" val="$3" head="${4:-}" f
   for f in "$S"/queue/* "$S"/active-* "$S"/done/*; do
     [ -f "$f" ] || continue
+    # the dispatcher's re-check before a start asks "is this still owed?" of a spec that IS queued: the
+    # queued spec must not answer for itself (NEEDS_IGNORE_QUEUE=1, dispatch.sh owed())
+    [ -n "${NEEDS_IGNORE_QUEUE:-}" ] && case "$f" in "$S"/queue/*) continue;; esac
+    # an active-* file with no running/<spec>.env is a start that a dead dispatcher never finished: it
+    # holds nothing (measured 2026-10-06: #235 waited a day for a Tester behind one); the dispatcher
+    # moves it to done/<spec>.orphaned at its next pass
+    case "$f" in "$S"/active-*) [ -f "$S/running/${f##*/active-}.env" ] || continue;; esac
     sed -n '1,/^---$/p' "$f" | grep -qx "role: $role" || continue
     sed -n '1,/^---$/p' "$f" | grep -qx "$key: $val" || continue
     # a finished attempt that failed to start or was rejected does not satisfy the need - for every
     # role: a coder spec that failed to start must not hide its issue forever
-    case "$f" in *.rejected|*.start-failed) continue;; esac
+    # nor does a spec the dispatcher dropped (no longer owed when it came to start) or found orphaned
+    case "$f" in *.rejected|*.start-failed|*.dropped|*.orphaned) continue;; esac
     # a blocked result holds the need for BLOCKED_TTL minutes only (default 240): what blocked it -
     # typically another open PR holding the files - is expected to move, and nobody re-queues it
     # ...and only until the base branch moves: what blocks a card is almost always another open PR,
