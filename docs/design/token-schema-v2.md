@@ -15,7 +15,7 @@ Replaces: the v1 reference in `src/core/schema.js` (54 groups, 432 names).
   - [`schema-v2/elements.md`](schema-v2/elements.md): every Preview element and the explicit list of names it reads.
   - [`schema-v2/migration.md`](schema-v2/migration.md): every v1 name and where it goes.
 
-Totals from the check: tier 1 = 199, tier 2 = 260, tier 3 = 283, so **742 names**, in 41 component sets. The required core is 86 names (§4).
+Totals from the check: tier 1 = 199, tier 2 = 260, tier 3 = 283, so **742 names**, in 41 component sets. The required core is 129 names (§4).
 
 ## 1. Why v2: the structural review of v1
 
@@ -40,7 +40,7 @@ v1's `--heading-*` tokens live only in `app/src/tokens/tokens.css` (the viewer's
 1. **One decision, one token.** The grammar alone answers "which token?".
 2. **Frictionless override.** Every tier-3 name aliases a tier-2 name, and every tier-2 name aliases a tier-1 name. Changing one value moves everything that should move and nothing else.
 3. **The user fills values, never names.** The schema is fixed. Names outside it are reported as *extras*.
-4. **Complete from a small core.** Filling the 86 core names yields a complete working system, and any other name can then be overridden alone (§4).
+4. **Complete from a known core.** Filling the 129 core names leaves no default unresolved, so the system is complete. Any other name can then be overridden alone (§4). The check enforces this.
 5. **Machine-readable.** Every name has a DTCG `$type`: `color`, `dimension`, `fontFamily`, `fontWeight`, `number`, `duration`, `cubicBezier`, `shadow` or `transition`.
 
 ## 3. Tiers and grammar
@@ -83,12 +83,10 @@ tier 3  {component}-{variant?}-{part?}-{property}-{scale|state?}
 
 The schema ships the names and a default for each tier-2 and tier-3 name. A default is a reference, never a literal, so the schema stays "given empty". The render order is: alias layer, then the user's CSS.
 
-- **The core (86 names):**
-  - the `neutral` and `brand` ramps (22);
-  - white, black and the shadow ink (3);
-  - the sans and mono families (2);
-  - the font-size ramp (12), the space ramp (15) and the radius ramp (9);
-  - the 23 root decisions (§3.1).
+- **The core (129 names)** is computed, not hand-picked:
+  - **106 tier-1 names:** every tier-1 name some default chain reaches. These are the brand and neutral steps the roles use, the status and chart steps (red, orange, green, blue, yellow, purple, teal, magenta), the type, space and radius steps the roles use, and the border widths, shadows, blur, opacity, scale, durations and easings the roles use.
+  - **23 root decisions** (§3.1).
+  - Filling exactly the core resolves every tier-2 and tier-3 name (✓ checked). The other 93 tier-1 names are optional ramp steps; Foundations shows them, but no default needs them.
 - **Coverage** is reported per tier as *set by the user*, *inherited* or *missing*. "Missing" exists only for core names.
 - **The two editing paths map onto the tiers:**
   - the Preview property panel (per element) writes tier-3 names, so an edit stays with that component;
