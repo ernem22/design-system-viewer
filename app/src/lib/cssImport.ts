@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from "react";
 
 const isCssFile = (f: File) => /\.css$/i.test(f.name);
 
+/** Our own JSON export, by extension — the only JSON the import reads. */
+export const isJsonFile = (f: File) => /\.json$/i.test(f.name);
+
+/** A page drop may carry either source the dialog reads: CSS or our JSON. */
+const isImportFile = (f: File) => isCssFile(f) || isJsonFile(f);
+
 /** Text of a picked/dropped stylesheet; rejects anything but .css (legacy
    parity — a JSON or image drop would parse to zero tokens anyway). */
 export async function readCssFile(file: File): Promise<string> {
@@ -98,8 +104,8 @@ export async function fetchCss(url: string): Promise<string> {
   return proxied ?? fetchDirect(url);
 }
 
-/** Page-wide .css drag & drop. Returns whether a file drag is over the page
-   (for the overlay); `onFile` gets the first .css file of a drop. */
+/** Page-wide drag & drop. Returns whether a file drag is over the page
+   (for the overlay); `onFile` gets the first .css/.json file of a drop. */
 export function useCssFileDrop(onFile: (file: File | null) => void): boolean {
   const [dragging, setDragging] = useState(false);
   const onFileRef = useRef(onFile);
@@ -130,7 +136,7 @@ export function useCssFileDrop(onFile: (file: File | null) => void): boolean {
       e.preventDefault();
       depth = 0;
       setDragging(false);
-      const file = [...(e.dataTransfer?.files ?? [])].find(isCssFile) ?? null;
+      const file = [...(e.dataTransfer?.files ?? [])].find(isImportFile) ?? null;
       onFileRef.current(file);
     };
     document.addEventListener("dragenter", enter);

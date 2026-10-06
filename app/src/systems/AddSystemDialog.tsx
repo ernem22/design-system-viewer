@@ -184,10 +184,28 @@ export function AddSystemDialog({
   // reflected in the menu.
   useEffect(() => {
     if (!open) return;
-    setName("");
-    setCss(initialCss ?? "");
-    setStep(1);
-    setStatus(initialCss ? { kind: "Dropped file", detail: "page drop", bytes: initialCss.length } : null);
+    // A page drop may hand us raw JSON (a .json export dropped onto the page
+    // opens here via `initialCss`): detect it so the drop round-trips with its
+    // name, exactly like a paste into the text pane. Anything else stays CSS.
+    if (initialCss && detectImportFormat(initialCss) === "system-json") {
+      try {
+        const imported = readSystemJson(initialCss);
+        setName(imported.name);
+        setCss(imported.css);
+        setStatus({ kind: "JSON export", detail: imported.name, bytes: imported.css.length });
+        setSource({ kind: "json" });
+      } catch {
+        setName("");
+        setCss(initialCss);
+        setStatus({ kind: "Dropped file", detail: "page drop", bytes: initialCss.length });
+        setSource({ kind: "drop" });
+      }
+    } else {
+      setName("");
+      setCss(initialCss ?? "");
+      setStatus(initialCss ? { kind: "Dropped file", detail: "page drop", bytes: initialCss.length } : null);
+      setSource(initialCss ? { kind: "drop" } : null);
+    }
     setError(null);
     setUrl("");
     setUrlOpen(false);
@@ -199,7 +217,6 @@ export function AddSystemDialog({
     setMode("new");
     setTarget("");
     setCollision(null);
-    setSource(initialCss ? { kind: "drop" } : null);
     // A close (or a re-seed) supersedes anything still in flight: abort it so
     // its handler cannot settle on a buffer that is no longer ours.
     return () => {
@@ -222,6 +239,21 @@ export function AddSystemDialog({
     setStatus(from);
     if (origin) setSource(origin);
     if (importedName) setName((current) => (current.trim() ? current : importedName));
+  };
+
+  /** Slice 2 (#214): start from an existing system. Seeds the Source buffer
+      with that system's CSS — the write still happens only on Save, and the
+      origin stays a clone so the provenance matches the Save-step clone mode. */
+  const seedFromExisting = (slug: string) => {
+    const found = (systems ?? []).find((s) => s.slug === slug);
+    if (!found) return;
+    cancelImport();
+    setCss(found.css);
+    setStatus({ kind: "Cloned", detail: found.name, bytes: found.css.length });
+    setSource({ kind: "clone" });
+    setError(null);
+    setCollision(null);
+    setStrippedPrefixes([]);
   };
 
   /** A JSON export is read into its `css` + `name`; anything else is kept as
@@ -529,6 +561,24 @@ export function AddSystemDialog({
               <button type="button" className="tok-btn" onClick={copyTemplate} title="Copy the empty schema to the clipboard">
                 Copy template
               </button>
+              {systems && systems.length > 0 && (
+                <select
+                  className="tok-input app-import-target"
+                  value=""
+                  aria-label="Start from an existing system"
+                  title="Seed the source from an existing system's CSS"
+                  onChange={(e) => {
+                    if (e.target.value) seedFromExisting(e.target.value);
+                  }}
+                >
+                  <option value="">Start from existing…</option>
+                  {systems.map((s) => (
+                    <option key={s.slug} value={s.slug}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               <input
                 ref={cssFileRef}
                 type="file"
