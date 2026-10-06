@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as Accordion from "@radix-ui/react-accordion";
-import { Icon } from "../lib/icons.tsx";
+import { RailGroup } from "./RailGroup.tsx";
 import { useScrollSpy } from "../lib/scrollspy.ts";
 import { writeSectionHash } from "../lib/urlState.ts";
 import type { RailGroups } from "../lib/railTypes.ts";
@@ -121,28 +121,19 @@ export default function Rail({ groups, searching = false, syncSection = false, a
         onValueChange={setOpenGroups}
       >
         {groups.map(([label, links]) => (
-          <Accordion.Item key={label} value={label} className="app-rail-group">
-            <Accordion.Header>
-              <Accordion.Trigger className="app-rail-group-label">
-                <Icon name="chevronDown" size={11} className="app-rail-group-chevron" />
-                <span>{label}</span>
-                <span className="app-rail-count">{links.length}</span>
-              </Accordion.Trigger>
-            </Accordion.Header>
-            <Accordion.Content className="app-rail-group-items">
-              {links.map((l) => (
-                <a
-                  key={l.id}
-                  href={`#${l.id}`}
-                  className="app-rail-link"
-                  aria-current={l.id === activeId ? "true" : undefined}
-                  onClick={() => pinTo(l.id)}
-                >
-                  {l.label}
-                </a>
-              ))}
-            </Accordion.Content>
-          </Accordion.Item>
+          <RailGroup key={label} value={label} label={label} count={links.length} contentClassName="app-rail-group-items">
+            {links.map((l) => (
+              <a
+                key={l.id}
+                href={`#${l.id}`}
+                className="app-rail-link"
+                aria-current={l.id === activeId ? "true" : undefined}
+                onClick={() => pinTo(l.id)}
+              >
+                {l.label}
+              </a>
+            ))}
+          </RailGroup>
         ))}
       </Accordion.Root>
     </>
