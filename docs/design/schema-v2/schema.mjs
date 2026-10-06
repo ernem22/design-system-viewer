@@ -307,4 +307,19 @@ comp("appshell", "Application shell (header, sidebar)", {
   "sidebar-bg": "color-bg-canvas", border: "color-border-subtle",
 });
 
+// The core is computed, never hand-marked: every tier-1 name some default chain reaches, plus the
+// root decisions. Filling exactly these leaves no default unresolved (token-schema-v2.md §4).
+{
+  const byN = new Map(tokens.map((t) => [t.name, t]));
+  const reached = new Set();
+  const walk = (n) => {
+    const t = byN.get(n);
+    if (!t) return;
+    if (t.tier === 1) { reached.add(n); return; }
+    for (const m of String(t.def ?? "").matchAll(/var\(--([a-z0-9-]+)\)/g)) walk(m[1]);
+  };
+  for (const t of tokens) if (t.tier > 1) walk(t.name);
+  for (const t of tokens) if (t.tier === 1) t.core = reached.has(t.name);
+}
+
 export const TOKENS = tokens;
