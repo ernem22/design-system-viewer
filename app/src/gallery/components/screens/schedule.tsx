@@ -4,6 +4,12 @@ import "./screens.css";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 
+// Real month date through Intl — keeps the shown "June 2026" stamp.
+const monthStamp = new Intl.DateTimeFormat("en-US", {
+  month: "long",
+  year: "numeric",
+}).format(new Date(2026, 5, 1));
+
 const EVENTS: Record<string, [string, string, string][]> = {
   Tue: [
     ["9:30", "Standup", "success"],
@@ -23,7 +29,7 @@ export default function ScheduleBody() {
         className="dsv-screen-subnav dsv-inline"
         style={{ padding: "var(--space-2) var(--space-3)", marginBottom: "var(--space-4)", borderRadius: "var(--radius-md)" }}
       >
-        <strong style={{ fontSize: "var(--font-size-sm)" }}>June 2026</strong>
+        <strong style={{ fontSize: "var(--font-size-sm)" }}>{monthStamp}</strong>
         <span className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>
           Week 24
         </span>

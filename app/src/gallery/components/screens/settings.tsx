@@ -38,6 +38,7 @@ export default function SettingsBody() {
   const [density, setDensity] = useState("comfortable");
   const [notif, setNotif] = useState({ email: true, push: true, digest: false });
   const [theme, setTheme] = useState("system");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   return (
     <div style={{ maxWidth: 560, margin: "0 auto" }}>
       <div className="dsv-card">
@@ -56,7 +57,7 @@ export default function SettingsBody() {
           <Tabs.Content className="dsv-tabs-content" value="general">
             <div className="dsv-stack" style={{ color: "var(--color-text)" }}>
               <SettingRow title="Auto save" desc="Save instantly">
-                <Switch.Root className="dsv-switch" defaultChecked>
+                <Switch.Root className="dsv-switch" defaultChecked aria-label="Auto save">
                   <Switch.Thumb className="dsv-switch-thumb" />
                 </Switch.Root>
               </SettingRow>
@@ -109,9 +110,20 @@ export default function SettingsBody() {
               </SettingRow>
               <Separator.Root className="dsv-sep" />
               <SettingRow title="Delete workspace" desc="Permanent, cannot be undone">
-                <Button variant="danger" size="sm">
-                  Delete…
-                </Button>
+                {confirmingDelete ? (
+                  <span className="dsv-inline" style={{ gap: "var(--space-2)" }}>
+                    <Button variant="danger" size="sm" onClick={() => setConfirmingDelete(false)}>
+                      Confirm delete
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setConfirmingDelete(false)}>
+                      Cancel
+                    </Button>
+                  </span>
+                ) : (
+                  <Button variant="danger" size="sm" onClick={() => setConfirmingDelete(true)}>
+                    Delete…
+                  </Button>
+                )}
               </SettingRow>
             </div>
             <div
@@ -131,6 +143,7 @@ export default function SettingsBody() {
               <SettingRow title="Email alerts" desc="Build results and invoices">
                 <Switch.Root
                   className="dsv-switch"
+                  aria-label="Email alerts"
                   checked={notif.email}
                   onCheckedChange={(v) => setNotif((n) => ({ ...n, email: v }))}
                 >
@@ -141,6 +154,7 @@ export default function SettingsBody() {
               <SettingRow title="Push notifications" desc="Mentions and comments">
                 <Switch.Root
                   className="dsv-switch"
+                  aria-label="Push notifications"
                   checked={notif.push}
                   onCheckedChange={(v) => setNotif((n) => ({ ...n, push: v }))}
                 >
@@ -151,6 +165,7 @@ export default function SettingsBody() {
               <SettingRow title="Weekly digest" desc="Summary every Monday">
                 <Switch.Root
                   className="dsv-switch"
+                  aria-label="Weekly digest"
                   checked={notif.digest}
                   onCheckedChange={(v) => setNotif((n) => ({ ...n, digest: v }))}
                 >
@@ -180,7 +195,7 @@ export default function SettingsBody() {
               </SettingRow>
               <Separator.Root className="dsv-sep" />
               <SettingRow title="Motion" desc="Reduce animations">
-                <Switch.Root className="dsv-switch">
+                <Switch.Root className="dsv-switch" aria-label="Motion">
                   <Switch.Thumb className="dsv-switch-thumb" />
                 </Switch.Root>
               </SettingRow>

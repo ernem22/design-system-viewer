@@ -55,9 +55,9 @@ export default function TeamBody() {
         <table className="dsv-table">
           <thead>
             <tr>
-              <th>Member</th>
-              <th>Role</th>
-              <th>Status</th>
+              <th scope="col">Member</th>
+              <th scope="col">Role</th>
+              <th scope="col">Status</th>
             </tr>
           </thead>
           <tbody>
