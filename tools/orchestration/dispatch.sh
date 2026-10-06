@@ -634,6 +634,23 @@ fill_queue() {
   [ $(( NOW - $(cat "$STAMP" 2>/dev/null || echo 0) )) -ge "${SPECGEN_EVERY:-120}" ] || return 0
   echo "$NOW" > "$STAMP"
   bash "$HERE/specgen.sh" 2>&1 | while IFS= read -r l; do say "$l"; done
+  prune_queue
+}
+
+# The queue says only what is owed: every queued spec is asked owed() on the specgen cadence, whether or
+# not anything can start. Measured 2026-10-06 on 74566fa: with 194 MB free no start was tried, so the
+# start-time check never ran and Coder specs for closed #221/#225/#248 stayed queued.
+prune_queue() {
+  local F
+  for F in $(ls -1 "$Q" 2>/dev/null | grep -v '^\.' | sort); do
+    [ -f "$Q/$F" ] || continue
+    owed "$Q/$F"
+    case $? in
+      0) ;;
+      1) drop_spec "$Q/$F" "$OWED_WHY" ;;
+      *) say "prune: GitHub unreadable ($OWED_WHY); the queue is left as it is"; return 0 ;;
+    esac
+  done
 }
 
 # Each pass: poll every live worker (close the settled ones), merge what the gate passed, top the
