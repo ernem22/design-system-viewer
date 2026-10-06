@@ -34,7 +34,13 @@ process.stdin.on('data', (d) => (s += d)).on('end', () => {
   const lines = [];
   for (const text of out) {
     for (const line of text.split(/\r?\n/)) {
-      if (/^\s*status:\s*[a-z]+\s*\|/i.test(line)) {
+      // ...or joined with "; " (measured 2026-10-05, tester #241, task_202f4d88e6fa: `status: pass; role:
+      // tester; task: ...; observed: ... . before: ...`). Split only before a known field name (after "; "
+      // or ". "), because an observed: value itself holds "; " between findings.
+      if (/^\s*status:\s*[a-z]+\s*;/i.test(line)) {
+        for (const f of line.split(/[;.]\s+(?=(?:status|role|task|commit|tests|build|lint|observed|before|reason|fix_required|scope_ok|source|pr|head)\s*:)/i))
+          if (f.trim()) lines.push(f.trim());
+      } else if (/^\s*status:\s*[a-z]+\s*\|/i.test(line)) {
         const cut = line.indexOf('||');
         const head = cut >= 0 ? line.slice(0, cut) : line;
         for (const f of head.split(/\s+\|\s+/)) if (f.trim()) lines.push(f.trim());

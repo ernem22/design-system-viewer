@@ -222,9 +222,19 @@ post_verdict() {
     case "$SPEC_HEAD" in "$REP_COMMIT"*) ;; *) case "$REP_COMMIT" in "$SPEC_HEAD"*) ;; *)
       say "report commit $REP_COMMIT is not the spec head $SPEC_HEAD; nothing posted"; return 1;; esac;; esac
   fi
-  bash "$HERE/verdict-post.sh" --pr "$PR" --role "$ROLE" --from-settlement "$REP" \
-    --source "dispatch $TASK" 2>&1 | sed 's/^/dispatch: verdict: /' | tee -a "$LOG" >&2
-  RC="${PIPESTATUS[0]}"
+  # A refusal because GitHub could not be read is not the verdict's fault: measured 2026-10-05 19:02,
+  # reviewer-243's finished verdict was lost to "could not read the head of PR #243" while needs.sh,
+  # in the same minute, could not list PRs either. Such a post is tried again (3 tries in all).
+  local TRY OUTF="$S/verdict-$TASK.out"
+  for TRY in 1 2 3; do
+    bash "$HERE/verdict-post.sh" --pr "$PR" --role "$ROLE" --from-settlement "$REP" \
+      --source "dispatch $TASK" > "$OUTF" 2>&1
+    RC=$?
+    sed 's/^/dispatch: verdict: /' "$OUTF" | tee -a "$LOG" >&2
+    [ "$RC" -ne 0 ] && grep -q 'could not read' "$OUTF" && [ "$TRY" -lt 3 ] || break
+    say "verdict-post for $TASK could not read GitHub (try $TRY/3); trying again in 20s"; sleep 20
+  done
+  rm -f "$OUTF"
   [ "$RC" -eq 0 ] && say "posted $ROLE verdict for #$PR from $TASK" || say "verdict-post refused $TASK (rc $RC); report kept at $REP"
   return "$RC"
 }
@@ -392,14 +402,37 @@ blocked_by() {
 # start every queued spec that nothing real blocks, in name order (1xx fixer < 2xx tester <
 # 3xx reviewer < 5xx coder), at most DISPATCH_STARTS per pass so the live workers keep being polled
 start_ready() {
-  local F N=0 WHY
+  local F N=0 WHY NEED AVAIL
   for F in $(ls -1 "$Q" 2>/dev/null | grep -v '^\.' | sort); do
     [ "$N" -ge "${DISPATCH_STARTS:-2}" ] && break
     [ -f "$Q/$F" ] || continue
     WHY="$(blocked_by "$Q/$F")"
     [ -z "$WHY" ] || continue
+    # Memory is the same for every queued spec, so when it is short the pass stops trying here.
+    # Measured 2026-10-05/06: each refused start still cost ~18 s inside worker.sh, a pass tried every
+    # queued spec in turn, and a pass grew past 7 minutes (`--stop` timed out waiting for it).
+    NEED="$(need_mb)"; AVAIL="$(avail_mb)"
+    if [ -n "$AVAIL" ] && [ "$AVAIL" -lt "$NEED" ]; then
+      say "memory: $AVAIL MB free, a start needs $NEED MB; nothing more starts this pass"
+      refused_event "$F"; break
+    fi
     start_one "$Q/$F" && N=$((N+1))
   done
+}
+
+# available MB from the same reader wait-capacity.sh uses; empty when unreadable (worker.sh decides then)
+avail_mb() {
+  node "${CAPACITY_JS:-D:/code/orca-supervisor/src/capacity.js}" 2>/dev/null \
+    | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(String(JSON.parse(s).available_mb))}catch(e){}})' 2>/dev/null \
+    | tr -dc '0-9'
+}
+
+# refused for memory/base/port: one event per 30 min at most, so a host that cannot start anything is
+# seen without flooding the manager
+refused_event() {
+  local RL="$S/refused.last"; [ $(( $(date +%s) - $(cat "$RL" 2>/dev/null || echo 0) )) -ge 1800 ] \
+    && { date +%s > "$RL"; event "start-refused spec=$(basename "$1") live=$(live_count)"; }
+  return 0
 }
 
 # MEMORY decides how many workers run, not a count. Measured 2026-10-05 on this 7.5 GB host: one
@@ -464,8 +497,7 @@ start_one() {
       say "start refused (rc 3); $(basename "$FILE") stays queued"; mv "$ACTIVE" "$FILE"
       # refused for memory/base/port: one event per 30 min at most, so a host that cannot start
       # anything is seen without flooding the manager
-      local RL="$S/refused.last"; [ $(( $(date +%s) - $(cat "$RL" 2>/dev/null || echo 0) )) -ge 1800 ] \
-        && { date +%s > "$RL"; event "start-refused spec=$(basename "$FILE") live=$(live_count)"; }
+      refused_event "$FILE"
       return 1
     else
       say "start failed (rc $RC) for $(basename "$FILE")"
