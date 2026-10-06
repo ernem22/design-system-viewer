@@ -100,7 +100,10 @@ emit() {   # role ref head why [branch]
 # ---- issues labelled agent with no open PR claiming them -> coder ----------------------------
 PRS_JSON="$(gh pr list --repo "$REPO" --base "$BASE" --state open --json number,title,body,headRefOid,headRefName,mergeable --limit 200 2>/dev/null)" \
   || { echo "needs.sh: cannot list PRs (gh)" >&2; exit 4; }
-CLAIMED="$(printf '%s' "$PRS_JSON" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const n=new Set();for(const p of JSON.parse(s)){for(const m of ((p.title||"")+"\n"+(p.body||"")).matchAll(/(?:\(#|(?:Closes|Fixes|Resolves) #)(\d+)/g))n.add(m[1])}console.log([...n].join(" "))})')"
+# An open PR claims an issue by `(#n)` in its TITLE or a closing keyword in its body. Not by `(#n` anywhere
+# in the body: measured 2026-10-06, the body of tooling PR #273 said "(#227, tester #238)" and #227 - open,
+# no PR of its own - was taken as claimed and its queued Coder dropped.
+CLAIMED="$(printf '%s' "$PRS_JSON" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const n=new Set();for(const p of JSON.parse(s)){for(const m of (p.title||"").matchAll(/\(#(\d+)\)/g))n.add(m[1]);for(const m of (p.body||"").matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):? #(\d+)/gi))n.add(m[1])}console.log([...n].join(" "))})')"
 
 LIMIT=200
 [ "$(printf '%s' "$PRS_JSON" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).length))')" -ge "$LIMIT" ] \
