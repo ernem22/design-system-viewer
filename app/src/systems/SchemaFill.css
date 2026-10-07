@@ -35,6 +35,12 @@
   white-space: nowrap;
 }
 
+/* Single expand/collapse toggle: never split across rows on its own. */
+.app-fill-expand {
+  flex: none;
+  white-space: nowrap;
+}
+
 .app-fill-summary {
   margin: 0;
 }

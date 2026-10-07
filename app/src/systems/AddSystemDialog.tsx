@@ -112,7 +112,8 @@ function untilAborted<T>(task: Promise<T>, signal: AbortSignal): Promise<T> {
  * fill a single token without pasting 432 lines) and the raw text — filling
  * everything between a one-line top bar and a one-line bottom bar.
  *
- * The ways in (upload, URL, JSON export, template, clipboard) are compact
+ * The ways in (upload, URL, fill-with-schema, plus a More-sources menu for
+ * JSON export, copy-empty-schema and seed-from-existing) are compact
  * triggers in that top bar, each opening only the row it needs. The three
  * steps gate the write, not the work: step 1 holds every source trigger and
  * both panes, step 2 holds the grouped schema fill (Form ⇄ Paste over the
@@ -520,7 +521,7 @@ export function AddSystemDialog({
       return;
     }
     clip.writeText(templateCss()).then(
-      () => onToast(`Copied the ${FULL_TEMPLATE_COUNT}-name template`, "ok"),
+      () => onToast(`Copied the ${FULL_TEMPLATE_COUNT}-name empty schema`, "ok"),
       () => onToast("Copy failed", "err"),
     );
   };
@@ -568,17 +569,6 @@ export function AddSystemDialog({
               <button
                 type="button"
                 className="tok-btn"
-                aria-expanded={jsonOpen}
-                onClick={() => {
-                  setJsonOpen((v) => !v);
-                  setUrlOpen(false);
-                }}
-              >
-                <Icon name="copy" size={14} /> JSON export
-              </button>
-              <button
-                type="button"
-                className="tok-btn"
                 onClick={() => {
                   cancelImport();
                   setCollision(null);
@@ -586,31 +576,51 @@ export function AddSystemDialog({
                   setError(null);
                   setSource({ kind: "template" });
                 }}
-                title={`Insert the ${FULL_TEMPLATE_COUNT} schema names, values empty`}
+                title={`Insert the ${FULL_TEMPLATE_COUNT} empty schema names into the editor`}
               >
-                Template
+                Fill with schema
               </button>
-              <button type="button" className="tok-btn" onClick={copyTemplate} title="Copy the empty schema to the clipboard">
-                Copy template
-              </button>
-              {systems && systems.length > 0 && (
-                <select
-                  className="tok-input app-import-target"
-                  value=""
-                  aria-label="Start from an existing system"
-                  title="Seed the source from an existing system's CSS"
-                  onChange={(e) => {
-                    if (e.target.value) seedFromExisting(e.target.value);
-                  }}
-                >
-                  <option value="">Start from existing…</option>
-                  {systems.map((s) => (
-                    <option key={s.slug} value={s.slug}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              )}
+              {/* Less-used sources share one menu so the toolbar stays on one
+                  row at desktop width and no select label is cut. */}
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger className="tok-btn" aria-label="More sources">
+                  More sources
+                  <Icon name="chevronDown" size={12} />
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content className="tok-menu" sideOffset={6} align="end">
+                    <DropdownMenu.Item
+                      className="tok-menu-item"
+                      onSelect={() => {
+                        setJsonOpen(true);
+                        setUrlOpen(false);
+                      }}
+                    >
+                      JSON export
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item className="tok-menu-item" onSelect={copyTemplate}>
+                      Copy empty schema
+                    </DropdownMenu.Item>
+                    {systems && systems.length > 0 && (
+                      <>
+                        <DropdownMenu.Separator className="app-import-menusep" />
+                        <DropdownMenu.Label className="app-import-menulabel">
+                          Start from existing
+                        </DropdownMenu.Label>
+                        {systems.map((s) => (
+                          <DropdownMenu.Item
+                            key={s.slug}
+                            className="tok-menu-item"
+                            onSelect={() => seedFromExisting(s.slug)}
+                          >
+                            {s.name}
+                          </DropdownMenu.Item>
+                        ))}
+                      </>
+                    )}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
               <input
                 ref={cssFileRef}
                 type="file"
