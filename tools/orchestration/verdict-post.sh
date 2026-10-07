@@ -64,7 +64,11 @@ if [ -n "$SETTLE" ]; then
   fi
   pick() { printf '%s\n' "$TEXT" | grep -m1 -E "^[[:space:]]*$1:" | sed -E "s/^[[:space:]]*$1:[[:space:]]*//" | tr -d '\r'; }
   [ -n "$STATUS" ] || STATUS="$(pick status)"
-  [ -n "$COMMIT" ] || COMMIT="$(pick commit)"
+  # only the leading sha: tester #294 (2026-10-07) wrote `commit: da8d79a (local HEAD da8d79a == gh pr view
+  # 294 headRefOid ...)`, and the whole line failed the head check below. The sha must still be the head.
+  # A commit line with no leading sha keeps its raw text, so it still fails the head check (an empty one
+  # would pass it).
+  if [ -z "$COMMIT" ]; then RAWC="$(pick commit)"; COMMIT="$(printf '%s' "$RAWC" | grep -oE '^[0-9a-fA-F]{7,40}' | head -1)"; COMMIT="${COMMIT:-$RAWC}"; fi
   [ -n "$SCOPE_OK" ] || SCOPE_OK="$(pick scope_ok)"
   [ -n "$REASON" ] || REASON="$(pick reason)"
   [ -n "$FIXREQ" ] || FIXREQ="$(pick fix_required)"
