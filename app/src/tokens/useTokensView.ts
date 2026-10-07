@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { lintTokens, parseTokens } from "../../../src/core/parse.js";
 import { categorize } from "../../../src/core/taxonomy.js";
 import { coverage } from "../../../src/core/schema.js";
 import type { DesignSystem, Token, TokenGroup, TokenGroupKind } from "../systems/store.ts";
 import type { RailGroups, RailLink } from "../lib/railTypes.ts";
 import type { PushToast } from "../lib/toasts.ts";
+import { readViewUrl } from "../lib/urlState.ts";
 
 /** Anchor ids — Rail links point at these, so both sides share the builders. */
 export const groupAnchor = (id: string) => `tok-group-${id}`;
@@ -79,17 +80,28 @@ const trLower = (s: string) => s.toLocaleLowerCase("tr");
  * state too); systems data itself lives in systems/store.ts.
  */
 export function useTokensView(system: DesignSystem | null, pushToast: PushToast) {
-  const [filter, setFilter] = useState("");
+  // Seeded from ?f= / ?tv= so a copied Tokens link reopens with the same
+  // filter and schema/gallery mode (an unknown tv falls back to gallery —
+  // readViewUrl normalises it to null). App's URL effect keeps both in sync
+  // while the Tokens tab is active.
+  const [filter, setFilter] = useState(() => readViewUrl().f ?? "");
   const [showMissing, setShowMissing] = useState(true);
-  const [schemaMode, setSchemaMode] = useState(false);
+  const [schemaMode, setSchemaMode] = useState(() => readViewUrl().tv === "schema");
   const [selectedName, setSelectedName] = useState<string | null>(null);
   // Token whose inline editor popover is open (single-open; only one
   // TokenEditControl renders open at a time).
   const [editingName, setEditingName] = useState<string | null>(null);
 
-  // Switching systems resets the view, like the old selectSystem did.
+  // Switching systems resets the view, like the old selectSystem did — but
+  // the first arrival (async store load, or a mount already holding one)
+  // keeps URL-seeded view state (?f= / ?tv=), so a copied Tokens link
+  // reopens with its filter and mode instead of flashing then clearing them.
   const slug = system?.slug ?? "";
+  const prevSlugRef = useRef(slug);
   useEffect(() => {
+    const prev = prevSlugRef.current;
+    prevSlugRef.current = slug;
+    if (!prev || prev === slug) return;
     setFilter("");
     setSchemaMode(false);
     setSelectedName(null);
