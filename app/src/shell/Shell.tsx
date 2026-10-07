@@ -1,7 +1,10 @@
 import { useState, type ReactNode } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
+import * as Popover from "@radix-ui/react-popover";
 import { readViewUrl, type UrlTab } from "../lib/urlState.ts";
+import { usePhoneViewport } from "../lib/panelStorage.ts";
+import { Icon } from "../lib/icons.tsx";
 import RailFrame from "./RailFrame.tsx";
 import PropsFrame from "./PropsFrame.tsx";
 import "./shell.css";
@@ -75,6 +78,12 @@ export default function Shell({
   // tab switches can't clobber the system/compare params mid-write.
   const [innerTab, setInnerTab] = useState<AppTab>(() => readViewUrl().tab ?? "tokens");
   const tab = controlledTab ?? innerTab;
+  // Phone topbar (issue #282): at ≤480px the action cluster no longer fits
+  // next to the tab strip (measured 451px of content in a 360px frame), so it
+  // collapses behind one "More actions" popover instead of overflowing the
+  // frame. Every control stays mounted — just relocated — so no affordance is
+  // lost on small screens.
+  const phone = usePhoneViewport();
 
   return (
     <Tabs.Root
@@ -112,7 +121,26 @@ export default function Shell({
               </Tabs.Trigger>
             ))}
           </Tabs.List>
-          <div className="app-topbar-right">{actions}</div>
+          {phone ? (
+            <div className="app-topbar-more">
+              <Popover.Root>
+                <Popover.Trigger
+                  className="app-iconbtn"
+                  aria-label="More actions"
+                  title="More actions"
+                >
+                  <Icon name="dots" size={15} />
+                </Popover.Trigger>
+                <Popover.Portal>
+                  <Popover.Content className="app-menu" sideOffset={8} align="end">
+                    {actions}
+                  </Popover.Content>
+                </Popover.Portal>
+              </Popover.Root>
+            </div>
+          ) : (
+            <div className="app-topbar-right">{actions}</div>
+          )}
         </header>
 
         <aside id="app-rail" className="app-rail" aria-label="Sections">
