@@ -433,7 +433,7 @@
      with transform and fades with opacity (~200ms ease-out), so a toggle
      costs one layout and never relayouts mid-animation. Motion resolves from
      the viewer-private --app-* tokens: the inspected system overwrites the
-     shared --duration-*/--ease-* names inline (issue #284), which would
+      shared --duration-* and --ease-* names inline (issue #284), which would
      freeze this slide at 0ms on systems that zero them. */
   transition:
     transform var(--app-duration-normal) var(--app-ease-out),
