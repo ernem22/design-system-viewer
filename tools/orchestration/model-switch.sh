@@ -7,7 +7,7 @@
 #   model-switch.sh --list                       each config's current model and its fallback order
 #
 # Without --to it tries, in order, every model listed AFTER the current one, and takes the first that
-# answers a one-line probe (`opencode run -m <model>`, 90 s). --to must name a listed model and is
+# answers a one-line probe (`opencode run -m <model>`, 90 s; on a timeout the whole process tree is killed). --to must name a listed model and is
 # probed too. Nothing is written unless a probe passed. On success: the role config's "model" is
 # rewritten, a `model-switch` event is written, and it prints SWITCHED <config> <from> -> <to>.
 # No model answering: prints NO-MODEL and exits 1 (the manager then pauses: dispatch.sh --pause).
@@ -27,8 +27,20 @@ cfg_of() { case "$1" in coder|fixer|write) echo write;; reviewer|readonly) echo 
 current() { node "$HERE_NATIVE/lib/jget.cjs" model < "$HERE/roles/$1.opencode.json" 2>/dev/null; }
 order() { sed -n "s/^$1:[[:space:]]*//p" "$FB" | head -1; }
 probe() {   # model -> 0 when it answers
-  local OUT RC
-  OUT="$(timeout "${PROBE_TIMEOUT:-90}" opencode run -m "$1" "Reply with exactly: OK" </dev/null 2>&1)"; RC=$?
+  # Not `timeout opencode ...`: on Windows `opencode` is a launcher that starts the real opencode.exe as
+  # a child, and timeout kills only the launcher. Measured 2026-10-07: with no worker running, two
+  # opencode.exe held 1486 + 894 MB and no start could pass the memory check. The probe runs in the
+  # background and, on a timeout, its whole process tree is killed (taskkill /T).
+  local OUT RC P W i=0 F="$S/probe.$$.out"
+  opencode run -m "$1" "Reply with exactly: OK" </dev/null > "$F" 2>&1 &
+  P=$!
+  while kill -0 "$P" 2>/dev/null && [ "$i" -lt "${PROBE_TIMEOUT:-90}" ]; do sleep 1; i=$((i+1)); done
+  if kill -0 "$P" 2>/dev/null; then
+    W="$(cat "/proc/$P/winpid" 2>/dev/null)"
+    if [ -n "$W" ] && command -v taskkill >/dev/null 2>&1; then taskkill //T //F //PID "$W" >/dev/null 2>&1; else pkill -9 -P "$P" 2>/dev/null; kill -9 "$P" 2>/dev/null; fi
+    wait "$P" 2>/dev/null; RC=124
+  else wait "$P"; RC=$?; fi
+  OUT="$(cat "$F" 2>/dev/null)"; rm -f "$F"
   if [ "$RC" -eq 0 ] && printf '%s' "$OUT" | grep -q 'OK'; then echo "OK $1"; return 0; fi
   echo "FAIL $1 (rc $RC): $(printf '%s' "$OUT" | grep -v '^[[:space:]]*$' | tail -2 | tr '\n' ' ' | cut -c1-200)"; return 1
 }
