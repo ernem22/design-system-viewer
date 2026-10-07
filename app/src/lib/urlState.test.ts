@@ -109,7 +109,6 @@ describe('writeViewUrl', () => {
       cmp: [],
       view: null,
       component: null,
-      dark: false,
     });
   });
 
@@ -137,7 +136,6 @@ describe('writeViewUrl', () => {
       cmp: ['a', 'b'],
       view: 'diff',
       component: 'button',
-      dark: false,
     });
   });
 
@@ -162,7 +160,6 @@ describe('writeViewUrl', () => {
       cmp: [],
       view: 'diff',
       component: 'button',
-      dark: false,
     });
   });
 
@@ -181,23 +178,21 @@ describe('writeViewUrl', () => {
   });
 });
 
-describe('dark flag (#110)', () => {
-  it('reads dark=false from the bare root', () => {
-    expect(readViewUrl('').dark).toBe(false);
+describe('retired dark flag (#277)', () => {
+  it('ignores a stale ?dark=1 on read', () => {
+    expect(readViewUrl('?sys=a&dark=1')).toEqual({
+      tab: null,
+      sys: 'a',
+      cmp: [],
+      view: null,
+      component: null,
+    });
   });
 
-  it('round-trips dark through the live URL (write then read)', () => {
-    const location = installWindowStub();
-    writeViewUrl({ sys: 'aurora', dark: true });
-    expect(location.search).toContain('dark=1');
-    expect(readViewUrl(location.search).dark).toBe(true);
-  });
-
-  it('drops the dark flag on write when dark is off', () => {
+  it('drops a stale ?dark=1 on write', () => {
     const location = installWindowStub('?sys=a&dark=1');
-    writeViewUrl({ sys: 'a', dark: false });
+    writeViewUrl({ sys: 'a' });
     expect(location.search).not.toContain('dark');
-    expect(readViewUrl(location.search).dark).toBe(false);
   });
 });
 

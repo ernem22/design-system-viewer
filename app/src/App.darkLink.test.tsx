@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Issue #110: "Copy link to this view" dropped the dark state, so opening the
-// copied URL landed with Dark unchecked. This mounts the real App with a
-// deep-linked ?dark=1 and asserts the switch comes up on, the dark override is
-// what the root element actually receives, and the flag survives the URL sync.
+// Issue #277, slice 2: the per-system dark variant is retired. With a system
+// that ships `themes.dark` and a stale `?dark=1` in the URL, App renders no
+// "Dark" switch, applies the base (light) value to the root element, and
+// drops the param on the next URL write. RED on the parent commit, where the
+// switch renders, the dark override is applied, and the param survives.
 vi.mock("./gallery/components/index.ts", () => ({ COMPONENT_ENTRIES: [] }));
 
 import { act } from "react";
@@ -62,14 +63,13 @@ afterEach(() => {
   localStorage.clear();
 });
 
-describe("App dark deep link (#110)", () => {
-  it("restores the dark variant from ?dark=1 and keeps it in the URL", async () => {
+describe("per-system dark variant retired (#277)", () => {
+  it("ignores a stale ?dark=1: no switch, base value, param dropped", async () => {
     const el = await mountApp();
 
-    expect(el.querySelector<HTMLElement>(".app-dark-switch")?.getAttribute("aria-checked")).toBe(
-      "true",
-    );
-    expect(document.documentElement.style.getPropertyValue(TOKEN)).toBe("#000000");
-    expect(window.location.search).toContain("dark=1");
+    expect(el.querySelector(".app-dark-switch")).toBeNull();
+    expect(el.querySelector(".app-dark")).toBeNull();
+    expect(document.documentElement.style.getPropertyValue(TOKEN)).toBe("#111111");
+    expect(new URLSearchParams(window.location.search).has("dark")).toBe(false);
   });
 });

@@ -36,8 +36,8 @@ interface ContrastRow {
  * effect ordering when switching systems.
  *
  * `values` is the same resolved per-token map the token panels display —
- * `tokenValueMap`'s css -> groups -> (dark) order — so the audit measures the
- * palette the user is actually shown, including a system's dark variant.
+ * `tokenValueMap`'s css -> groups order — so the audit measures the
+ * palette the user is actually shown.
  */
 export function ContrastSection({ values }: { values: Map<string, string> }) {
   const sectionRef = useRef<HTMLElement>(null);

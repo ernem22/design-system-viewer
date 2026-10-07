@@ -427,10 +427,8 @@ export function systemCoveragePercent(system: DesignSystem | null | undefined): 
   return pct;
 }
 
-/** Flat token list for a system — base values, plus its dark variant on
-   top (later wins) when `dark` is on and the system ships one. */
-export function resolveSystemTokens(system: DesignSystem | null, dark = false): Token[] {
-  const base = system?.groups?.flatMap((g) => g.tokens) ?? [];
-  const darkTokens = dark ? (system?.themes?.dark ?? []) : [];
-  return darkTokens.length ? [...base, ...darkTokens] : base;
+/** Flat token list for a system — the base values. A stored `themes.dark`
+   block is never read: dark mode is retired and every panel shows light. */
+export function resolveSystemTokens(system: DesignSystem | null): Token[] {
+  return system?.groups?.flatMap((g) => g.tokens) ?? [];
 }

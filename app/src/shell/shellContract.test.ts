@@ -100,7 +100,7 @@ describe("topbar narrow-viewport contract (issue #90)", () => {
 });
 
 // Issue #134: the ≤900px block dropped the Preview-only chrome (coverage pill,
-// search, edit-reset pill, dark switch) and the ≤480px block dropped the brand
+// search, edit-reset pill) and the ≤480px block dropped the brand
 // and the copy-link action — the only in-app copy-link. `display: none` on a
 // control a user needs is not a narrow-viewport fix, so the topbar now keeps
 // every control and scrolls inside its own frame instead. Like the rules
@@ -111,7 +111,6 @@ describe("topbar keeps its functional controls at narrow widths (#134)", () => {
     const controls = [
       ".app-pill",
       ".app-topbar-cov",
-      ".app-dark",
       ".app-brand",
       ".app-topbar-search",
       '.app-iconbtn[aria-label="Copy link to this view"]',

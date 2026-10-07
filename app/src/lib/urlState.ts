@@ -14,9 +14,8 @@
 //   cv=diff                      compare mode — only when diff (the default
 //                                "component" is omitted, like legacy)
 //   cc=<id>                      compare component — only when non-default
-//   dark=1                       active system's dark variant is on — omitted
-//                                when off (the switch only exists for systems
-//                                that ship themes.dark)
+// A legacy ?dark=1 is ignored on read and dropped on the next write: dark
+// mode is retired, every panel shows the base (light) values.
 // Section scroll position rides in location.hash (#<element-id>), like
 // legacy's gallery scrollspy (`history.replaceState(null, "", `#${best}`)`).
 // Rail's links are already plain <a href="#id"> anchors, so clicks deep-link
@@ -50,7 +49,6 @@ export interface ViewUrlState {
   cmp: string[];
   view: string | null;
   component: string | null;
-  dark: boolean;
 }
 
 /** Parse shareable state out of a querystring (defaults to the live URL).
@@ -79,7 +77,6 @@ export function readViewUrl(search?: string): ViewUrlState {
     cmp,
     view: params.get("cv") ?? params.get("v"),
     component: params.get("cc") ?? params.get("c"),
-    dark: params.get("dark") === "1",
   };
 }
 
@@ -89,7 +86,6 @@ export interface WriteViewUrlParams {
   cmp?: string[] | null;
   view?: string | null;
   component?: string | null;
-  dark?: boolean;
 }
 
 /** Single replaceState writer for the querystring half of the URL — Rail owns
@@ -112,8 +108,8 @@ export function writeViewUrl(next: WriteViewUrlParams): void {
   else params.delete("cv");
   if (next.component) params.set("cc", next.component);
   else params.delete("cc");
-  if (next.dark) params.set("dark", "1");
-  else params.delete("dark");
+  // Dark mode is retired: a stale ?dark=1 opens normally and is dropped here.
+  params.delete("dark");
   params.delete("v");
   params.delete("c");
   const qs = params.toString();

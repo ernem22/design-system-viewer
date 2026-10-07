@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Window } from 'happy-dom';
-import { parseThemes } from '../../../src/core/parse.js';
 import type { DesignSystem } from '../systems/store.ts';
 import { download, systemToCss } from './export.ts';
 
@@ -46,11 +45,9 @@ describe('download', () => {
   });
 });
 
-// Issue #110: the viewer displays a system's dark variant, but the CSS export
-// emitted `:root` only — the exported file could not reproduce what the viewer
-// showed. The dark tokens now ride in a `[data-theme="dark"]` block, which is
-// the same selector shape parse.js reads back (`DARK_SEL`), so the export
-// round-trips through the import path instead of being light-only.
+// Issue #277: dark mode is retired — the CSS export carries the base (light)
+// values only, even when the system stores a `themes.dark` block. A stored
+// dark block is never emitted.
 const darkSystem = {
   slug: 'wire-dark',
   name: 'Wire dark',
@@ -71,20 +68,13 @@ const darkSystem = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 } as unknown as DesignSystem;
 
-describe('systemToCss dark variant', () => {
-  it('emits a [data-theme="dark"] block carrying every dark token', () => {
+describe('systemToCss base values (#277)', () => {
+  it('emits :root only, never a [data-theme="dark"] block', () => {
     const css = systemToCss(darkSystem);
     expect(css).toContain(':root {');
     expect(css).toContain('--color-bg: #ffffff;');
-    expect(css).toContain('[data-theme="dark"] {');
-    expect(css).toContain('--color-bg: #0a0a0f;');
-  });
-
-  it('round-trips back through parseThemes as the system dark set', () => {
-    const { dark } = parseThemes(systemToCss(darkSystem)) as {
-      dark: { name: string; value: string }[];
-    };
-    expect(dark).toContainEqual({ name: '--color-bg', value: '#0a0a0f' });
+    expect(css).not.toContain('[data-theme="dark"]');
+    expect(css).not.toContain('--color-bg: #0a0a0f;');
   });
 
   it('omits the dark block for a system that ships no dark variant', () => {

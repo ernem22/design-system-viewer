@@ -27,42 +27,12 @@ const KNOWN_COMPONENT_IDS = new Set(
   [...BASIC_OPTIONS, ...COMPONENT_OPTIONS, ...EXTRA_OPTIONS, ...SCREEN_OPTIONS].map((o) => o.id),
 );
 
-/** A system whose `groups` carry the active variant's values, so consumers
-   that read `groups` directly — the diff table's value maps — see exactly what
-   the columns' `styleFor` scope paints. Dark tokens overlay the base groups by
-   name (later wins, matching resolveSystemTokens); any token the base groups
-   don't author is appended under a synthetic group so it still diffs. Variant
-   off, or no dark theme: the system passes through untouched. Never mutates
-   its input. */
-function resolveForDiff(system: DesignSystem, dark: boolean): DesignSystem {
-  const darkTokens = dark ? (system.themes?.dark ?? []) : [];
-  if (!darkTokens.length) return system;
-  const overrides = new Map(darkTokens.map((t) => [t.name, t.value]));
-  const applied = new Set<string>();
-  const groups = system.groups.map((g) => ({
-    ...g,
-    tokens: g.tokens.map((t) => {
-      const value = overrides.get(t.name);
-      if (value === undefined) return t;
-      applied.add(t.name);
-      return { ...t, value };
-    }),
-  }));
-  const added = darkTokens.filter((t) => !applied.has(t.name));
-  if (!added.length) return { ...system, groups };
-  return {
-    ...system,
-    groups: [...groups, { id: "theme-dark", label: "Dark", kind: "raw", tokens: added }],
-  };
-}
-
 /** Compare tab view model — mirrors useTokensView's shape (state + derived
    data, lifted to App.tsx, no Context/Redux). `systems` comes from
-   useSystems() in App.tsx, same source the rest of the app reads. `dark`
-   overlays each system's `themes.dark` onto its resolved tokens, the same
-   variant App applies to `:root`; it defaults off so existing callers keep
-   the light behaviour. */
-export function useCompareView(systems: DesignSystem[], dark = false) {
+   useSystems() in App.tsx, same source the rest of the app reads. Every
+   panel shows the base (light) values; a stored `themes.dark` block is
+   never read. */
+export function useCompareView(systems: DesignSystem[]) {
   // Deep-link init (legacy's compare.jsx read cmp/v/c the same way): unknown
   // values fall back to today's defaults, and the repair effect below drops
   // picked slugs with no matching system — so no querystring, same as before.
@@ -116,12 +86,11 @@ export function useCompareView(systems: DesignSystem[], dark = false) {
   const allOptions = useMemo(() => optionGroups.flatMap((g) => g.items), [optionGroups]);
   const active = allOptions.find((o) => o.id === componentId) ?? allOptions[0] ?? null;
 
-  // Dark-resolved copies (identity unchanged when dark is off, so the light
-  // path allocates nothing new) — CompareColumn's `styleFor` scope and the
-  // diff table's group reads both derive from these.
+  // Picked systems in selection order — CompareColumn's `styleFor` scope and
+  // the diff table's group reads both derive from these.
   const cols = useMemo(
-    () => systems.filter((s) => picked.includes(s.slug)).map((s) => resolveForDiff(s, dark)),
-    [systems, picked, dark],
+    () => systems.filter((s) => picked.includes(s.slug)),
+    [systems, picked],
   );
 
   const toggle = (slug: string) => {
@@ -132,14 +101,12 @@ export function useCompareView(systems: DesignSystem[], dark = false) {
   // One CSS-variable map per system — CompareColumn spreads this as inline
   // `style` so `var(--x)` inside that column resolves to its own tokens
   // instead of the page's :root (which only ever holds one active system).
-  // Resolved through the active variant, so a column's components/contrast
-  // readouts paint dark values whenever the system ships them and dark is on.
   const styleFor = useMemo(() => {
     const map = new Map<string, Record<string, string>>();
     for (const s of systems)
-      map.set(s.slug, Object.fromEntries(resolveSystemTokens(s, dark).map((t) => [t.name, t.value])));
+      map.set(s.slug, Object.fromEntries(resolveSystemTokens(s).map((t) => [t.name, t.value])));
     return map;
-  }, [systems, dark]);
+  }, [systems]);
 
   return {
     picked,

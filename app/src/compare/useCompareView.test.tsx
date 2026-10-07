@@ -46,24 +46,24 @@ let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 let view: CompareViewModel | null = null;
 
-function Harness({ systems, dark = false }: { systems: DesignSystem[]; dark?: boolean }) {
-  view = useCompareView(systems, dark);
+function Harness({ systems }: { systems: DesignSystem[] }) {
+  view = useCompareView(systems);
   return null;
 }
 
-async function mount(systems: DesignSystem[], dark = false): Promise<void> {
+async function mount(systems: DesignSystem[]): Promise<void> {
   const { createRoot } = await import("react-dom/client");
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => {
-    root!.render(<Harness systems={systems} dark={dark} />);
+    root!.render(<Harness systems={systems} />);
   });
 }
 
-async function rerender(systems: DesignSystem[], dark = false): Promise<void> {
+async function rerender(systems: DesignSystem[]): Promise<void> {
   await act(async () => {
-    root!.render(<Harness systems={systems} dark={dark} />);
+    root!.render(<Harness systems={systems} />);
   });
 }
 
@@ -127,33 +127,28 @@ describe("useCompareView default selection", () => {
   });
 });
 
-describe("useCompareView dark variant (#22)", () => {
-  it("resolves styleFor to the light value when dark is off", async () => {
+describe("useCompareView base values (#277)", () => {
+  it("resolves styleFor to the base value even when a dark theme is stored", async () => {
     await mount([darkSystem()]);
     expect(view!.styleFor.get("aurora")?.["--color-bg"]).toBe("#f8fafc");
   });
 
-  it("resolves styleFor to the dark override when dark is on", async () => {
-    await mount([darkSystem()], true);
-    expect(view!.styleFor.get("aurora")?.["--color-bg"]).toBe("#0a0f1c");
-  });
-
-  it("overlays dark per token, leaving non-overridden tokens light", async () => {
-    await mount([darkSystem()], true);
+  it("leaves non-overridden tokens at their base values", async () => {
+    await mount([darkSystem()]);
     expect(view!.styleFor.get("aurora")?.["--color-accent"]).toBe("#6366f1");
   });
 
-  it("feeds the diff table's groups the dark override when dark is on", async () => {
-    await mount([darkSystem()], true);
+  it("feeds the diff table's groups the base value, never the dark override", async () => {
+    await mount([darkSystem()]);
     const token = view!.cols[0]?.groups
       .flatMap((g) => g.tokens)
       .find((t) => t.name === "--color-bg");
-    expect(token?.value).toBe("#0a0f1c");
+    expect(token?.value).toBe("#f8fafc");
   });
 
-  it("never mutates the stored system when overlaying dark", async () => {
+  it("never mutates the stored system", async () => {
     const sys = darkSystem();
-    await mount([sys], true);
+    await mount([sys]);
     expect(sys.groups[0]?.tokens[0]?.value).toBe("#f8fafc");
     expect(sys.themes?.dark?.[0]?.value).toBe("#0a0f1c");
   });

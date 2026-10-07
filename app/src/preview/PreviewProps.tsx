@@ -13,13 +13,12 @@ import { tokenValueMap } from "../tokens/useTokensView.ts";
 import type { DesignSystem } from "../systems/store.ts";
 
 // Values come from the same shared map the Tokens tab reads (css, then groups
-// per token, then the active dark theme) so the two panels can never disagree
-// about a token; only a token the system doesn't author at all falls through to
-// the computed `:root` value. The ephemeral override sits above that whole
-// chain (resolvedValue: valueEdit > authored), so a what-if edit shows here
-// without touching the map.
-function useValueOf(system: DesignSystem | null, dark: boolean): (token: string) => string {
-  const tokenValues = useMemo(() => tokenValueMap(system, dark), [system, dark]);
+// per token) so the two panels can never disagree about a token; only a token
+// the system doesn't author at all falls through to the computed `:root`
+// value. The ephemeral override sits above that whole chain (resolvedValue:
+// valueEdit > authored), so a what-if edit shows here without touching the map.
+function useValueOf(system: DesignSystem | null): (token: string) => string {
+  const tokenValues = useMemo(() => tokenValueMap(system), [system]);
   const { valueEdits } = useInspector();
   // `valueEdits` is passed into resolvedValue rather than read from module
   // state inside it, so the memo re-creates (and the panels re-read) whenever
@@ -34,11 +33,9 @@ function useValueOf(system: DesignSystem | null, dark: boolean): (token: string)
 /** Docked props-panel content — replaces the "Select a component" placeholder. */
 export function PreviewProps({
   system,
-  dark = false,
   active = true,
 }: {
   system: DesignSystem | null;
-  dark?: boolean;
   /** Whether the docked panel is the open surface — Preview tab active and the
       props panel expanded. App passes the live state so the panel's Escape
       handler is inert while another tab (or a collapsed panel) owns the
@@ -50,7 +47,7 @@ export function PreviewProps({
       and drop this field with it. */
   onPatch?: (name: string, value: string) => void;
 }) {
-  const valueOf = useValueOf(system, dark);
+  const valueOf = useValueOf(system);
   return <ScopePanel valueOf={valueOf} active={active} />;
 }
 
@@ -59,15 +56,13 @@ export function PreviewProps({
     to the Preview content; never in Compare. */
 export function PreviewScopeDialog({
   system,
-  dark = false,
 }: {
   system: DesignSystem | null;
-  dark?: boolean;
   /** Accepted and ignored, same as PreviewProps. */
   onPatch?: (name: string, value: string) => void;
 }) {
   const { mobileOpen, selected } = useInspector();
-  const valueOf = useValueOf(system, dark);
+  const valueOf = useValueOf(system);
   if (!selected) return null;
   return (
     <Dialog.Root open={mobileOpen} onOpenChange={setMobileOpen}>

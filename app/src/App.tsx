@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import * as Switch from "@radix-ui/react-switch";
 import Shell, { type AppTab, type ShellTab } from "./shell/Shell.tsx";
 import ErrorBoundary from "./shell/ErrorBoundary.tsx";
 import Brand from "./shell/Brand.tsx";
@@ -72,12 +71,6 @@ function App() {
   // so the first scrollspy scan can't clobber a #section before it scrolls.
   const [sectionSyncArmed, setSectionSyncArmed] = useState(false);
   const [query, setQuery] = useState("");
-  // Dark variant is per-view, not persisted (legacy parity); it only exists
-  // for systems that ship a `themes.dark` block. A deep-linked ?dark=1 seeds
-  // it, so a copied link restores the variant it was showing.
-  const [dark, setDark] = useState(() => readViewUrl().dark);
-  const hasDark = !!active?.themes?.dark?.length;
-  const darkOn = dark && hasDark;
 
   const [addOpen, setAddOpen] = useState(false);
   const [addCss, setAddCss] = useState("");
@@ -109,11 +102,11 @@ function App() {
   // Tokens tab view model — one hook instance feeds its main content, its
   // left-rail group nav and its right-rail inspector (lifted to App, passed
   // down as props; no context).
-  const tokensView = useTokensView(active, pushToast, darkOn);
+  const tokensView = useTokensView(active, pushToast);
 
   // Compare tab view model — same lifted-to-App.tsx shape as tokensView,
   // fed its own tab's rail/content/props (see Scope note in issue #1).
-  const compareView = useCompareView(systems, darkOn);
+  const compareView = useCompareView(systems);
   // Slug-bound mutation callbacks — useCallback (not inline closures) so the
   // memo()'d token rows downstream keep stable onSave/onMerge identities
   // across unrelated App re-renders (e.g. filter keystrokes).
@@ -194,7 +187,7 @@ function App() {
   // out of the active system so stale props never accumulate on <html>.
   const appliedTokensRef = useRef<string[]>([]);
   useLayoutEffect(() => {
-    const tokens = resolveSystemTokens(active, darkOn);
+    const tokens = resolveSystemTokens(active);
     const style = document.documentElement.style;
     const names = new Set(tokens.map((t) => t.name));
     // Drop props from the previous system/variant that the new list no
@@ -203,7 +196,7 @@ function App() {
     for (const n of appliedTokensRef.current) if (!names.has(n)) style.removeProperty(n);
     for (const t of tokens) style.setProperty(t.name, t.value);
     appliedTokensRef.current = tokens.map((t) => t.name);
-  }, [active, darkOn]);
+  }, [active]);
 
   useEffect(() => {
     document.title = active ? `${active.name} — ${APP_TITLE}` : APP_TITLE;
@@ -247,9 +240,8 @@ function App() {
       view: tab === "compare" && mode === "diff" ? mode : null,
       component:
         tab === "compare" && componentId !== DEFAULT_COMPONENT_ID ? componentId : null,
-      dark: darkOn,
     });
-  }, [loading, tab, activeSlug, picked, mode, componentId, darkOn]);
+  }, [loading, tab, activeSlug, picked, mode, componentId]);
 
   // Hash half restore: client-rendered sections miss the browser's native
   // initial jump, so redo it once layout settles (double rAF, like legacy's
@@ -326,7 +318,7 @@ function App() {
           {COMPONENT_ENTRIES.map((entry) => (
             <GallerySection key={entry.id} {...entry} hidden={shownEntries ? !shownEntries.has(entry.id) : false} />
           ))}
-          <PreviewScopeDialog system={active} dark={darkOn} />
+          <PreviewScopeDialog system={active} />
         </>
       ) : (
         <PreviewNotes
@@ -349,7 +341,7 @@ function App() {
           />
         </>
       ),
-      propsPanel: <PreviewProps system={active} dark={darkOn} active={tab === "preview" && propsOpen} />,
+      propsPanel: <PreviewProps system={active} active={tab === "preview" && propsOpen} />,
     },
     {
       id: "compare",
@@ -396,14 +388,6 @@ function App() {
                   {overrideCount} edit{overrideCount === 1 ? "" : "s"}
                   <span className="app-pill-reset">Reset</span>
                 </button>
-              )}
-              {hasDark && (
-                <label className="app-dark" title="Toggle the system's dark variant">
-                  <Switch.Root className="app-dark-switch" checked={dark} onCheckedChange={setDark}>
-                    <Switch.Thumb className="app-dark-thumb" />
-                  </Switch.Root>
-                  Dark
-                </label>
               )}
               {tab === "preview" && <SectionSearch value={query} onChange={setQuery} />}
               <IconActionButton onClick={copyLink} icon={<Icon name="link" size={15} />} label="Copy link to this view" />
