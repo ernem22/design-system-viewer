@@ -7,6 +7,8 @@
 #   dispatch.sh --stop     ask the running dispatcher to exit between passes; waits until it has
 #   dispatch.sh --status   print the queue, the running worker and the last results
 #   dispatch.sh --bind     bind THIS terminal to the dispatcher's Run first, then loop (launcher's form)
+#   dispatch.sh --pause "<reason>"   no new worker starts (live ones finish, merges go on); reason kept in dispatch.paused
+#   dispatch.sh --resume             undo --pause
 #
 # Acts only while $S/dispatch.enabled exists. Without it every pass is a dry run that logs what it
 # WOULD start - the shadow mode for the cut-over, and the kill switch afterwards.
@@ -79,7 +81,8 @@ say() { printf '%s dispatch: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" | tee -
 # EVENTS for the manager (Hermes): one line each in events.log, `<time> <kind> key=value ...`.
 # The dispatcher does not wait for anyone to read them; hermes-watch.sh wakes Hermes on the ones
 # that need attention. Kinds: up started finished delivered kept no-pr no-push unknown start-failed
-# start-refused verdict-refused merge-refused conflict leftover gave-up down dropped orphaned disk-low.
+# start-refused verdict-refused merge-refused conflict leftover gave-up down dropped orphaned disk-low
+# provider-error merged paused resumed (and model-switch, written by model-switch.sh).
 event() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$S/events.log"; }
 acting() { [ -f "$S/dispatch.enabled" ]; }
 hdr() { sed -n "1,/^---\$/s/^$1:[[:space:]]*//p" "$2" | head -1; }
@@ -144,6 +147,7 @@ finish_running() {
     [ -n "$OUTC" ] || { say "wait gave no outcome for $DISP; will look again next pass"; return 1; }
   fi
 
+  [ "$OUTC" = "succeeded" ] || check_provider "$RUNNING"
   local CLOSE_ARGS=("$DISP")
   case "$OUTC" in succeeded|failed|cancelled) ;; *) CLOSE_ARGS+=(--stop) ;; esac
   local CRC=0
@@ -615,11 +619,14 @@ close_pass() {
   local STAMP="$S/close.last" NOW; NOW="$(date +%s)"
   [ $(( NOW - $(cat "$STAMP" 2>/dev/null || echo 0) )) -ge "${CLOSE_EVERY:-120}" ] || return 0
   echo "$NOW" > "$STAMP"
-  local ARG=(); acting || ARG=(--dry-run)
+  # a pause (--pause) stops new starts only: what the gate already passed is still merged
+  local ARG=(); acting || [ -f "$S/dispatch.paused" ] || ARG=(--dry-run)
   bash "$HERE/close.sh" "${ARG[@]+"${ARG[@]}"}" 2>&1 | grep -E 'MERGED|refused|BLOCKED|issue #|merged [0-9]|held' \
     | sed 's/^/close: /' | while IFS= read -r l; do
         say "$l"
         case "$l" in *"merge was refused"*) event "merge-refused $(printf '%s' "$l" | sed 's/^close: //' | cut -c1-200)";; esac
+        # the manager writes the owner's test checklist from merges
+        case "$l" in *": MERGED "*) event "merged pr=$(printf '%s' "$l" | sed -n 's/^close: #\([0-9]*\):.*/\1/p') sha=$(printf '%s' "$l" | sed -n 's/.*MERGED \([0-9a-f]*\).*/\1/p' | cut -c1-7)";; esac
       done
 }
 
@@ -635,6 +642,7 @@ fill_queue() {
   echo "$NOW" > "$STAMP"
   bash "$HERE/specgen.sh" 2>&1 | while IFS= read -r l; do say "$l"; done
   prune_queue
+  provider_scan
 }
 
 # The queue says only what is owed: every queued spec is asked owed() on the specgen cadence, whether or
@@ -664,7 +672,40 @@ read_workers() {
   orca orchestration worker-list --run "$(cat "$S/dispatch.run" 2>/dev/null)" --json </dev/null 2>/dev/null \
     | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const i=s.indexOf("{");const j=JSON.parse(s.slice(i));
         for(const w of ((j.result||{}).workers||[])){const p=w.projection||{};
-          console.log([w.dispatchId,p.outcome||"-",(p.liveness||{}).verdict||"-"].join(" "))}}catch(e){}})' > "$S/workers.now" 2>/dev/null
+          console.log([w.dispatchId,p.outcome||"-",(p.liveness||{}).verdict||"-",w.agentTerminalHandle||"-"].join(" "))}}catch(e){}})' > "$S/workers.now" 2>/dev/null
+}
+
+# PROVIDER ERRORS. A model whose quota ran out does not say so to the dispatcher: Orca reports the
+# worker as running or idle and the error only shows on its screen, which is gone once the worker
+# is closed (measured 2026-10-07: the OpenCode Go quota ran out and nothing in events.log said so).
+# So the screen of every live worker is read on the specgen cadence, and once more when a worker
+# ends without succeeding; a provider-looking error becomes a `provider-error` event for the manager,
+# who decides whether it is the model (switch it) or one worker. The screen is kept as
+# $S/tail-<task>.txt either way.
+PROVIDER_RE='rate.?limit|too many requests|quota|insufficient (credit|balance|funds)|exceeded your|usage limit|limit reached|freetiererror|free tier|payment required|billing|http 4(01|02|03|29)|status(code)?[ :=]*4(01|02|03|29)|overloaded|unauthorized|invalid api key'
+screen_of() {   # dispatch -> its terminal's last lines, ANSI stripped (empty when unreadable)
+  local H; H="$(grep -m1 "^$1 " "$S/workers.now" 2>/dev/null | cut -d' ' -f4)"
+  [ -n "$H" ] && [ "$H" != "-" ] || return 0
+  orca terminal read --terminal "$H" </dev/null 2>/dev/null | sed -E 's/\x1b\[[0-9;?]*[a-zA-Z]//g' | grep -v '^[[:space:]]*$' | tail -40
+}
+check_provider() {   # running-env file -> reads the screen once, emits provider-error once per dispatch
+  local F="$1" D T M SCR HIT
+  D="$(kv DISPATCH "$F")"; T="$(kv TASK "$F")"; M="$(kv MODEL "$F")"
+  [ -n "$(kv PROVIDER_ERR "$F")" ] && return 0
+  SCR="$(screen_of "$D")"; [ -n "$SCR" ] || return 0
+  printf '%s\n' "$SCR" > "$S/tail-${T:-$D}.txt"
+  HIT="$(printf '%s\n' "$SCR" | grep -iE -m1 "$PROVIDER_RE")" || return 0
+  echo "PROVIDER_ERR=1" >> "$F"
+  say "provider error on $D ($M): $(printf '%s' "$HIT" | cut -c1-200)"
+  event "provider-error model=$M dispatch=$D spec=$(basename "$(kv FILE "$F")" | sed 's/^active-//') msg=$(printf '%s' "$HIT" | tr -s ' \t' ' ' | cut -c1-160)"
+}
+provider_scan() {   # every live worker that has been up for 2 minutes or more
+  local F ST NOW; NOW="$(date +%s)"
+  for F in $(live); do
+    ST="$(date -d "$(kv STARTED "$F")" +%s 2>/dev/null || echo "$NOW")"
+    [ $(( NOW - ST )) -ge 120 ] && check_provider "$F"
+  done
+  return 0
 }
 
 PASS_NO=0
@@ -709,6 +750,7 @@ stop_asked() { [ -f "$S/dispatch.stop" ] || return 0; rm -f "$S/dispatch.stop"; 
 
 status() {
   echo "enabled: $(acting && echo yes || echo 'no (dry run)')"
+  [ -f "$S/dispatch.paused" ] && echo "paused: $(cat "$S/dispatch.paused")"
   local F; echo "running ($(live_count)$([ "$MAX_WORKERS" -gt 0 ] && echo " of max $MAX_WORKERS")):"
   for F in $(live) "$S/running.env"; do [ -f "$F" ] && { echo "  [$(basename "$F" .env)]"; sed 's/^/    /' "$F"; }; done
   echo "queue:"; ls -1 "$Q" 2>/dev/null | sed 's/^/  /'
@@ -717,6 +759,15 @@ status() {
 
 case "${1:-}" in
   --status) status ;;
+  --pause)
+      # The kill switch with a reason: no new worker starts (live ones are still polled and closed).
+      # The reason file tells a cold start why the pipeline is paused, so it is not resumed blindly.
+      [ -n "${2:-}" ] || { echo "usage: dispatch.sh --pause \"<reason>\"" >&2; exit 2; }
+      printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$2" > "$S/dispatch.paused"
+      rm -f "$S/dispatch.enabled"; event "paused reason=$(printf '%s' "$2" | tr -s ' \n' ' ' | cut -c1-160)"
+      echo "PAUSED: $2" ;;
+  --resume)
+      touch "$S/dispatch.enabled"; rm -f "$S/dispatch.paused"; event "resumed"; echo "RESUMED" ;;
   --once) lock; pass ;;
   --stop)
       # Stop the running dispatcher BETWEEN passes, never inside one. 2026-10-05: a `kill` landed between

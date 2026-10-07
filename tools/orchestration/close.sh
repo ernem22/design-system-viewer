@@ -157,9 +157,11 @@ done
 # ... (#N) merges" / "held until #N merges". Nobody removed the label by hand when #N landed, so the
 # slice sat forever (measured 2026-10-05, #214-#216 waiting on #213). The body names the dependency;
 # when #N is closed (a merged PR, or an issue this script closed after its PR merged), the label goes.
+# The manager (Hermes) never edits a card's body, so it states a dependency in a comment: the body and
+# then the comments are read in order, and the LAST such statement wins (a later comment updates it).
 for n in $(gh issue list --repo "$REPO" --label held --state open --json number --jq '.[].number' 2>/dev/null); do
-  dep="$(gh issue view "$n" --repo "$REPO" --json body --jq .body 2>/dev/null \
-    | grep -oiE 'held`?\*{0,2} until [^#]{0,60}#[0-9]+\)? merges' | grep -oE '#[0-9]+' | head -1 | tr -d '#')"
+  dep="$(gh issue view "$n" --repo "$REPO" --json body,comments --jq '.body + "\n" + ([.comments[].body] | join("\n"))' 2>/dev/null \
+    | grep -oiE 'held`?\*{0,2} until [^#]{0,60}#[0-9]+\)? merges' | grep -oE '#[0-9]+' | tail -1 | tr -d '#')"
   [ -n "$dep" ] || continue
   st="$(gh issue view "$dep" --repo "$REPO" --json state --jq .state 2>/dev/null)"
   [ "$st" = "CLOSED" ] || continue
