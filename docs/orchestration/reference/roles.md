@@ -1,7 +1,7 @@
 # Roles: the manager, the hands, the workers (2026-10-05)
 
-This page supersedes the coordinator sections of `ORCHESTRATION.md` (Hermes Responsibilities,
-Wake-Up Loop): those describe Hermes driving every worker by hand, which is no longer the design.
+Hermes's own manual - cold start, duties per wake, rules - is `ORCHESTRATION.md` at the repo root.
+This page is the reference for the layers, the events and what the dispatcher does by itself.
 
 ## The rule
 
@@ -14,7 +14,7 @@ verdicts and merge. Hermes is the guard of the flow, not a step in it.
 
 | Layer | Who | Does | Never |
 |---|---|---|---|
-| Manager | Hermes (LLM) | reads events, decides, calls a hand, writes specs/issues, reports to the user | write code, commit, push, merge, start or stop a worker by hand |
+| Manager | Hermes (LLM) | cold start, reads events, judges what a script cannot (provider errors, new issues, stuck work), calls a hand (`model-switch.sh`, `dispatch.sh --pause`, `bootstrap.sh`), keeps the owner's test checklist, reports | write code, commit, push, merge, start or stop a worker by hand, edit a role file by hand |
 | Hands | scripts in `tools/orchestration/` | one deterministic job each | decide |
 | Workers | OpenCode via Orca (`worker.sh`) | Coder, Reviewer, Tester, Fixer | know about each other |
 
@@ -55,44 +55,22 @@ Stopping or switching the dispatcher's code: never `kill` it. A kill lands insid
 | `dropped` | a queued spec was no longer owed when its turn came (issue closed / not `agent` / held; PR head moved; spec cut short) and went to `done/<spec>.dropped` with `why=` (routine, never wakes Hermes) |
 | `orphaned` | an `active-<spec>` had no running env (a start a dead dispatcher never finished); moved to `done/<spec>.orphaned`, its work is owed again |
 | `disk-low` | the state/worktree drive has less than `DISK_MIN_MB` (2048) free; nothing starts; at most one per 30 min |
+| `provider-error` | a worker's screen showed a provider-looking error (quota, rate limit, 401/402/403/429, billing); `model=`, `msg=`; the screen is in `tail-<task>.txt` |
+| `merged` | `close.sh` merged a PR (`pr=`, `sha=`); the manager adds it to the owner's test checklist |
+| `paused`, `resumed` | `dispatch.sh --pause "<reason>"` / `--resume`: new starts stop / restart (live workers and merges go on) |
+| `model-switch` | `model-switch.sh` moved a role config to another model (`config=`, `from=`, `to=`) |
 
 Hermes never reads Orca's mailbox for the dispatcher's Run: its terminal is fenced off it
 (`check` answers `consumer_fenced`, measured 2026-10-05).
 
-## How Hermes is woken
+## How Hermes is woken, and what it does
 
-```
-bash D:/code/dsv-dispatcher/tools/orchestration/hermes-watch.sh     # background, notify on completion
-```
+`hermes-watch.sh` exits (= wakes Hermes) on an attention event, `dispatcher-dead`, `idle-with-work`,
+`intake` (an `agent` issue without `intake-ok`) or `stuck` (2+ failed results on one PR/issue in 24 h);
+with nothing to report it exits 3 after an hour. What Hermes does on each - and its cold start
+(`hermes-start.sh`) - is in `ORCHESTRATION.md`, Duties.
 
-It exits (= wakes Hermes) with `WAKE events` + the attention lines, `WAKE dispatcher-dead` (no live
-dispatcher for 10 min, i.e. the scheduled restart is failing), or `WAKE idle-with-work` (nothing live
-or queued for 30 min while `needs.sh` lists work). With nothing to report it exits 3 after an hour.
-Hermes acts, then runs it again. The exit is the wake because this host caps stdout pattern wakes at 8
-per process (measured 2026-09-28).
-
-## What Hermes does on each wake
-
-| Wake | Hermes calls / does |
-|---|---|
-| `kept` | the work was NOT delivered (the report said blocked/failed/unreproducible, or delivery failed: see the `dispatch: deliver:` lines). Reads `git -C <path> status --short`; reports to the user. The tree stays until the user decides |
-| `no-pr` | nothing if a `delivered` line follows for the same spec; otherwise `needs.sh` re-queues the issue after `RETRY_TTL`; reports if it repeats |
-| `merge-refused` | reads the PR's checks (`gh pr checks <n>`); reports the reason. A red CI is work for a Fixer, which the gate failing produces |
-| `no-push`, `unknown` | reads `report-<task>.txt`; reports if the same spec repeats |
-| `verdict-refused` | reads the `dispatch: verdict:` lines in `dispatch.log` and `report-<task>.txt`; reports the reason |
-| `start-failed` | reads the tail of `done/<spec>.start-failed`; reports |
-| `start-refused` | reads `dispatch.sh --status`; reports if the host stays full |
-| `leftover` | calls `bash tools/orchestration/worker.sh close <dispatch> --stop` once; reports the result |
-| `gave-up` | reports the spec and its last outcome to the user |
-| `down` | reads the `exiting` line in `dispatch.log` and the tail of `dispatch.err`; the launcher restarts the dispatcher within 5 min (otherwise `dispatcher-dead` follows); reports the reason |
-| `orphaned` | reads `orca orchestration worker-list` for a live worker named `name=`; reports it (it is not tracked: the user decides whether to stop it) |
-| `disk-low` | reports the free space and the largest folders under `%LOCALAPPDATA%\Temp` and the Orca workspaces; deletes nothing |
-| `dispatcher-dead` | calls `bash "$LOCALAPPDATA/orca-orchestration/design-system-viewer/bootstrap.sh" D:/code/dsv-dispatcher D:/code/design-system-viewer`; reports the launcher log |
-| `idle-with-work` | runs `dispatch.sh --status` and `needs.sh`; reports why the owed work is not queued |
-| heartbeat (exit 3) | nothing; runs the watcher again |
-
-Specs and issues are the only things Hermes writes: splitting an issue, labelling `held`/`umbrella`,
-answering what a card means. A worker cannot ask Hermes anything (questions are denied; `reply` on
+What Hermes may change is listed in `ORCHESTRATION.md`, Rules. A worker cannot ask Hermes anything (questions are denied; `reply` on
 the dispatcher's Run is fenced).
 
 ## Worktree closing (known trouble, kept in view)

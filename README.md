@@ -43,9 +43,9 @@ shareable link.
 - `preview/` — the React/Radix app (Preview + Compare)
 - `app/` — the React/TS migration app (`refactor/full-react-migration` branch);
   see `app/CLAUDE.md` for its code style
-- `ORCHESTRATION.md` — source of truth for the Hermes/Orca autonomous worker
-  pipeline (Coder/Reviewer/Tester/PR) that develops `app/`; read this before
-  spawning or resuming any orchestration run
+- `ORCHESTRATION.md` — the manager's (Hermes) manual for the unattended pipeline that
+  develops `app/`: cold start, duties per wake, rules. The dispatcher and the events are in
+  `docs/orchestration/reference/`
 
 ## Limits
 

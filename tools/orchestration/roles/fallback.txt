@@ -1,0 +1,9 @@
+# Model fallback order per role config, owner-approved (2026-10-07). model-switch.sh moves a role to the
+# next model AFTER its current one that answers a probe; it never picks a model that is not listed here.
+# One line per config: `<config>: <model> <model> ...` (config = write | readonly | tester).
+# write = Coder and Fixer; readonly = Reviewer; tester = Tester.
+# Models are OpenCode ids: `opencode-go/...` is the Go subscription, `opencode/...-free` is Zen's free
+# tier (only usable from inside OpenCode, which is where workers run).
+write: opencode-go/muse-spark-1.3-contributor opencode/muse-spark-1.3-contributor-free opencode/longcat-2.5-preview-free opencode/ling-3.1-flash-free
+readonly: opencode-go/deepseek-v4-pro opencode/ling-3.1-flash-free opencode/space-bunny-free opencode/longcat-2.5-preview-free
+tester: opencode-go/deepseek-v4.1-flash opencode/space-bunny-free opencode/ling-3.1-flash-free opencode/longcat-2.5-preview-free

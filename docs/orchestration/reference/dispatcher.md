@@ -19,6 +19,7 @@ There is no slot and no "one at a time". A queued spec starts unless something r
 | memory a start needs | `WORKER_MB` (1500) + growth still owed by live workers (live x `WORKER_MB` - what opencode holds); `WATCH_MIN_MB` when none is live | measured 2026-10-05: a worker starts small and grows to 1.2-1.6 GB, so free memory at start time let 5-6 workers in and bash could not fork |
 | `MODEL_CAP_<model>` live workers on one model | 0 (none) | set only from a measured quota |
 | free disk on the state/worktree drive (`DISK_MIN_MB`) | 2048 MB | measured 2026-10-06: C: at 0.79 GB free cut a queued spec short; one `disk-low` event per 30 min |
+| a pause (`dispatch.sh --pause "<reason>"`) | - | the manager's switch: no new starts; live workers finish and `close.sh` still merges; the reason is kept in `dispatch.paused` for the next cold start; `--resume` undoes it |
 | still owed (`owed`) | - | a queued spec is GitHub's answer when specgen wrote it: on every specgen pass (whether or not memory allows a start) and right before its start, `needs.sh` is asked again with the queue left out (and a Coder's issue is read directly). Not owed -> `done/<spec>.dropped`; GitHub unreadable -> it stays queued and nothing starts that pass. Measured 2026-10-06: Coder specs for #221/#225 (merged, closed) and #248 (closed, not planned) sat queued |
 
 A blocked spec never holds the ones behind it: the queue is walked in name order and each ready spec starts.
