@@ -28,6 +28,47 @@
   white-space: normal;
   overflow-wrap: break-word;
   text-align: center;
+  /* Occasional UI enters with a standard ease-out under 300ms. A transition
+     (not keyframes) retargets when toasts stack in quick succession instead
+     of restarting. Durations/easing resolve from the viewer's own tokens. */
+  transition:
+    transform var(--duration-normal) var(--ease-out),
+    opacity var(--duration-normal) var(--ease-out);
+}
+
+/* Enter-from state for the transition above: the toast slides up from
+   translateY(8px) (--motion-distance-md) and fades in over ~200ms. */
+@starting-style {
+  .app-toast {
+    transform: translateY(var(--motion-distance-md));
+    opacity: 0;
+  }
+}
+
+/* Exit runs shorter (100ms fast token) so a dismissed toast is gone within
+   150ms. Toasts.tsx keeps the node mounted with data-leaving until the fade
+   completes; the leaving toast stays in flow so the stack below never jumps. */
+.app-toast[data-leaving="true"] {
+  transform: translateY(var(--motion-distance-sm));
+  opacity: 0;
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Reduced motion fades with opacity only — no sliding on enter or exit. */
+  .app-toast {
+    transition: opacity var(--duration-fast) var(--ease-out);
+  }
+  @starting-style {
+    .app-toast {
+      transform: none;
+      opacity: 0;
+    }
+  }
+  .app-toast[data-leaving="true"] {
+    transform: none;
+  }
 }
 
 .app-toast-warn {
