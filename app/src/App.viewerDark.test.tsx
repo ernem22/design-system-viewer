@@ -1,27 +1,19 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Full gallery is irrelevant (and heavy); this test is about App's viewer dark
-// control being reachable regardless of what the active system ships.
+// Issue #276, slice 1: the viewer dark chrome is retired. The always-present
+// topbar switch ("Viewer dark mode") and the `html[data-theme="dark"]` chrome
+// rules are gone; a stale `dsv.viewer.dark` value in localStorage is never
+// read. The per-system Dark variant (`.app-dark-switch`, `themes.dark`) is
+// slice 2 and is untouched here.
 vi.mock("./gallery/components/index.ts", () => ({ COMPONENT_ENTRIES: [] }));
 
 import { act } from "react";
 import type { Root } from "react-dom/client";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import App from "./App.tsx";
 import type { DesignSystem } from "./systems/store.ts";
-
-// Literal (not imported from lib/viewerDark.ts) so this file still compiles —
-// and its first assertion still runs — on the parent commit, where that module
-// does not exist. That keeps the RED failure the assertion, not a resolution
-// error.
-const VIEWER_DARK_KEY = "dsv.viewer.dark";
-
-// Issue #115: 35 of the 37 catalogue systems ship no `themes.dark`, so the
-// per-system Dark switch is not rendered for them. This mounts the shell with
-// a system that has no dark theme and asserts the viewer dark control is still
-// reachable and still repaints the chrome. On the parent commit the control is
-// absent (App.tsx only renders `.app-dark-switch` when `active.themes.dark`
-// exists), so the first querySelector assertion is the RED line.
 
 const lightOnly = {
   slug: "wire-light",
@@ -40,13 +32,6 @@ const lightOnly = {
   updatedAt: "2026-01-01T00:00:00.000Z",
 } as unknown as DesignSystem;
 
-const darkThemed = {
-  ...lightOnly,
-  slug: "wire-dark",
-  name: "Wire dark",
-  themes: { dark: [{ name: "--color-accent", value: "#000000" }] },
-} as unknown as DesignSystem;
-
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 
@@ -61,13 +46,12 @@ async function mountApp(): Promise<HTMLDivElement> {
   return host;
 }
 
-function setSystems(list: DesignSystem[], activeSlug: string) {
-  localStorage.setItem("dsv.app.systems", JSON.stringify(list));
-  localStorage.setItem("dsv.app.active", activeSlug);
-}
-
 beforeEach(() => {
   localStorage.clear();
+  // A stale pre-retirement value: must be ignored, never applied.
+  localStorage.setItem("dsv.app.systems", JSON.stringify([lightOnly]));
+  localStorage.setItem("dsv.app.active", lightOnly.slug);
+  localStorage.setItem("dsv.viewer.dark", "1");
   delete document.documentElement.dataset.theme;
 });
 
@@ -80,45 +64,25 @@ afterEach(() => {
   delete document.documentElement.dataset.theme;
 });
 
-describe("App viewer dark control (#115)", () => {
-  it("is reachable for a system that ships no dark theme", async () => {
-    setSystems([lightOnly], lightOnly.slug);
+describe("viewer dark chrome retired (#276)", () => {
+  it("renders no control named Viewer dark mode", async () => {
     const el = await mountApp();
-
-    // The system-variant switch is (correctly) absent here.
-    expect(el.querySelector(".app-dark-switch")).toBeNull();
-
-    const toggle = el.querySelector<HTMLElement>(".app-viewer-dark-switch");
-    expect(toggle).not.toBeNull();
-    expect(toggle!.getAttribute("aria-checked")).toBe("false");
+    expect(el.querySelector('[aria-label="Viewer dark mode"]')).toBeNull();
+    expect(el.querySelector(".app-viewer-dark-switch")).toBeNull();
+    expect(el.querySelector(".app-viewer-dark")).toBeNull();
   });
 
-  it("repaints the viewer chrome when switched on", async () => {
-    setSystems([lightOnly], lightOnly.slug);
-    const el = await mountApp();
-
-    const toggle = el.querySelector<HTMLElement>(".app-viewer-dark-switch");
-    expect(toggle).not.toBeNull();
-    expect(document.documentElement.dataset.theme).toBe("light");
-
-    await act(async () => {
-      toggle!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    expect(document.documentElement.dataset.theme).toBe("dark");
-    expect(toggle!.getAttribute("aria-checked")).toBe("true");
-    expect(localStorage.getItem(VIEWER_DARK_KEY)).toBe("1");
+  it("ignores a stale dsv.viewer.dark value", async () => {
+    await mountApp();
+    expect(document.documentElement.dataset.theme).toBeUndefined();
   });
 
-  it("is present even for a system that does ship a dark theme", async () => {
-    setSystems([darkThemed], darkThemed.slug);
-    const el = await mountApp();
-    expect(el.querySelector(".app-viewer-dark-switch")).not.toBeNull();
-  });
-
-  it("is present with an empty catalogue (no active system)", async () => {
-    setSystems([], "");
-    const el = await mountApp();
-    expect(el.querySelector(".app-viewer-dark-switch")).not.toBeNull();
+  it("has no html[data-theme=\"dark\"] rule in shell.css", () => {
+    const css = readFileSync(
+      resolve(process.cwd(), "src/shell/shell.css"),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(css).not.toContain('html[data-theme="dark"]');
+    expect(css).not.toContain("app-viewer-dark");
   });
 });
