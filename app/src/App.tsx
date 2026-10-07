@@ -70,7 +70,9 @@ function App() {
   // Section-hash sync stays off until the initial deep-link restore lands,
   // so the first scrollspy scan can't clobber a #section before it scrolls.
   const [sectionSyncArmed, setSectionSyncArmed] = useState(false);
-  const [query, setQuery] = useState("");
+  // Seeded from ?q= so a copied Preview link reopens with the same search —
+  // the writer below keeps the URL in sync while the Preview tab is active.
+  const [query, setQuery] = useState(() => readViewUrl().q ?? "");
 
   const [addOpen, setAddOpen] = useState(false);
   const [addCss, setAddCss] = useState("");
@@ -227,10 +229,13 @@ function App() {
   // replaceState writer, so switches never spam back/forward and never
   // reload. The section-hash half is owned by the active Rail; both halves
   // preserve each other, and copyLinkToView captures their union for free.
-  // Compare params are scoped to the compare tab, like legacy's syncUrl.
+  // Compare params are scoped to the compare tab, like legacy's syncUrl;
+  // q/f/tv are scoped the same way (Preview/Tokens/Tokens) inside the
+  // writer, so the effect passes each tab's live state unconditionally.
   // Held until the first system load lands: writing earlier would drop a
   // deep-linked ?sys= before the store could read it.
   const { picked, mode, componentId } = compareView;
+  const { filter: tokensFilter, schemaMode } = tokensView;
   useEffect(() => {
     if (loading) return;
     writeViewUrl({
@@ -240,8 +245,11 @@ function App() {
       view: tab === "compare" && mode === "diff" ? mode : null,
       component:
         tab === "compare" && componentId !== DEFAULT_COMPONENT_ID ? componentId : null,
+      q: query || null,
+      f: tokensFilter || null,
+      tv: schemaMode ? "schema" : null,
     });
-  }, [loading, tab, activeSlug, picked, mode, componentId]);
+  }, [loading, tab, activeSlug, picked, mode, componentId, query, tokensFilter, schemaMode]);
 
   // Hash half restore: client-rendered sections miss the browser's native
   // initial jump, so redo it once layout settles (double rAF, like legacy's

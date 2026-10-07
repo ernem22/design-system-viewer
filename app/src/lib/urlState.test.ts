@@ -85,6 +85,25 @@ describe('readViewUrl', () => {
     expect(readViewUrl('?cc=button').component).toBe('button');
   });
 
+  it('restores the Preview search, Tokens filter and Tokens view mode', () => {
+    expect(readViewUrl('').q).toBeNull();
+    expect(readViewUrl('?tab=preview&q=button').q).toBe('button');
+    expect(readViewUrl('').f).toBeNull();
+    expect(readViewUrl('?f=color').f).toBe('color');
+    expect(readViewUrl('').tv).toBeNull();
+    expect(readViewUrl('?tv=schema').tv).toBe('schema');
+  });
+
+  it('falls back to the default gallery mode for an unknown tv', () => {
+    expect(readViewUrl('?tv=bogus').tv).toBeNull();
+    expect(readViewUrl('?tv=').tv).toBeNull();
+  });
+
+  it('treats an empty q/f as the default (omitted)', () => {
+    expect(readViewUrl('?q=').q).toBeNull();
+    expect(readViewUrl('?f=').f).toBeNull();
+  });
+
   it('honors legacy aliases for links shared from the old viewer', () => {
     expect(readViewUrl('?mode=compare').tab).toBe('compare');
     expect(readViewUrl('?v=diff').view).toBe('diff');
@@ -109,6 +128,9 @@ describe('writeViewUrl', () => {
       cmp: [],
       view: null,
       component: null,
+      q: null,
+      f: null,
+      tv: null,
     });
   });
 
@@ -136,6 +158,9 @@ describe('writeViewUrl', () => {
       cmp: ['a', 'b'],
       view: 'diff',
       component: 'button',
+      q: null,
+      f: null,
+      tv: null,
     });
   });
 
@@ -160,6 +185,9 @@ describe('writeViewUrl', () => {
       cmp: [],
       view: 'diff',
       component: 'button',
+      q: null,
+      f: null,
+      tv: null,
     });
   });
 
@@ -176,6 +204,66 @@ describe('writeViewUrl', () => {
     expect(location.search).toContain('foo=bar');
     expect(readViewUrl(location.search).sys).toBe('carbon');
   });
+
+  it('writes the Preview search only while the Preview tab is active', () => {
+    const location = installWindowStub();
+    writeViewUrl({ tab: 'preview', q: 'button' });
+    expect(location.search).toContain('q=button');
+    expect(readViewUrl(location.search).q).toBe('button');
+
+    // Off the Preview tab the param drops instead of leaking onto the link.
+    writeViewUrl({ tab: 'tokens', sys: 'a', q: 'button' });
+    expect(location.search).not.toContain('q=');
+    expect(readViewUrl(location.search).q).toBeNull();
+  });
+
+  it('writes the Tokens filter and schema mode only while the Tokens tab is active', () => {
+    const location = installWindowStub();
+    writeViewUrl({ tab: 'tokens', f: 'color', tv: 'schema' });
+    expect(location.search).toContain('f=color');
+    expect(location.search).toContain('tv=schema');
+
+    // The default tokens view (null tab) counts as the Tokens tab.
+    writeViewUrl({ tab: null, f: 'color', tv: 'schema' });
+    expect(location.search).toContain('f=color');
+    expect(location.search).toContain('tv=schema');
+
+    // Off the Tokens tab both drop instead of leaking onto the link.
+    writeViewUrl({ tab: 'preview', sys: 'a', f: 'color', tv: 'schema' });
+    expect(location.search).not.toContain('f=');
+    expect(location.search).not.toContain('tv=');
+  });
+
+  it('omits q/f/tv when each is the default, keeping the bare-root URL', () => {
+    const location = installWindowStub('?tab=preview&q=button');
+    writeViewUrl({ tab: 'preview', q: null });
+    expect(location.search).not.toContain('q=');
+    writeViewUrl({ tab: 'tokens', f: '', tv: null });
+    expect(location.search).not.toContain('f=');
+    expect(location.search).not.toContain('tv=');
+    expect(readViewUrl(location.search)).toEqual({
+      tab: null,
+      sys: null,
+      cmp: [],
+      view: null,
+      component: null,
+      q: null,
+      f: null,
+      tv: null,
+    });
+  });
+
+  it('round-trips q, f and tv through write-then-read', () => {
+    const location = installWindowStub();
+    writeViewUrl({ tab: 'preview', sys: 'a', q: 'button' });
+    const preview = readViewUrl(location.search);
+    expect(preview.q).toBe('button');
+
+    writeViewUrl({ tab: 'tokens', sys: 'a', f: 'color', tv: 'schema' });
+    const tokens = readViewUrl(location.search);
+    expect(tokens.f).toBe('color');
+    expect(tokens.tv).toBe('schema');
+  });
 });
 
 describe('retired dark flag (#277)', () => {
@@ -186,6 +274,9 @@ describe('retired dark flag (#277)', () => {
       cmp: [],
       view: null,
       component: null,
+      q: null,
+      f: null,
+      tv: null,
     });
   });
 
