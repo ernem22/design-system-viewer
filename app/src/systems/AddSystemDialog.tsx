@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { REFERENCE, templateCss } from "../../../src/core/schema.js";
-import { slugify } from "../../../src/core/parse.js";
+import { REFERENCE, coverage, templateCss } from "../../../src/core/schema.js";
+import { lintTokens, parseTokens, slugify } from "../../../src/core/parse.js";
 import type { AppTab } from "../shell/Shell.tsx";
 import type { PushToast } from "../lib/toasts.ts";
 import { Icon } from "../lib/icons.tsx";
@@ -12,10 +12,13 @@ import { fetchCss, readCssFile } from "../lib/cssImport.ts";
 import {
   detectImportFormat,
   detectPrefixes,
+  extraSuggestions,
   mergePreview,
   readSystemJson,
   stripPrefix,
 } from "../lib/systemImport.ts";
+import { tokenValueMap } from "../lib/tokenCss.ts";
+import type { CoverageInfo, LintWarning } from "../tokens/useTokensView.ts";
 import {
   nextFreeSlug,
   type DesignSystem,
@@ -31,6 +34,8 @@ import "../tokens/TokenToolbar.css";
 import "./AddSystemDialog.css";
 
 const FULL_TEMPLATE_COUNT = (REFERENCE as { tokens: string[] }[]).reduce((n, g) => n + g.tokens.length, 0);
+
+const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
 /** What the current text came from. One line in the top bar, because a toast
     is gone before it has been read. */
@@ -234,6 +239,23 @@ export function AddSystemDialog({
     [css, strippedPrefixes],
   );
   const tokenCount = countTokens(css);
+  /** Review summary (#216): always recomputed from the CSS text, never
+      stored. Coverage gives present/432, extras carry near-miss suggestions,
+      lint lists value warnings, and colour tokens show swatches. */
+  const reviewValues = useMemo(() => tokenValueMap(css), [css]);
+  const reviewCoverage = useMemo(
+    () => coverage([...reviewValues.keys()]) as CoverageInfo,
+    [reviewValues],
+  );
+  const reviewExtras = useMemo(() => extraSuggestions(css), [css]);
+  const reviewWarnings = useMemo(
+    () => (css.trim() ? (lintTokens(parseTokens(css)) as LintWarning[]) : []),
+    [css],
+  );
+  const reviewColors = useMemo(
+    () => [...reviewValues.entries()].filter(([name]) => name.startsWith("--color-")),
+    [reviewValues],
+  );
 
   /** One entry point for every source: the text, and where it came from.
       `from` is the human status line; `origin` is the structured provenance
@@ -414,8 +436,14 @@ export function AddSystemDialog({
     if (step !== 3) return;
     const isClone = mode === "clone";
     const seedCss = isClone ? targetSystem?.css : undefined;
-    if (!tokenCount && !seedCss) {
-      setError("Nothing to save — the system has no `--token: value;` line yet.");
+    // Slice 4 (#216): a partial import is the default — missing names stay
+    // empty — and zero schema tokens is the only hard fail. Extras alone do
+    // not count: Preview only reads the schema, so an extras-only source has
+    // nothing to save. A clone seeded from an existing system carries that
+    // system's schema tokens, so it is exempt.
+    const seedPresent = seedCss ? (coverage([...tokenValueMap(seedCss).keys()]) as CoverageInfo).present : 0;
+    if (reviewCoverage.present === 0 && seedPresent === 0) {
+      setError("Nothing to save — the import has no schema tokens yet.");
       return;
     }
     setError(null);
@@ -734,22 +762,79 @@ export function AddSystemDialog({
           </div>
           ) : step === 2 ? (
           <div className="app-import-stepbody">
-            {/* Review (#215): the grouped schema fill over the same `css`
-                string the Source paste edits. The Form ⇄ Paste toggle only
-                switches which pane renders — both read and write `css`, so
-                the paths interleave without loss and `coverage()` stays
-                derived, never hand-edited. Nothing is written until Save. */}
+            {/* Review (#215 + #216): the grouped schema fill over the same `css`
+                string the Source paste edits, with the import summary on top.
+                The Form ⇄ Paste toggle only switches which pane renders — both
+                read and write `css`, so the paths interleave without loss and
+                `coverage()` stays derived, never hand-edited. Nothing is
+                written until Save. */}
             <section className="app-import-reviewpane" aria-label="Review">
-              <p className="app-import-reviewcount" role="status">
-                {tokenCount} token{tokenCount === 1 ? "" : "s"} ready
-              </p>
-              {status ? (
-                <p className="app-import-sub">
-                  {status.kind} · {status.detail} · {formatBytes(status.bytes)}
+              {/* Summary (#216): coverage present/432, extras with near-miss
+                  suggestions, lint warnings, colour swatches. A rename-mapping
+                  UI is out of scope — suggestions read as text here; the fill
+                  below already renames. Partial import is the default; only
+                  zero schema tokens fails, at Save. */}
+              <section className="app-import-summary" aria-label="Import summary">
+                <p className="app-import-reviewcount" role="status">
+                  {tokenCount} token{tokenCount === 1 ? "" : "s"} ready · {reviewCoverage.present}/{reviewCoverage.expected} schema tokens
+                  {reviewExtras.length > 0 && (
+                    <span className="warn"> · {reviewExtras.length} extra</span>
+                  )}
+                  {reviewWarnings.length > 0 && (
+                    <span className="warn"> · {reviewWarnings.length} value warning{reviewWarnings.length === 1 ? "" : "s"}</span>
+                  )}
                 </p>
-              ) : (
-                <p className="app-import-sub">Pasted text · no source yet</p>
-              )}
+                {status ? (
+                  <p className="app-import-sub">
+                    {status.kind} · {status.detail} · {formatBytes(status.bytes)}
+                  </p>
+                ) : (
+                  <p className="app-import-sub">Pasted text · no source yet</p>
+                )}
+                <p className="app-import-sub">
+                  Partial import is the default — missing names stay empty. Nothing is written until
+                  you save.
+                </p>
+                {reviewExtras.length > 0 && (
+                  <ul className="app-import-extras" aria-label="Extra tokens">
+                    {reviewExtras.map(({ name, suggest }) => (
+                      <li key={name} className="app-import-extra">
+                        <code className="app-fill-name">{name}</code>
+                        {suggest ? (
+                          <span className="app-import-suggest">
+                            {" → "}
+                            <code className="app-fill-name">{suggest}</code>
+                          </span>
+                        ) : (
+                          <span className="app-import-sub"> — no suggestion</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {reviewWarnings.length > 0 && (
+                  <ul className="app-import-warnings" aria-label="Value warnings">
+                    {reviewWarnings.map((w) => (
+                      <li key={w.name} className="app-import-warning">
+                        <code className="app-fill-name">{w.name}</code>
+                        <span className="app-import-sub"> — {w.msg}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {reviewColors.length > 0 && (
+                  <ul className="app-import-swatches" aria-label="Colour tokens">
+                    {reviewColors.map(([name, value]) => (
+                      <li key={name} className="app-import-swatchrow" title={`${name}: ${value}`}>
+                        {HEX.test(value.trim()) && (
+                          <span className="app-import-swatch" style={{ background: value.trim() }} />
+                        )}
+                        <code className="app-fill-name">{name}</code>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
               <div className="app-import-viewtoggle" role="group" aria-label="Review view">
                 <button
                   type="button"
