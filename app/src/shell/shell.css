@@ -675,53 +675,6 @@
   font-size: var(--font-size-xs);
 }
 
-/* Dark-variant switch — only rendered for systems shipping themes.dark. */
-.app-dark {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-}
-
-.app-dark-switch {
-  appearance: none;
-  position: relative;
-  width: 30px;
-  height: 18px;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-full);
-  background: var(--color-border-strong);
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
-}
-
-.app-dark-switch[data-state="checked"] {
-  background: var(--color-accent);
-}
-
-.app-dark-switch:focus-visible {
-  outline: var(--focus-ring-width) solid var(--color-focus-ring);
-  outline-offset: 2px;
-}
-
-.app-dark-thumb {
-  display: block;
-  width: 14px;
-  height: 14px;
-  border-radius: var(--radius-full);
-  background: var(--color-on-accent);
-  transform: translateX(2px);
-  transition: transform var(--duration-fast) var(--ease-out);
-}
-
-.app-dark-switch[data-state="checked"] .app-dark-thumb {
-  transform: translateX(14px);
-}
-
 /* ── narrow viewport: rails become overlay drawers ── */
 
 /* Below this width the two fixed-width rails (208px + 300px) would squeeze
@@ -790,8 +743,8 @@
   }
 
   /* Topbar, drawer mode: every control stays in the layout. Dropping the
-     Preview-only chrome (coverage pill, search, edit-reset pill, dark switch)
-     removes the only search / reset / dark affordances on tablet and phone,
+     Preview-only chrome (coverage pill, search, edit-reset pill)
+     removes the only search / reset affordances on tablet and phone,
      and the phone block below repeated that for the brand and copy-link
      (#134). Instead the topbar is treated as a frame the contract allows to
      scroll inside itself: the text cluster gives up width first (its labels

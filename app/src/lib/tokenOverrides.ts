@@ -16,7 +16,7 @@
 //     :root), so it only affects that node's descendants via normal CSS
 //     inheritance — every other place still reads the real --color-accent.
 //
-// Resolution precedence, light and dark alike (legacy parity): a scope's swap
+// Resolution precedence (legacy parity): a scope's swap
 // is resolved first, and its source is read through the value-edit layer. So a
 // value edit on a swap's *source* token does affect what the scope reads,
 // while a value edit on the swapped-away *target* does not override the
@@ -45,7 +45,7 @@
 // inspector instead. Same narrow scope as a Preview-local context, minus the
 // provider. A value override applies through `resolvedValue`, which the
 // Preview panels call with the active system's own value map — keeping
-// tokenValueMap (css -> groups -> themes.dark) as the authored layer and this
+// tokenValueMap (css -> groups) as the authored layer and this
 // override layer strictly above it, so there is one resolution order, not two.
 import { useSyncExternalStore, type CSSProperties } from "react";
 import { REFERENCE } from "../../../src/core/schema.js";
@@ -97,7 +97,7 @@ export function baseValue(name: string): string {
 }
 
 /** The authored value of a token in the active system, before any override —
-    the Preview panel passes `tokenValueMap(system, dark).get` here, so the
+    the Preview panel passes `tokenValueMap(system).get` here, so the
     resolution order below sits on top of the one shared source rather than
     re-deriving it. A token the system doesn't author returns "" (name-value
     convention for "not defined anywhere"). */
@@ -109,7 +109,7 @@ function authoredOrComputed(authored: AuthoredValueOf, name: string): string {
 }
 
 /** Global value of a token: the ephemeral override wins, then the authored
-    value (css -> groups -> themes.dark via the caller's map), then whatever
+    value (css -> groups via the caller's map), then whatever
     the page computed. This is the top of the precedence chain and the value a
     swap's *source* resolves through.
 

@@ -104,13 +104,11 @@ let host: HTMLDivElement | null = null;
 function Harness({
   system,
   push,
-  dark = false,
 }: {
   system: DesignSystem;
   push: PushToast;
-  dark?: boolean;
 }) {
-  const view = useTokensView(system, push, dark);
+  const view = useTokensView(system, push);
   // The real hook the gallery section uses to write a scope's swaps onto its
   // own node — the inline custom properties the tester reads on the page.
   const scopeStyle = useSectionScopeStyle("demo");
@@ -118,7 +116,7 @@ function Harness({
     <>
       <span data-testid="tokens-value">{view.valueMap.get(TOKEN) ?? "missing"}</span>
       <span data-testid="scope-style">{JSON.stringify(scopeStyle ?? null)}</span>
-      <PreviewProps system={system} dark={dark} />
+      <PreviewProps system={system} />
     </>
   );
 }
@@ -126,14 +124,13 @@ function Harness({
 async function mount(
   system: DesignSystem,
   push: PushToast,
-  dark = false,
 ): Promise<HTMLDivElement> {
   const { createRoot } = await import("react-dom/client");
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => {
-    root!.render(<Harness system={system} push={push} dark={dark} />);
+    root!.render(<Harness system={system} push={push} />);
   });
   return host;
 }
@@ -201,16 +198,10 @@ describe("Preview vs Tokens token values", () => {
     expect(previewValue(el)).toBe("#333333");
   });
 
-  it("agree on the light value when a dark theme is present but off", async () => {
-    const el = await mount(darkThemed, vi.fn(), false);
+  it("agree on the base value when a dark theme is stored but retired", async () => {
+    const el = await mount(darkThemed, vi.fn());
     expect(tokensValue(el)).toBe("#111111");
     expect(previewValue(el)).toBe("#111111");
-  });
-
-  it("agree on the dark override when dark is on", async () => {
-    const el = await mount(darkThemed, vi.fn(), true);
-    expect(tokensValue(el)).toBe("#000000");
-    expect(previewValue(el)).toBe("#000000");
   });
 });
 

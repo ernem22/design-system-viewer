@@ -6,19 +6,15 @@ import { TokensView } from "./TokensView.tsx";
 import { useTokensView } from "./useTokensView.ts";
 import type { DesignSystem } from "../systems/store.ts";
 
-// Issue #22: the contrast audit was fed the CSS-derived `view.tokens`, so it
-// measured the light values even with the dark variant active. These mount the
-// real TokensView (the wiring the Reviewer flagged) and read the ratio/badge
-// the section reports, so a section that keeps measuring light while claiming
-// dark is caught. #999 text on #fff is a genuine AA failure (~2.85), which must
-// surface as "Fail" for the mode being shown — not be hidden by a passing light
-// measurement. The fixture uses rgb() literals because happy-dom passes custom
-// property values through verbatim (a browser normalises hex to rgb itself).
+// Issue #277: dark mode is retired — the contrast audit measures the base
+// (light) values even when the system stores a `themes.dark` block. The
+// fixture keeps a dark override to prove it is ignored: the section reports
+// the light ratio (black on white = 21.00, AAA).
 
 const noop = () => {};
 
-function TokensHarness({ system, dark }: { system: DesignSystem; dark: boolean }) {
-  const view = useTokensView(system, noop, dark);
+function TokensHarness({ system }: { system: DesignSystem }) {
+  const view = useTokensView(system, noop);
   return (
     <TokensView system={system} view={view} onDelete={noop} onMerge={noop} onPatch={noop} />
   );
@@ -37,13 +33,13 @@ const system: DesignSystem = {
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 
-async function render(dark: boolean): Promise<HTMLDivElement> {
+async function render(): Promise<HTMLDivElement> {
   const { createRoot } = await import("react-dom/client");
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => {
-    root!.render(<TokensHarness system={system} dark={dark} />);
+    root!.render(<TokensHarness system={system} />);
   });
   return host;
 }
@@ -55,30 +51,10 @@ afterEach(() => {
   host = null;
 });
 
-async function reported(dark: boolean): Promise<{ ratio: string; badge: string }> {
-  const el = await render(dark);
-  return {
-    ratio: el.querySelector(".tok-contrast-num")?.textContent ?? "",
-    badge: el.querySelector(".tok-contrast-badge")?.textContent ?? "",
-  };
-}
-
-describe("ContrastSection dark awareness", () => {
-  it("reports the dark palette's ratio when the flag is on", async () => {
-    const light = await reported(false);
-    act(() => root?.unmount());
-    root = null;
-    host?.remove();
-    host = null;
-    const dark = await reported(true);
-
-    // Pre-fix TokensView fed the CSS-derived (light) tokens in both modes, so
-    // this first assertion fails: both renders report "#000 on #fff" = 21.00.
-    expect(dark.ratio).not.toBe(light.ratio);
-    expect(light.ratio).toBe("21.00");
-    expect(light.badge).toBe("AAA");
-    // The dark override is a real AA failure; it must still be reported as one.
-    expect(dark.badge).toBe("Fail");
-    expect(Number(dark.ratio)).toBeLessThan(Number(light.ratio));
+describe("ContrastSection base values (#277)", () => {
+  it("reports the light palette even when a dark theme is stored", async () => {
+    const el = await render();
+    expect(el.querySelector(".tok-contrast-num")?.textContent).toBe("21.00");
+    expect(el.querySelector(".tok-contrast-badge")?.textContent).toBe("AAA");
   });
 });

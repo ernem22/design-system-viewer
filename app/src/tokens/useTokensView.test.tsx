@@ -4,8 +4,8 @@ import { tokenValueMap } from "./useTokensView.ts";
 
 // Issue #37: Preview and Tokens must read token values from one place. These
 // pin that place and its merge order: `css` first, then `groups` per token
-// (groups win — what App applies to `:root` and the gallery renders), then the
-// active `themes.dark` override on top.
+// (groups win — what App applies to `:root` and the gallery renders).
+// Dark mode is retired (#277): a stored `themes.dark` block is never read.
 
 const TOKEN = "--color-accent";
 
@@ -61,7 +61,7 @@ describe("tokenValueMap", () => {
     expect(map.get("--new")).toBe("#333333");
   });
 
-  it("applies the active themes.dark override only when dark is on", () => {
+  it("ignores a stored themes.dark block (#277)", () => {
     const sys = system({
       css: `:root { ${TOKEN}: #222222; }`,
       groups: [
@@ -75,25 +75,6 @@ describe("tokenValueMap", () => {
       themes: { dark: [{ name: TOKEN, value: "#000000" }] },
     });
     expect(tokenValueMap(sys).get(TOKEN)).toBe("#111111");
-    expect(tokenValueMap(sys, true).get(TOKEN)).toBe("#000000");
-  });
-
-  it("overlays dark per token, leaving non-overridden layers intact", () => {
-    const sys = system({
-      css: `:root { ${TOKEN}: #222222; --new: #333333; }`,
-      groups: [
-        {
-          id: "color-accent",
-          label: "Accent / Brand",
-          kind: "color",
-          tokens: [{ name: TOKEN, value: "#111111" }],
-        },
-      ],
-      themes: { dark: [{ name: TOKEN, value: "#000000" }] },
-    });
-    const map = tokenValueMap(sys, true);
-    expect(map.get(TOKEN)).toBe("#000000");
-    expect(map.get("--new")).toBe("#333333");
   });
 
   it("still returns the authored value when both sources agree", () => {
