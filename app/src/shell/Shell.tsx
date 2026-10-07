@@ -87,6 +87,12 @@ export default function Shell({
       asChild
     >
       <div className="app-shell" data-tab={tab}>
+        {/* Skip link (issue #227): the single keyboard entry to <main>, which
+            carries the matching id below. TabIndex -1 on main lets the anchor
+            move focus there without adding it to the tab order. */}
+        <a href="#app-main" className="app-skip-link">
+          Skip to main content
+        </a>
         <header className="app-topbar">
           {/* The document's single h1 (issue #117): the viewer had 0 h1 and
              94 h2, so the outline had no top. Visually hidden (absolutely
@@ -121,7 +127,7 @@ export default function Shell({
           </RailFrame>
         </aside>
 
-        <main className="app-main">
+        <main id="app-main" className="app-main" tabIndex={-1}>
           {tabs.map(({ id, content }) => (
             <Tabs.Content key={id} value={id} forceMount>
               {content}
