@@ -90,6 +90,13 @@
   padding: var(--space-2) var(--space-3); border-bottom: var(--border-width-thin) solid var(--color-border-subtle);
 }
 .cmp-diff-table td { padding: var(--space-2) var(--space-3); border-bottom: var(--border-width-thin) solid var(--color-border-subtle); vertical-align: top; font-variant-numeric: tabular-nums; }
+/* Issue #279: one containment unit per category (DiffTable renders one tbody
+   per category). Rows stay in the DOM, so find-in-page keeps working; the
+   320px placeholder sits near the measured mean category height (~324px). */
+.cmp-diff-table tbody {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
+}
 .cmp-diff-cat th {
   background: var(--color-surface-sunken); color: var(--color-text-muted);
   font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: var(--letter-spacing-wide);

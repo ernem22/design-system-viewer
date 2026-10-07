@@ -43,6 +43,7 @@
     "@radix-ui/react-toolbar": "^1.1.19",
     "@radix-ui/react-tooltip": "^1.2.16",
     "@radix-ui/react-visually-hidden": "^1.2.11",
+    "design-system-viewer": "file:..",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },

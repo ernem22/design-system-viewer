@@ -10,6 +10,11 @@
 
 .tok-group {
   scroll-margin-top: calc(var(--app-topbar-height) + var(--space-4));
+  /* Issue #279: skip rendering for off-screen groups. Every row stays in the
+     DOM, so find-in-page, #anchor links and scrollspy keep working; the 500px
+     placeholder sits near the measured mean group height (~431px). */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 500px;
 }
 
 .tok-group > h2 {
