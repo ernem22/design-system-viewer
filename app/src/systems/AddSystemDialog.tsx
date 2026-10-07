@@ -110,8 +110,8 @@ function untilAborted<T>(task: Promise<T>, signal: AbortSignal): Promise<T> {
  * The ways in (upload, URL, JSON export, template, clipboard) are compact
  * triggers in that top bar, each opening only the row it needs. The three
  * steps gate the write, not the work: step 1 holds every source trigger and
- * both panes, step 2 shows only what exists today (the parsed token count),
- * step 3 holds identity and the write. Nothing is written until Save.
+ * both panes, step 2 holds the grouped schema fill (Form ⇄ Paste over the
+ * same text), step 3 holds identity and the write. Nothing is written until Save.
  */
 export function AddSystemDialog({
   open,
@@ -154,6 +154,9 @@ export function AddSystemDialog({
   const [target, setTarget] = useState("");
   const [collision, setCollision] = useState<Collision | null>(null);
   const [source, setSource] = useState<SourceDescriptor | null>(null);
+  /** Review-step view (#215): the form and the paste are two ways of seeing
+      the same `css` string, so this only switches which pane renders. */
+  const [reviewView, setReviewView] = useState<"form" | "paste">("form");
   const cssFileRef = useRef<HTMLInputElement>(null);
   const jsonFileRef = useRef<HTMLInputElement>(null);
   const urlRef = useRef<HTMLInputElement>(null);
@@ -217,6 +220,7 @@ export function AddSystemDialog({
     setMode("new");
     setTarget("");
     setCollision(null);
+    setReviewView("form");
     // A close (or a re-seed) supersedes anything still in flight: abort it so
     // its handler cannot settle on a buffer that is no longer ours.
     return () => {
@@ -730,9 +734,11 @@ export function AddSystemDialog({
           </div>
           ) : step === 2 ? (
           <div className="app-import-stepbody">
-            {/* Review shows only what exists today (the parsed token count);
-                the grouped review, swatches and suggestions belong to slices
-                3 and 4. */}
+            {/* Review (#215): the grouped schema fill over the same `css`
+                string the Source paste edits. The Form ⇄ Paste toggle only
+                switches which pane renders — both read and write `css`, so
+                the paths interleave without loss and `coverage()` stays
+                derived, never hand-edited. Nothing is written until Save. */}
             <section className="app-import-reviewpane" aria-label="Review">
               <p className="app-import-reviewcount" role="status">
                 {tokenCount} token{tokenCount === 1 ? "" : "s"} ready
@@ -743,6 +749,36 @@ export function AddSystemDialog({
                 </p>
               ) : (
                 <p className="app-import-sub">Pasted text · no source yet</p>
+              )}
+              <div className="app-import-viewtoggle" role="group" aria-label="Review view">
+                <button
+                  type="button"
+                  className="tok-btn"
+                  aria-pressed={reviewView === "form"}
+                  onClick={() => setReviewView("form")}
+                >
+                  Form
+                </button>
+                <button
+                  type="button"
+                  className="tok-btn"
+                  aria-pressed={reviewView === "paste"}
+                  onClick={() => setReviewView("paste")}
+                >
+                  Paste
+                </button>
+              </div>
+              {reviewView === "form" ? (
+                <SchemaFill css={css} onChange={editCss} />
+              ) : (
+                <textarea
+                  className="tok-textarea app-import-textarea"
+                  value={css}
+                  spellCheck={false}
+                  aria-label="Review CSS text"
+                  placeholder={"--color-bg: #0a0a0f;\n--color-text: #f0f0f3;"}
+                  onChange={(e) => applyText(e.target.value)}
+                />
               )}
               <p className="app-import-sub">Nothing is written until you save.</p>
             </section>

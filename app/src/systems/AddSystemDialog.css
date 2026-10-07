@@ -124,7 +124,7 @@
 
 /* Stepper shell (#213): Source → Review → Save. The steps gate the write,
    not the work — step 1 holds every source trigger and both panes, step 2
-   shows only the parsed token count, step 3 holds identity and the write. */
+   holds the grouped schema fill (#215), step 3 holds identity and the write. */
 .app-import-steps {
   display: flex;
   align-items: center;
@@ -188,6 +188,25 @@
   flex-direction: column;
   gap: var(--space-2);
   max-width: var(--container-max-width-md);
+}
+
+/* Review (#215) holds the 54-group fill, so it takes the full step width
+   instead of the narrow save-pane measure. */
+.app-import-reviewpane {
+  max-width: none;
+}
+
+/* Form ⇄ Paste toggle over the same `css` string (#215). */
+.app-import-viewtoggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.app-import-viewtoggle .tok-btn[aria-pressed="true"] {
+  color: var(--color-text);
+  background: var(--color-accent-subtle);
+  border-color: var(--color-accent-border);
 }
 
 .app-import-reviewcount {
