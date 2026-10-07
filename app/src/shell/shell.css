@@ -26,6 +26,35 @@
   font-size: var(--font-size-base);
 }
 
+/* Skip link (issue #227): the only keyboard entry past the topbar/rail
+   chrome into #app-main. Off-screen until focused (never display: none, so
+   it stays in the tab order), then the same token ring every control uses. */
+.app-skip-link {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  z-index: 100;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  transform: translateY(-300%);
+}
+
+.app-skip-link:focus-visible {
+  transform: none;
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Skip-target focus lands programmatically (mouse users never see it). */
+#app-main:focus:not(:focus-visible) {
+  outline: none;
+}
+
 .app-topbar {
   grid-area: topbar;
   position: sticky;

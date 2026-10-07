@@ -62,8 +62,10 @@ function FontNote({ css }: { css: string }) {
   }, [key]);
 
   if (!missing.length) return null;
+  // role="status" (implicit aria-live="polite"): the check resolves after
+  // the fonts round trip, so the notice must announce when it appears.
   return (
-    <div className="dsv-font-note">
+    <div className="dsv-font-note" role="status">
       <b>Not available in this browser:</b> {missing.join(", ")}. Falls back to a default font.
     </div>
   );
@@ -120,7 +122,14 @@ export function PreviewNotes({
   onUpload?: () => void;
   onRetry?: () => void;
 }) {
-  if (loading) return <p className="app-placeholder app-loading">Loading systems…</p>;
+  // role="status" (implicit aria-live="polite"): the index fetch is async,
+  // so the placeholder must announce instead of swapping silently.
+  if (loading)
+    return (
+      <p className="app-placeholder app-loading" role="status">
+        Loading systems…
+      </p>
+    );
   return (
     <>
       {error && <PreviewError error={error} onRetry={onRetry} />}

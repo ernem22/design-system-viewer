@@ -1,6 +1,7 @@
 .app-toasts {
   position: fixed;
-  bottom: var(--space-5);
+  /* Home-indicator clearance: the stack floats above the OS gesture bar. */
+  bottom: calc(var(--space-5) + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -9,6 +10,8 @@
   gap: var(--space-2);
   z-index: var(--z-toast);
   pointer-events: none;
+  /* The stack never exceeds the viewport — children wrap inside it. */
+  max-width: 90vw;
 }
 
 .app-toast {
@@ -19,7 +22,12 @@
   color: var(--color-text);
   font-size: var(--font-size-sm);
   box-shadow: var(--shadow-md);
-  white-space: nowrap;
+  /* Long messages wrap and break inside the 90vw stack instead of
+     overflowing the viewport (nowrap painted them off-screen). */
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-align: center;
 }
 
 .app-toast-warn {
