@@ -71,6 +71,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Three digits ("100%") at the base size run into the stroke on both sides;
+   drop just that case to the next token step down. The ring stays 44px. */
+.tok-cov-ring.tok-cov-3dig b {
+  font-size: var(--font-size-xs);
+}
+
 .tok-cov-ring b i {
   font-style: normal;
   font-size: 9px;
