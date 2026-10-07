@@ -47,6 +47,14 @@ process.stdin.on('data', (d) => (s += d)).on('end', () => {
         const head = cut >= 0 ? line.slice(0, cut) : line;
         for (const f of head.split(/\s+\|\s+/)) if (f.trim()) lines.push(f.trim());
         if (cut >= 0 && line.slice(cut + 2).trim()) lines.push(line.slice(cut + 2).trim());
+      } else if (/^\s*[A-Za-z][\w-]*\s*:\s*(?:observed|before|build)\b[^:]*:/i.test(line)) {
+        // ...or as a labelled list (measured 2026-10-07, tester #294 on space-bunny-free:
+        // `VERIFIED-1: observed: ... -> before: ...`, eight such lines and no line starting with
+        // observed:). The label is dropped and the line split before each evidence field, after "->",
+        // "; " or ". ". Evidence is still required: this only finds fields the Tester did write.
+        const body = line.replace(/^\s*[A-Za-z][\w-]*\s*:\s*/, '');
+        for (const f of body.split(/\s*(?:->|=>|[;.])\s+(?=(?:observed|before|build|reason|fix_required|scope_ok)\b[^:]*:)/i))
+          if (f.trim()) lines.push(f.trim());
       } else if (/[;.]\s+(?:observed|before|build|reason|fix_required|scope_ok)\s*:/i.test(line)) {
         // ...and a multi-line report can still put an evidence field mid-line (measured 2026-10-06:
         // tester #238 `observed: ... '1Source'; before: base ...`, tester #243 `build: ... observed: ...
