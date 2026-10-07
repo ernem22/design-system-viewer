@@ -73,11 +73,11 @@ problem again.
 |---|---|
 | `dispatcher-dead` | run `bash "$S/bootstrap.sh" D:/code/dsv-dispatcher D:/code/design-system-viewer` and read `launcher.log`. If it is still dead after 10 minutes, report it to the owner. |
 | `down` | read the `exiting` line in `dispatch.log` and the tail of `dispatch.err`. The keep-alive restarts the dispatcher; report the reason. |
-| `leftover` | run `bash tools/orchestration/worker.sh close <dispatch> --stop` once and report the result. |
-| `orphaned` | find the worker named `name=` in Orca. If it is still running, close it with `worker.sh close <dispatch> --stop`: its work is owed again and will be redone. |
+| `leftover` | run `bash D:/code/dsv-dispatcher/tools/orchestration/worker.sh close <dispatch> --stop` once and report the result. |
+| `orphaned` | find the worker named `name=` in Orca. If it is still running, close it with `bash D:/code/dsv-dispatcher/tools/orchestration/worker.sh close <dispatch> --stop`: its work is owed again and will be redone. |
 | `disk-low` | report the free space and the largest folders under `%LOCALAPPDATA%\Temp` and the Orca workspaces. **Delete nothing**: the owner decides. |
-| `start-refused` | read `dispatch.sh --status`. Report it if the host stays full for an hour or more. |
-| `idle-with-work` | run `dispatch.sh --status` and `needs.sh`, and find out why the owed work is not queued. |
+| `start-refused` | run `bash D:/code/dsv-dispatcher/tools/orchestration/dispatch.sh --status`. Report it if the host stays full for an hour or more. |
+| `idle-with-work` | run `bash D:/code/dsv-dispatcher/tools/orchestration/dispatch.sh --status` and `bash D:/code/dsv-dispatcher/tools/orchestration/needs.sh`, and find out why the owed work is not queued. |
 | `HEARTBEAT` | nothing; re-arm. |
 
 ### 2. Model watchdog
@@ -87,14 +87,14 @@ A `provider-error` event means a worker's screen showed a provider-looking error
 
 1. Read `tail-<task>.txt` for that dispatch. Then check whether the same model has another
    `provider-error` in the last 30 minutes (`grep provider-error "$S/events.log"`).
-2. Probe the model: `bash tools/orchestration/model-switch.sh --probe <model>`.
+2. Probe the model: `bash D:/code/dsv-dispatcher/tools/orchestration/model-switch.sh --probe <model>`.
 3. Decide:
    - **The probe fails, or 2 or more workers on that model show the error:** the model is out.
-     - Run `bash tools/orchestration/model-switch.sh <role>`. It walks `roles/fallback.txt` and takes
+     - Run `bash D:/code/dsv-dispatcher/tools/orchestration/model-switch.sh <role>`. It walks `roles/fallback.txt` and takes
        the first model that answers.
      - Prints `SWITCHED`: workers started from now on use the new model. A worker already running on
        the dead model fails or times out, and its retry starts on the new model.
-     - Prints `NO-MODEL`: run `bash tools/orchestration/dispatch.sh --pause "no working model for <role>"`.
+     - Prints `NO-MODEL`: run `bash D:/code/dsv-dispatcher/tools/orchestration/dispatch.sh --pause "no working model for <role>"`.
    - **The probe passes and only one worker shows the error:** do nothing yet. Note it in the report.
 4. Report: the model, the error line, and what you did.
 
@@ -103,7 +103,7 @@ Rules:
   approval first.
 - Never edit a role file by hand. `model-switch.sh` writes it, probes before writing, and logs a
   `model-switch` event.
-- Resume a pause (`dispatch.sh --resume`) only when its reason no longer holds and you have verified
+- Resume a pause (`bash D:/code/dsv-dispatcher/tools/orchestration/dispatch.sh --resume`) only when its reason no longer holds and you have verified
   that. A pause you did not set: ask the owner.
 - On each `HEARTBEAT`, if a role was switched away from its first-listed model, probe the first-listed
   model. When it answers again, switch back with `model-switch.sh <role> --to <model>` and report it.
@@ -140,13 +140,16 @@ Hermes never rewrites the issue body. The owner owns the card. Product questions
 
 The owner does the final test. On every `merged pr=N` event:
 
-1. Run `bash tools/orchestration/test-note.sh N`. It prints the PR, its issue, the app files changed,
+1. Run `bash D:/code/dsv-dispatcher/tools/orchestration/test-note.sh N`. It prints the PR, its issue, the app files changed,
    and the Tester's `observed:` / `before:` / `build:` lines.
 2. Add one comment to the open issue labelled `test-list`, titled "Owner test checklist". Create that
-   issue if none is open, and **never** give it the `agent` label. The comment:
+   issue if none is open, and **never** give it the `agent` label. Its body starts with:
+   "Before testing: `cd D:/code/design-system-viewer && git checkout refactor/full-react-migration &&
+   git pull && git log --oneline -1` - the commit shown must be the one in the entry, or newer." The
+   comment (`<merge7>` is the `sha=` of the `merged` event, also printed by test-note.sh):
 
    ```
-   - [ ] #N <PR title> (closes #<issue>)
+   - [ ] #N <PR title> (closes #<issue>) - test at <merge7> or newer
      Where: <tab / screen / dialog>
      Do: <the steps, from the Tester's observed lines>
      Expect: <what the Tester saw>
@@ -202,12 +205,16 @@ and head is refused twice.
   `kill` a process, delete files, edit a role file by hand, or resume a pause you did not set.
 - To stop or switch the dispatcher's code, never `kill` it:
   1. check out the commit in `D:/code/dsv-dispatcher`;
-  2. run `STOP_WAIT=360 bash tools/orchestration/dispatch.sh --stop`;
+  2. run `STOP_WAIT=360 bash D:/code/dsv-dispatcher/tools/orchestration/dispatch.sh --stop`;
   3. only after it prints `STOPPED`, run `bash "$S/bootstrap.sh" D:/code/dsv-dispatcher D:/code/design-system-viewer`.
 
   A Hermes tool call times out after 420 s.
 - On this host, do not pipe into `node` inside `$( … )` in Hermes's shell: it answers "stdin is not a
   tty". Write to a file first.
+- **Every command runs from the dispatcher checkout, by full path** (`D:/code/dsv-dispatcher/tools/orchestration/...`), whatever directory
+  the shell opened in. The owner's clone `D:/code/design-system-viewer` is the owner's: it can be
+  behind (nobody pulls it for you), and scripts there may be old or missing. Never run tooling from it.
+- In Git Bash on this host, `node` is a `winpty` alias that fails with redirects; call `node.exe`.
 - Labels Hermes needs, created once if missing:
   - `gh label create intake-ok --color 0E8A16 --description "Hermes intake: claims verified against the code"`;
   - `gh label create test-list --color 5319E7 --description "Owner's test checklist (not for workers)"`.

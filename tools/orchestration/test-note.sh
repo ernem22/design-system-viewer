@@ -12,8 +12,8 @@ S="${LOCALAPPDATA:-$HOME}/orca-orchestration/design-system-viewer"
 REPO="${DSV_REPO:-ernem22/design-system-viewer}"
 PR="${1:?usage: test-note.sh <pr-number>}"
 
-gh pr view "$PR" --repo "$REPO" --json number,title,mergedAt,headRefOid,body \
-  --jq '"PR #\(.number): \(.title)\nmerged: \(.mergedAt // "not merged")\nhead: \(.headRefOid[0:7])\ncloses: \((.body // "") | [scan("(?i)(?:closes|fixes|resolves) #([0-9]+)")[][]] | join(", "))"' 2>/dev/null \
+gh pr view "$PR" --repo "$REPO" --json number,title,mergedAt,mergeCommit,headRefOid,body \
+  --jq '"PR #\(.number): \(.title)\nmerged: \(.mergedAt // "not merged")\ntest at: \((.mergeCommit.oid // "-")[0:7]) or newer (the owner pulls first)\nhead: \(.headRefOid[0:7])\ncloses: \((.body // "") | [scan("(?i)(?:closes|fixes|resolves) #([0-9]+)")[0]] | join(", "))"' 2>/dev/null \
   || { echo "cannot read PR #$PR"; exit 3; }
 echo "app files changed:"
 gh pr view "$PR" --repo "$REPO" --json files --jq '.files[].path | select(startswith("app/"))' 2>/dev/null | sed 's/^/  /'
