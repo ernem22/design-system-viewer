@@ -448,6 +448,21 @@
   --motion-scale-enter: 0.95;
   --motion-scale-exit: 1;
 
+  /* Viewer chrome motion (private, issue #284). The inspected system is
+     applied inline on document.documentElement (App.tsx) and overwrites every
+     overridable token above — a system that zeroes durations/distances (e.g.
+     the default perp-ultra-v2: --duration-*: 0ms, --motion-distance-*: 0)
+     would freeze the viewer's own toast enter/exit and press motion. These
+     --app-* literals mirror the viewer defaults, but no system defines them,
+     so chrome transitions always resolve to viewer values. Literals on
+     purpose: aliasing var(--duration-*) would reintroduce the override. */
+  --app-duration-fast: 100ms;
+  --app-duration-normal: 200ms;
+  --app-motion-distance-sm: 4px;
+  --app-motion-distance-md: 8px;
+  --app-motion-scale-active: 0.97;
+  --app-ease-out: cubic-bezier(0, 0, 0.2, 1);
+
   /* Motion Blur */
   --motion-blur-enter: 8px;
   --motion-blur-exit: 4px;

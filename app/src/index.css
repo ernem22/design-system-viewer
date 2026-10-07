@@ -46,13 +46,16 @@ body {
    gallery's dsv-* components, whose motion belongs to the inspected system —
    scales to ~0.97 on :active over a short ease-out transform transition.
    One shared rule so the chrome reads as one surface. Disabled controls
-   (native :disabled, or the compare chip's data-disabled) never scale. */
+   (native :disabled, or the compare chip's data-disabled) never scale.
+   Motion resolves from the viewer-private --app-* tokens: the inspected
+   system overwrites the shared --duration-* / --motion-* names inline, which
+   would freeze this press at 0ms / restyle it to the system's scale. */
 .app-iconbtn:not(:disabled),
 .app-sysbtn:not(:disabled),
 .tok-btn:not(:disabled),
 .cmp-chip:not([data-disabled="true"]),
 .app-tabs button:not(:disabled) {
-  transition: transform var(--duration-fast) var(--ease-out);
+  transition: transform var(--app-duration-fast) var(--app-ease-out);
 }
 
 .app-iconbtn:not(:disabled):active,
@@ -60,7 +63,7 @@ body {
 .tok-btn:not(:disabled):active,
 .cmp-chip:not([data-disabled="true"]):active,
 .app-tabs button:not(:disabled):active {
-  transform: scale(var(--motion-scale-active));
+  transform: scale(var(--app-motion-scale-active));
 }
 
 @media (prefers-reduced-motion: reduce) {

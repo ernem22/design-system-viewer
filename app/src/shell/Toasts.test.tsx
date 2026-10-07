@@ -98,4 +98,36 @@ describe("Toasts", () => {
     ]);
     expect(el.querySelectorAll(".app-toast")).toHaveLength(2);
   });
+
+  it("exits on the same node: a removed toast keeps its DOM node with data-leaving", async () => {
+    // Reviewer finding on #284: the exit fade was a visual no-op — the live
+    // node unmounted in one frame and a freshly mounted ghost (already at
+    // opacity 0, mounted by an effect a frame late) never transitioned. The
+    // leaving toast must be the SAME node, so opacity 1->0 actually runs.
+    // Fails on bc125fa, where the ghost is a different node.
+    const { createRoot } = await import("react-dom/client");
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root!.render(<Toasts toasts={[toast(1, "Link copied", "ok")]} />);
+    });
+    const before = host.querySelector(".app-toast");
+    expect(before).not.toBeNull();
+    expect(before!.getAttribute("data-leaving")).toBeNull();
+    await act(async () => {
+      root!.render(<Toasts toasts={[]} />);
+    });
+    const leaving = host.querySelector(".app-toast");
+    expect(leaving, "leaving toast stays mounted for the exit fade").not.toBeNull();
+    expect(leaving, "exit animates the same node (opacity 1->0 transitions)").toBe(
+      before,
+    );
+    expect(leaving!.getAttribute("data-leaving")).toBe("true");
+    // The fade completes inside the 150ms exit budget, then the node unmounts.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 200));
+    });
+    expect(host.querySelectorAll(".app-toast")).toHaveLength(0);
+  });
 });
