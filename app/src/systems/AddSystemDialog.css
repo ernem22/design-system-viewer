@@ -215,6 +215,56 @@
   font-weight: var(--font-weight-semibold);
 }
 
+/* Review summary (#216): coverage, extras with suggestions, lint warnings,
+   colour swatches. A plain stacked section at the top of the Review step —
+   no nested scroller, so the step body stays the single scroll container. */
+.app-import-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.app-import-summary .warn {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.app-import-extras,
+.app-import-warnings,
+.app-import-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--font-size-sm);
+}
+
+.app-import-extra,
+.app-import-warning,
+.app-import-swatchrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.app-import-suggest {
+  color: var(--color-text-secondary);
+}
+
+.app-import-swatch {
+  display: inline-block;
+  flex: none;
+  width: var(--space-4);
+  height: var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+}
+
 /* A source that needs input opens exactly one row and nothing else. */
 .app-import-inline {
   display: flex;

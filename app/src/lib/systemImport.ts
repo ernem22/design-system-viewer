@@ -142,13 +142,16 @@ export function stripPrefix(css: string, prefix: string): string {
 
 /** Abbreviations the same idea gets written with. Canonicalising both sides
     first is what lets `--color-background` find `--color-bg`: a prefix test
-    alone cannot, because "background" does not start with "bg". */
+    alone cannot, because "background" does not start with "bg". British
+    spellings canonicalise the same way, so `--colour-bg` finds `--color-bg`. */
 const SEGMENT_ALIASES: Record<string, string> = {
   bg: "background",
   fg: "foreground",
   txt: "text",
   clr: "color",
   col: "color",
+  colour: "color",
+  grey: "gray",
   sz: "size",
   rad: "radius",
   brd: "border",
