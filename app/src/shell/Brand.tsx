@@ -2,12 +2,8 @@
    call site, since the two never appear apart. `title` repeats the name
    for when `.app-brand-name`'s ellipsis truncation (shell.css) clips it —
    sighted users can still hover for the full string.
-   Icon ported 1:1 from the legacy dsv-brand mark (preview/src/App.jsx).
-   Also the host for the viewer dark control (issue #115): the brand slot is
-   the one always-mounted topbar cluster, so a control placed here is reachable
-   for every system and tab — the per-system Dark switch is not. */
+   Icon ported 1:1 from the legacy dsv-brand mark (preview/src/App.jsx). */
 
-import ViewerDarkToggle from "./ViewerDarkToggle.tsx";
 import HelpDialog from "./HelpDialog.tsx";
 
 function BrandMark() {
@@ -28,7 +24,6 @@ export default function Brand() {
         <BrandMark />
         <span className="app-brand-name">Design System Viewer</span>
       </span>
-      <ViewerDarkToggle />
       <HelpDialog />
     </>
   );
