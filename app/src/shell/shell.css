@@ -414,7 +414,9 @@
   height: 100%;
   /* clip mirrors the shell contract: a layout frame must not be scrollable. */
   overflow: clip;
-  transition: width 260ms var(--ease-emphasized);
+  /* No transition here (issue #282): the grid column snaps to its new width
+     in a single layout. Animating width relaid out .app-main every frame;
+     only the inner content below animates, with transform/opacity. */
 }
 
 .app-rail-clip[data-open="false"] {
@@ -427,7 +429,15 @@
   height: 100%;
   overflow-y: auto;
   padding: 8px 10px 20px;
-  transition: opacity 180ms var(--ease-out);
+  /* Compositor-only enter (issue #282): the column snaps, the content slides
+     with transform and fades with opacity (~200ms ease-out), so a toggle
+     costs one layout and never relayouts mid-animation. Motion resolves from
+     the viewer-private --app-* tokens: the inspected system overwrites the
+      shared --duration-* and --ease-* names inline (issue #284), which would
+     freeze this slide at 0ms on systems that zero them. */
+  transition:
+    transform var(--app-duration-normal) var(--app-ease-out),
+    opacity var(--app-duration-normal) var(--app-ease-out);
 }
 
 .app-rail-inner,
@@ -462,6 +472,7 @@
 
 .app-rail-clip[data-open="false"] .app-rail-inner {
   opacity: 0;
+  transform: translateX(calc(var(--app-motion-distance-md) * -1));
 }
 
 .app-main {
@@ -500,7 +511,8 @@
   height: 100%;
   /* clip mirrors the shell contract: a layout frame must not be scrollable. */
   overflow: clip;
-  transition: width 260ms var(--ease-emphasized);
+  /* No transition here either (issue #282) — same single-layout snap as the
+     rail clip; the inner content below owns the motion. */
 }
 
 .app-props-clip[data-open="false"] {
@@ -513,11 +525,29 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  transition: opacity 180ms var(--ease-out);
+  /* Same compositor-only enter as the rail inner (issue #282), mirrored. */
+  transition:
+    transform var(--app-duration-normal) var(--app-ease-out),
+    opacity var(--app-duration-normal) var(--app-ease-out);
 }
 
 .app-props-clip[data-open="false"] .app-props-inner {
   opacity: 0;
+  transform: translateX(var(--app-motion-distance-md));
+}
+
+/* Issue #282: under reduced motion the panel slide drops away and only a
+   short opacity fade (100ms, within the ≤150ms budget) remains. */
+@media (prefers-reduced-motion: reduce) {
+  .app-rail-inner,
+  .app-props-inner {
+    transition: opacity var(--app-duration-fast) var(--app-ease-out);
+  }
+
+  .app-rail-clip[data-open="false"] .app-rail-inner,
+  .app-props-clip[data-open="false"] .app-props-inner {
+    transform: none;
+  }
 }
 
 .app-placeholder {
@@ -785,20 +815,93 @@
   }
 }
 
-/* Phone: there is no room to hide behind — the brand lockup, copy-link and
-   the rest compress and the topbar frame scrolls. Only the tab padding
-   tightens, so all three tabs stay on screen. */
+/* Phone (issue #282): a single 44px row cannot hold the brand, the switcher,
+   the tabs and the actions at 360px (measured 451px of content in the frame),
+   so the topbar becomes two fixed rows — brand plus the overflow menu above,
+   the tab strip below — inside a doubled topbar track. The action cluster
+   lives behind the "More actions" popover (Shell.tsx) instead of overflowing
+   the frame, so the topbar's scrollWidth fits its clientWidth with every
+   control still reachable. The shell row and the drawer top track the doubled
+   height from the same token, so the drawers still start exactly below the
+   chrome. */
 @media (max-width: 480px) {
+  .app-shell {
+    grid-template-rows: calc(var(--app-topbar-height) * 2) minmax(0, 1fr);
+  }
+
   .app-topbar {
+    display: grid;
+    grid-template-areas:
+      "left more"
+      "tabs tabs";
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 1fr 1fr;
+    align-items: center;
+    column-gap: var(--space-2);
+    row-gap: 0;
     padding: 0 var(--space-2);
-    gap: var(--space-2);
   }
 
   .app-topbar-left {
+    grid-area: left;
     gap: var(--space-2);
+  }
+
+  .app-topbar-more {
+    grid-area: more;
+    justify-self: end;
+    display: flex;
+    align-items: center;
+  }
+
+  .app-tabs {
+    grid-area: tabs;
+    margin-inline: auto;
+    max-width: 100%;
   }
 
   .app-tabs button {
     padding: 3px var(--space-2);
   }
+
+  /* The wordmark truncates instead of widening the row: as a flex item its
+     min-content width is the whole unbroken string, so without min-width: 0
+     it floors the row near 140px and the frame overflows. */
+  .app-brand-name {
+    min-width: 0;
+  }
+
+  /* The switcher gives up width before the tabs do; the full name stays on
+     the trigger's title for sighted users and in its aria-label for AT. */
+  .app-sysbtn {
+    max-width: 120px;
+  }
+
+  /* The floating drawers start below the doubled topbar track. */
+  .app-rail,
+  .app-props {
+    top: calc(var(--app-topbar-height) * 2);
+  }
+}
+
+/* Phone overflow menu (issue #282): the action cluster behind "More actions".
+   A wrapping row, not a menuitem list — its children are icon buttons, pills
+   and the search field, which keep their own chrome and behaviour. */
+.app-menu {
+  z-index: var(--z-popover);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 10px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.app-menu .app-topbar-search {
+  flex: 1 1 100%;
+  width: auto;
 }

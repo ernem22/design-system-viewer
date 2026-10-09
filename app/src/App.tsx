@@ -15,7 +15,7 @@ import { Icon } from "./lib/icons.tsx";
 import { useToasts } from "./lib/toasts.ts";
 import { clearAll, countOverrides, useInspector } from "./lib/tokenOverrides.ts";
 import { useSystems, resolveSystemTokens } from "./systems/store.ts";
-import { usePanelOpen } from "./lib/panelStorage.ts";
+import { usePanels } from "./lib/panelStorage.ts";
 import SystemSwitcher from "./systems/SystemSwitcher.tsx";
 import { AddSystemDialog } from "./systems/AddSystemDialog.tsx";
 import "./systems/AddSystemDialog.css";
@@ -60,9 +60,40 @@ function App() {
   const [toasts, pushToast] = useToasts();
   // Panel collapse lives here so the toggles can sit in the topbar —
   // no floating edge handle next to the main scrollbar. Same storage
-  // keys as before, so persisted choices survive the move.
-  const [railOpen, toggleRail] = usePanelOpen("dsv.app.rail");
-  const [propsOpen, toggleProps, revealProps] = usePanelOpen("dsv.app.props");
+  // keys as before, so persisted choices survive the move. On narrow
+  // viewports (issue #282) the two panels are overlay drawers instead:
+  // both start closed, opening one closes the other, and toggles there
+  // never touch the stored desktop preference.
+  const {
+    railOpen,
+    propsOpen,
+    narrow: narrowPanels,
+    toggleRail,
+    toggleProps,
+    revealProps,
+    closePanels,
+  } = usePanels();
+
+  // Narrow drawers are dismissible: Esc or a pointer outside both drawers
+  // (and outside the topbar, whose toggles own their own clicks) closes the
+  // open one. Desktop panels are unaffected — Esc never collapses them.
+  useEffect(() => {
+    if (!narrowPanels || (!railOpen && !propsOpen)) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closePanels();
+    };
+    const onPointer = (e: PointerEvent) => {
+      const target = e.target as Element | null;
+      if (target?.closest?.(".app-rail, .app-props, .app-topbar, .app-toasts")) return;
+      closePanels();
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+    };
+  }, [narrowPanels, railOpen, propsOpen, closePanels]);
   // Active tab lives here (not in Shell) so the URL sync below sees every
   // switch — Shell stays a controlled chrome shell. A deep-linked ?tab=
   // wins; otherwise this is "tokens", exactly as before.
