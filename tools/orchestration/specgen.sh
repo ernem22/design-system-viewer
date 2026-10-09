@@ -106,7 +106,10 @@ THE BEHAVIOUR TO VERIFY:
   1. Before: the base commit's behaviour for what the issue names. There is no base server; read the
      base code with \`git show <base sha>:<file>\` and say in \`before:\` that it is declaration-level.
   2. After: the same thing in the running app - drive the DOM with a headless browser
-     (\`npx playwright ...\` or \`node\`), read computed style, attributes, counts. The strongest form.
+     (\`node\` with a script that launches the browser and closes it), read computed style, attributes,
+     counts. The strongest form. Never \`npx playwright cli ... open\`: it leaves a browser running and
+     never returns, so your terminal waits until the deadline (measured 3 times on tester #300; the
+     role config now refuses \`playwright cli\`). Every command you run must exit by itself.
   3. Negative control: what must NOT happen.
   4. No regression: the adjacent behaviour that must be unchanged.
 Report each as \`observed: <what you did> -> <value>\` paired with \`before: <value>\`.
