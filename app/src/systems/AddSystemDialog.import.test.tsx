@@ -65,6 +65,21 @@ async function click(el: HTMLElement | undefined): Promise<void> {
   await act(async () => el!.click());
 }
 
+/** Less-used sources live in the "More sources" menu (#285): open it, then
+    pick the item by name. Follows the same pointerdown + click the "Open in"
+    menu test uses, since Radix opens on pointerdown. */
+async function clickMoreItem(label: string): Promise<void> {
+  const trigger = document.querySelector<HTMLButtonElement>('button[aria-label="More sources"]')!;
+  await act(async () => {
+    trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+    trigger.click();
+  });
+  const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((i) =>
+    i.textContent?.trim().startsWith(label),
+  )!;
+  await act(async () => item.click());
+}
+
 /** The stepper shell (#213) holds the write on step 3: reach the Save step. */
 async function goToSave(): Promise<void> {
   await click(button("Continue"));
@@ -130,14 +145,14 @@ describe("AddSystemDialog composition", () => {
     await click(button("Fetch URL"));
     expect(document.querySelector('input[aria-label="Stylesheet URL"]')).not.toBeNull();
     expect(document.querySelector('textarea[aria-label="System JSON"]')).toBeNull();
-    await click(button("JSON export"));
+    await clickMoreItem("JSON export");
     expect(document.querySelector('textarea[aria-label="System JSON"]')).not.toBeNull();
     expect(document.querySelector('input[aria-label="Stylesheet URL"]')).toBeNull();
   });
 
   it("imports JSON through its row", async () => {
     await renderDialog();
-    await click(button("JSON export"));
+    await clickMoreItem("JSON export");
     await act(async () =>
       setValue(document.querySelector<HTMLTextAreaElement>('textarea[aria-label="System JSON"]')!, JSON_EXPORT),
     );
@@ -148,18 +163,31 @@ describe("AddSystemDialog composition", () => {
 
   it("fills the text from the template trigger", async () => {
     await renderDialog();
-    await click(button("Template"));
+    await click(button("Fill with schema"));
     expect(textPane()!.value).toContain("--color-bg: ;");
     expect(textPane()!.value).toContain("--font-size-base: ;");
   });
 
-  it("copies the template, the action the port had dropped", async () => {
+  it("copies the empty schema, the action the port had dropped", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     await renderDialog();
-    await click(button("Copy template"));
+    await clickMoreItem("Copy empty schema");
     expect(writeText).toHaveBeenCalledTimes(1);
     expect(writeText.mock.calls[0][0]).toContain("--color-bg: ;");
+  });
+
+  // Issue #285: each source label says what it does — no ambiguous
+  // "Template" / "Copy template" pair, and the toolbar stays compact.
+  it("names each source by what it does", async () => {
+    await renderDialog();
+    const names = [...document.querySelectorAll(".app-import-dialog button")].map((b) =>
+      b.textContent?.trim(),
+    );
+    expect(names).not.toContain("Template");
+    expect(names).not.toContain("Copy template");
+    expect(names).toContain("Fill with schema");
+    expect(names).toContain("More sources");
   });
 
   it("writes on Save, with the name that is in the field", async () => {
@@ -241,7 +269,7 @@ describe("AddSystemDialog composition", () => {
       () => new Promise<string>((resolve) => pending.push(resolve)),
     );
     await renderDialog();
-    await click(button("JSON export"));
+    await clickMoreItem("JSON export");
 
     let resolveJson!: (value: string) => void;
     const file = {
@@ -311,8 +339,8 @@ describe("AddSystemDialog composition", () => {
   });
 
   // Issue #214, slice 2: the Source step seeds from an existing system. The
-  // picker copies that system's CSS into the buffer — the write still waits
-  // for Save, so this only asserts the seeded source text + status.
+  // More-sources menu copies that system's CSS into the buffer — the write
+  // still waits for Save, so this only asserts the seeded source text + status.
   it("seeds the source from an existing system", async () => {
     const { createRoot } = await import("react-dom/client");
     host = document.createElement("div");
@@ -339,12 +367,7 @@ describe("AddSystemDialog composition", () => {
         />,
       );
     });
-    const seed = document.querySelector<HTMLSelectElement>(
-      'select[aria-label="Start from an existing system"]',
-    )!;
-    expect(seed).not.toBeNull();
-    seed.value = "aurora";
-    await act(async () => seed.dispatchEvent(new Event("change", { bubbles: true })));
+    await clickMoreItem("Aurora");
     expect(textPane()!.value).toBe("--color-bg: #0a0a0f;\n--color-text: #f0f0f3;");
     expect(document.querySelector(".app-import-status")?.textContent).toContain("Aurora");
   });

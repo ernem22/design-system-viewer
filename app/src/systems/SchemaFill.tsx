@@ -72,6 +72,10 @@ export function SchemaFill({ css, onChange }: { css: string; onChange: (next: st
       return next;
     });
 
+  // One toggle, not two side-by-side buttons, so the second can never wrap
+  // alone onto its own row at desktop width.
+  const allOpen = openIds.size >= cov.groups.length && cov.groups.length > 0;
+
   return (
     <div className="app-fill">
       <div className="app-fill-controls">
@@ -106,13 +110,11 @@ export function SchemaFill({ css, onChange }: { css: string; onChange: (next: st
         </select>
         <button
           type="button"
-          className="tok-btn"
-          onClick={() => setOpenIds(new Set(cov.groups.map((g) => g.id)))}
+          className="tok-btn app-fill-expand"
+          aria-pressed={allOpen}
+          onClick={() => setOpenIds(allOpen ? new Set() : new Set(cov.groups.map((g) => g.id)))}
         >
-          Expand all
-        </button>
-        <button type="button" className="tok-btn" onClick={() => setOpenIds(new Set())}>
-          Collapse all
+          {allOpen ? "Collapse all" : "Expand all"}
         </button>
       </div>
 

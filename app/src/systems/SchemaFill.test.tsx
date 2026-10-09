@@ -113,4 +113,19 @@ describe("SchemaFill", () => {
     expect(document.querySelectorAll(".app-fill-group")).toHaveLength(1);
     expect(row("--color-bg")).not.toBeNull();
   });
+
+  // Issue #285: one toggle, not two buttons, so "Collapse all" can never wrap
+  // alone onto a second row at desktop width.
+  it("expands and collapses all groups from a single toggle", async () => {
+    await renderFill("--color-bg: #fff;");
+    const toggle = () => document.querySelector<HTMLButtonElement>(".app-fill-expand")!;
+    expect(document.querySelectorAll(".app-fill-controls button")).toHaveLength(1);
+    expect(toggle().textContent?.trim()).toBe("Expand all");
+    await act(async () => toggle().click());
+    expect(toggle().textContent?.trim()).toBe("Collapse all");
+    expect(document.querySelectorAll(".app-fill-row").length).toBeGreaterThan(0);
+    await act(async () => toggle().click());
+    expect(toggle().textContent?.trim()).toBe("Expand all");
+    expect(document.querySelectorAll(".app-fill-row")).toHaveLength(0);
+  });
 });
