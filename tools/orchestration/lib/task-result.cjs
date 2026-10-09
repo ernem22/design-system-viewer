@@ -39,7 +39,14 @@ process.stdin.on('data', (d) => (s += d)).on('end', () => {
       // or ". "), because an observed: value itself holds "; " between findings.
       // ...or with ". " (measured 2026-10-06, tester #244, task_eb8d2c91398b: `status: pass. role: tester.
       // task: ... before: ...`), which the "; " test missed: the whole line became the status.
-      if (/^\s*status:\s*[a-z]+\s*[;.]\s/i.test(line)) {
+      // ...or with NO separator at all (measured 2026-10-09, tester #300, task_58208da47e12: `status:
+      // passrole: testertask: task_58208da47e12commit: 4059587tests: n-abuild: ...observed: ...before:
+      // ...`, the line breaks lost; the whole line became the status). Recognised only when the status
+      // word runs straight into the next field name; the line is then split before every field name.
+      if (/^\s*status:\s*(?:pass|fail)(?=(?:role|task|commit|tests|build|lint|observed|before|reason|fix_required|scope_ok|source|pr|head)\s*:)/i.test(line)) {
+        for (const f of line.split(/(?=(?:status|role|task|commit|tests|build|lint|observed|before|reason|fix_required|scope_ok|source|pr|head)\s*(?:\([^)]*\))?\s*:)/i))
+          if (f.trim()) lines.push(f.trim());
+      } else if (/^\s*status:\s*[a-z]+\s*[;.]\s/i.test(line)) {
         for (const f of line.split(/[;.]\s+(?=(?:status|role|task|commit|tests|build|lint|observed|before|reason|fix_required|scope_ok|source|pr|head)\s*:)/i))
           if (f.trim()) lines.push(f.trim());
       } else if (/^\s*status:\s*[a-z]+\s*\|/i.test(line)) {
