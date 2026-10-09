@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import * as Checkbox from "@radix-ui/react-checkbox";
 import { Icon } from "../lib/icons.tsx";
+import { cssValueEq } from "../lib/cssValueEq.ts";
 import type { DesignSystem } from "../systems/store.ts";
 
 /* CSS-wide keywords the parser accepts as valid `color` values but which are
@@ -91,7 +92,10 @@ export function DiffTable({ cols }: { cols: DesignSystem[] }) {
         .map((name) => {
           const vals = valueMaps.map((m) => m.get(name));
           const present = vals.filter((v) => v != null);
-          const same = present.length === vals.length && present.every((v) => v === present[0]);
+          // Compare after notation normalisation (`cssValueEq`): values CSS
+          // treats as equal (`.5rem` vs `0.5rem`) are the same token value.
+          // Cells still render `v` exactly as authored.
+          const same = present.length === vals.length && present.every((v) => cssValueEq(v ?? "", present[0] ?? ""));
           total++;
           if (!same) diffs++;
           return { name, vals, same, categories: categories.get(name) ?? [] };
