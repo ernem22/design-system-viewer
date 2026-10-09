@@ -127,10 +127,12 @@ export default function Rail({ groups, searching = false, syncSection = false, a
                 key={l.id}
                 href={`#${l.id}`}
                 className="app-rail-link"
+                title={l.label}
                 aria-current={l.id === activeId ? "true" : undefined}
                 onClick={() => pinTo(l.id)}
               >
-                {l.label}
+                <span className="app-rail-label">{l.label}</span>
+                {l.count != null && <span className="app-rail-item-count">{l.count}</span>}
               </a>
             ))}
           </RailGroup>
