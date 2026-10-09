@@ -636,6 +636,9 @@
   z-index: 1;
   display: flex;
   align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  white-space: nowrap;
   padding: 5px 10px;
   border-radius: 10px;
   color: var(--color-text-secondary);
@@ -643,6 +646,28 @@
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   transition: color 150ms var(--ease-out);
+}
+
+/* Rail names stay on one line (issue #286): the row never wraps, the name
+   truncates with an ellipsis inside its own span, and the count rides in a
+   separate right-aligned tabular-nums column the ellipsis never cuts off.
+   Sizes resolve from viewer tokens — no literal sizes here. */
+.app-rail-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-rail-item-count {
+  flex: none;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .app-rail-link:hover {

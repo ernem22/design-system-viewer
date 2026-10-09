@@ -176,7 +176,7 @@ export function useTokensView(system: DesignSystem | null, pushToast: PushToast)
       for (const g of cov.groups) {
         const names = g.present.concat(g.missing).filter(matchTok);
         if (!names.length) continue;
-        links.push({ id: schemaAnchor(g.id), label: `${g.label} · ${g.present.length}/${g.expected}` });
+        links.push({ id: schemaAnchor(g.id), label: g.label, count: `${g.present.length}/${g.expected}` });
       }
       return links.length ? [["Schema", links]] : [];
     }
@@ -184,7 +184,7 @@ export function useTokensView(system: DesignSystem | null, pushToast: PushToast)
     for (const { group, tokens: toks } of visibleGroups) {
       const label = KIND_LABELS[group.kind] ?? "Other";
       if (!byKind.has(label)) byKind.set(label, []);
-      byKind.get(label)?.push({ id: groupAnchor(group.id), label: `${group.label} · ${toks.length}` });
+      byKind.get(label)?.push({ id: groupAnchor(group.id), label: group.label, count: toks.length });
     }
     return [...byKind.entries()];
     // eslint-disable-next-line react-hooks/exhaustive-deps

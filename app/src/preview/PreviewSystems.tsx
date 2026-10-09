@@ -34,10 +34,11 @@ export function PreviewSystems({ systems, activeSlug, onSelect }: PreviewSystems
               key={s.slug}
               type="button"
               className="app-rail-link"
+              title={s.name}
               aria-current={s.slug === activeSlug ? "true" : undefined}
               onClick={() => onSelect(s.slug)}
             >
-              {s.name}
+              <span className="app-rail-label">{s.name}</span>
             </button>
           ))}
         </Accordion.Content>

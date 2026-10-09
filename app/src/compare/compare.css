@@ -122,6 +122,7 @@ tr.is-diff td { background: color-mix(in srgb, var(--color-warning) 8%, transpar
   position: relative;
   display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer;
   font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); min-height: 34px;
+  min-width: 0; white-space: nowrap;
   padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
   border: var(--border-width-thin) solid var(--color-border-subtle); border-radius: var(--radius-md);
   color: var(--color-text-secondary); background: var(--color-surface);
@@ -131,7 +132,10 @@ tr.is-diff td { background: color-mix(in srgb, var(--color-warning) 8%, transpar
 .cmp-chip:has(.dsv-check:focus-visible) { outline: var(--focus-ring-width) solid var(--color-focus-ring); outline-offset: var(--focus-ring-offset); }
 .cmp-dot { width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--color-border-strong); flex: none; }
 .cmp-chip.on .cmp-dot { background: var(--color-accent); }
-.cmp-pct { margin-left: auto; font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-muted); background: var(--color-surface-sunken); border-radius: var(--radius-full); padding: 1px var(--space-2); }
+.cmp-pct { margin-left: auto; flex: none; white-space: nowrap; font-family: var(--font-mono); font-size: var(--font-size-xs); font-variant-numeric: tabular-nums; color: var(--color-text-muted); background: var(--color-surface-sunken); border-radius: var(--radius-full); padding: 1px var(--space-2); }
+/* System names stay on one line (issue #286): the name truncates while the
+   % badge keeps its own right-aligned column. No literal sizes here. */
+.cmp-chip-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cmp-chip.on .cmp-pct { color: var(--color-accent-text); background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
 .cmp-chip[data-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 .cmp-chip[data-disabled="true"]:hover { border-color: var(--color-border-subtle); color: var(--color-text-secondary); }

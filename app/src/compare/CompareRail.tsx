@@ -63,7 +63,7 @@ export function CompareRail({
                   key={s.slug}
                   className={`cmp-chip${isOn ? " on" : ""}`}
                   data-disabled={locked || undefined}
-                  title={locked ? `Max ${maxColumns} systems — unpick one first` : undefined}
+                  title={locked ? `${s.name} — Max ${maxColumns} systems — unpick one first` : s.name}
                 >
                   <Checkbox.Root
                     className="dsv-check"
@@ -77,7 +77,7 @@ export function CompareRail({
                     </Checkbox.Indicator>
                   </Checkbox.Root>
                   <span className="cmp-dot" aria-hidden="true" />
-                  {s.name}
+                  <span className="cmp-chip-name">{s.name}</span>
                   {pct != null && <span className="cmp-pct">{pct}%</span>}
                 </label>
                 );
@@ -99,10 +99,11 @@ export function CompareRail({
                   key={o.id}
                   type="button"
                   className="app-rail-link"
+                  title={o.label}
                   aria-current={o.id === componentId ? "true" : undefined}
                   onClick={() => setComponentId(o.id)}
                 >
-                  {o.label}
+                  <span className="app-rail-label">{o.label}</span>
                 </button>
               ))}
             </RailGroup>
