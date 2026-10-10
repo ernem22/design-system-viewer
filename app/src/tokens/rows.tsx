@@ -1,5 +1,6 @@
-import { memo, type CSSProperties } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { Token } from "../systems/store.ts";
+import { contrastRatio } from "../../../src/core/contrast.js";
 import { isRef } from "./tokenUtils.ts";
 import "./rows.css";
 
@@ -138,6 +139,167 @@ export const ColorGrid = memo(function ColorGrid(props: RendererProps) {
 
 export const BarRow = memo(function BarRow(props: RendererProps) {
   return <TokenRows {...props} render={(t) => <div className="tok-bar" style={{ width: varOf(t.name) }} />} />;
+});
+
+/** One numeric step of a color scale: `--color-brand-500` is step 500 of the
+    `--color-brand` ramp. */
+export interface ScaleStep {
+  token: Token;
+  step: number;
+}
+
+const STEP_SUFFIX = /^(.*)-(\d+)$/;
+
+/**
+ * A color group counts as a scale when 3+ of its tokens end in a numeric step
+ * and share the same prefix (issue #308). Returns those steps ordered by step
+ * number ascending, or null when the group is not a scale. When several
+ * prefixes qualify, the largest wins; tokens outside it render as swatches.
+ */
+function scaleSteps(tokens: Token[]): ScaleStep[] | null {
+  const byPrefix = new Map<string, ScaleStep[]>();
+  for (const token of tokens) {
+    const m = token.name.match(STEP_SUFFIX);
+    if (!m) continue;
+    const [, prefix, raw] = m;
+    const list = byPrefix.get(prefix) ?? [];
+    list.push({ token, step: Number(raw) });
+    byPrefix.set(prefix, list);
+  }
+  let best: ScaleStep[] | null = null;
+  for (const list of byPrefix.values()) {
+    if (list.length >= 3 && (!best || list.length > best.length)) best = list;
+  }
+  if (!best) return null;
+  return [...best].sort((a, b) => a.step - b.step);
+}
+
+/** Empty-scale sentinel: useMemo returns this stable reference instead of a
+    fresh `[]` so downstream memo/effect deps never churn. */
+const NO_RAMP: ScaleStep[] = [];
+
+/**
+ * Color-group dispatch (issue #308): scales render as one continuous ramp,
+ * every other color group keeps the swatch grid.
+ */
+export const ColorGroup = memo(function ColorGroup(props: RendererProps) {
+  const steps = useMemo(() => scaleSteps(props.tokens), [props.tokens]);
+  if (!steps) return <ColorGrid {...props} />;
+  return <ColorRamp {...props} />;
+});
+
+/** One-decimal ratio text, pinned to en-US like ContrastSection's formatter
+    so the rendered ratio is stable on every machine. */
+const rampRatioFormat = new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+
+/**
+ * Continuous ramp for a color scale (issue #308): one gapless strip of
+ * equal-width cells in step order, each showing its step, its value and its
+ * WCAG ratio against --color-bg. Ratios resolve through a hidden probe plus
+ * getComputedStyle — never by re-parsing raw strings — so var() references
+ * resolve exactly as the browser renders them (the ContrastSection pattern).
+ * Picking matches the swatch: click = copy + inspect, double-click = select +
+ * focus the inspector's edit form. Tokens outside the scale (if any) keep the
+ * swatch grid below the strip.
+ */
+export const ColorRamp = memo(function ColorRamp(props: RendererProps) {
+  const { tokens, selectedName, onPick, onEdit } = props;
+  const ramp = useMemo(() => scaleSteps(tokens) ?? NO_RAMP, [tokens]);
+  const inRamp = useMemo(() => new Set(ramp.map((s) => s.token.name)), [ramp]);
+  const rest = useMemo(() => tokens.filter((t) => !inRamp.has(t.name)), [tokens, inRamp]);
+
+  const stripRef = useRef<HTMLDivElement>(null);
+  const appliedRef = useRef<string[]>([]);
+  const [ratios, setRatios] = useState<Record<string, number | null>>({});
+
+  useEffect(() => {
+    const node = stripRef.current;
+    if (!node || ramp.length === 0) return;
+    // Carry this group's values onto the strip so var() resolves in isolation
+    // (stale props from a previous group would silently skew ratios).
+    const names = new Set(tokens.map((t) => t.name));
+    for (const n of appliedRef.current) if (!names.has(n)) node.style.removeProperty(n);
+    for (const t of tokens) node.style.setProperty(t.name, t.value);
+    appliedRef.current = [...names];
+
+    const probe = document.createElement("span");
+    probe.setAttribute("aria-hidden", "true");
+    probe.style.cssText =
+      "position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden";
+    node.appendChild(probe);
+    const cs = getComputedStyle(probe);
+    const next: Record<string, number | null> = {};
+    for (const { token } of ramp) {
+      probe.style.color = `var(${token.name})`;
+      probe.style.backgroundColor = "var(--color-bg)";
+      next[token.name] = contrastRatio(cs.color, cs.backgroundColor) as number | null;
+    }
+    probe.remove();
+    setRatios(next);
+  }, [tokens, ramp]);
+
+  return (
+    <div className="tok-scale">
+      <div className="tok-ramp-scroll">
+        <div ref={stripRef} className="tok-ramp" role="listbox" aria-label="Tokens">
+          {ramp.map(({ token, step }) => {
+            const ratio = ratios[token.name];
+            const text = ratio == null ? "—" : rampRatioFormat.format(ratio);
+            const pass = ratio != null && ratio >= 4.5;
+            return (
+              <div
+                key={token.name}
+                className="tok-ramp-cell"
+                data-token={token.name}
+                role="option"
+                aria-selected={token.name === selectedName}
+                tabIndex={0}
+                title="click to copy — double-click to edit"
+                onClick={() => onPick(token)}
+                onDoubleClick={() => {
+                  onPick(token);
+                  onEdit(token);
+                }}
+                onKeyDown={(e) => pickKeyDown(e, () => onPick(token))}
+              >
+                <div
+                  className="tok-ramp-chip"
+                  style={{ "--val": varOf(token.name) } as CSSProperties}
+                  aria-hidden="true"
+                />
+                <div className="tok-ramp-meta">
+                  <div className="tok-ramp-step">{step}</div>
+                  <div className="tok-ramp-value" title={token.value}>
+                    {token.value}
+                  </div>
+                  <div
+                    className="tok-ramp-ratio"
+                    data-pass={pass ? "true" : "false"}
+                    title={`contrast against --color-bg: ${text}`}
+                  >
+                    {text}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {rest.length > 0 && (
+        <ColorGrid
+          tokens={rest}
+          selectedName={selectedName}
+          onPick={onPick}
+          editingName={props.editingName}
+          onEdit={onEdit}
+          onSave={props.onSave}
+        />
+      )}
+    </div>
+  );
 });
 
 export const RadiusRow = memo(function RadiusRow(props: RendererProps) {
