@@ -235,6 +235,89 @@
   background: var(--color-surface-raised);
 }
 
+/* Shadow specimens (issue #310): the old 40px dark square on a dark page hid
+   every shadow but the rings. Each token now draws a card at least
+   --space-16 by --space-12 inside a padded stage with room for a 72px blur
+   to spread without the row clipping it (the stage never scrolls, so
+   scrollWidth === clientWidth). The stage ground flips between the page and
+   the inverse surface via the group-level toggle; on the light stage the
+   card matches the stage so a dark shadow reads. Every ink and size resolves
+   from the token layer — no literals. */
+.tok-shadowgroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.tok-shadowtoggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.tok-shadowtoggle button {
+  font-size: var(--font-size-xs);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.tok-shadowtoggle button[aria-pressed="true"] {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent-border);
+}
+
+.tok-shadowstage {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg);
+  overflow: visible;
+}
+
+.tok-shadowstage[data-stage="light"] {
+  background: var(--color-surface-inverse);
+}
+
+.tok-shadowcard {
+  width: var(--space-16);
+  min-width: var(--space-16);
+  height: var(--space-12);
+  min-height: var(--space-12);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+}
+
+.tok-shadowstage[data-stage="light"] .tok-shadowcard {
+  background: var(--color-surface-inverse);
+}
+
+/* Opacity specimens (issue #310): the accent square sits over a checkerboard
+   so partial transparency is visible. The board is two token inks in a
+   repeating-conic tile — no literal colors. */
+.tok-opacitystage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  background-image: repeating-conic-gradient(
+    var(--color-border-subtle) 0% 25%,
+    var(--color-surface) 0% 50%
+  );
+  background-size: var(--space-4) var(--space-4);
+}
+
 .tok-motionbox {
   width: var(--space-10);
   height: var(--space-4);

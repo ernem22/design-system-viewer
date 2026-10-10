@@ -307,7 +307,36 @@ export const RadiusRow = memo(function RadiusRow(props: RendererProps) {
 });
 
 export const ShadowRow = memo(function ShadowRow(props: RendererProps) {
-  return <TokenRows {...props} render={(t) => <div className="tok-shadowbox" style={{ boxShadow: varOf(t.name) }} />} />;
+  const { tokens, selectedName, onPick, editingName, onEdit, onSave } = props;
+  // One toggle for the whole group (issue #310): every row's stage shares
+  // this state, so xs/md/2xl can be compared on the same ground. Defaults to
+  // the page ground; "light" flips every stage to --color-surface-inverse.
+  const [stage, setStage] = useState<"page" | "light">("page");
+  return (
+    <div className="tok-shadowgroup">
+      <div className="tok-shadowtoggle" role="group" aria-label="Shadow stage background">
+        <button type="button" aria-pressed={stage === "page"} onClick={() => setStage("page")}>
+          Page
+        </button>
+        <button type="button" aria-pressed={stage === "light"} onClick={() => setStage("light")}>
+          Light
+        </button>
+      </div>
+      <TokenRows
+        tokens={tokens}
+        selectedName={selectedName}
+        onPick={onPick}
+        editingName={editingName}
+        onEdit={onEdit}
+        onSave={onSave}
+        render={(t) => (
+          <div className="tok-shadowstage" data-stage={stage}>
+            <div className="tok-shadowcard" style={{ boxShadow: varOf(t.name) }} />
+          </div>
+        )}
+      />
+    </div>
+  );
 });
 
 export const MotionRow = memo(function MotionRow(props: RendererProps) {
@@ -335,7 +364,12 @@ export const OpacityRow = memo(function OpacityRow(props: RendererProps) {
     <TokenRows
       {...props}
       render={(t) => (
-        <div className="tok-shadowbox" style={{ opacity: varOf(t.name), background: "var(--color-accent)" }} />
+        // Checkerboard ground (issue #310) so partial transparency reads
+        // against something other than a flat fill; the square itself keeps
+        // the accent ground so the existing opacity contract holds.
+        <div className="tok-opacitystage">
+          <div className="tok-shadowbox" style={{ opacity: varOf(t.name), background: "var(--color-accent)" }} />
+        </div>
       )}
     />
   );
