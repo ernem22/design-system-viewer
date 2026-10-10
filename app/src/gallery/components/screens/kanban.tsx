@@ -7,7 +7,10 @@ const COLS: Record<string, string[]> = {
   Done: ["Schema view", "409 guard", "Tests"],
 };
 
+const ASSIGNEES = ["Ada Lovelace", "Grace Hopper", "Alan Turing", "Katherine Johnson"];
+
 export default function KanbanBody() {
+  let cardIndex = -1;
   return (
     <div className="dsv-kanban">
       {Object.entries(COLS).map(([col, cards]) => (
@@ -15,18 +18,22 @@ export default function KanbanBody() {
           <h4>
             {col} · {cards.length}
           </h4>
-          {cards.map((c) => (
-            <div key={c} className="dsv-kanban-card">
-              {c}
-              <div
-                className="dsv-inline"
-                style={{ marginTop: "var(--space-2)", justifyContent: "space-between" }}
-              >
-                <span className="dsv-tag">{col === "Done" ? "done" : "dev"}</span>
-                <Avat n={c.length + 5} size="xs" />
+          {cards.map((c) => {
+            cardIndex += 1;
+            const assignee = ASSIGNEES[cardIndex % ASSIGNEES.length];
+            return (
+              <div key={c} className="dsv-kanban-card">
+                {c}
+                <div
+                  className="dsv-inline"
+                  style={{ marginTop: "var(--space-2)", justifyContent: "space-between" }}
+                >
+                  <span className="dsv-tag">{col === "Done" ? "done" : "dev"}</span>
+                  <Avat name={assignee} size="xs" />
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ))}
     </div>

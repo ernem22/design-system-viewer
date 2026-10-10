@@ -1,12 +1,12 @@
 import { useState } from "react";
 import * as AspectRatio from "@radix-ui/react-aspect-ratio";
 import * as Accordion from "@radix-ui/react-accordion";
-import * as Avatar from "@radix-ui/react-avatar";
 import * as Collapsible from "@radix-ui/react-collapsible";
 import * as ScrollArea from "@radix-ui/react-scroll-area";
 import * as Separator from "@radix-ui/react-separator";
 import { Button, Demo } from "../ui.tsx";
 import { Icon } from "../../lib/icons.tsx";
+import { Avat } from "./screens/screenBits.tsx";
 import "./layout.css";
 
 interface FaqItem {
@@ -108,19 +108,8 @@ export default function LayoutBody() {
       </Demo>
 
       <Demo title="Avatar">
-        <span className="dsv-avatar">
-          <Avatar.Root className="dsv-avatar-root">
-            <Avatar.Image src="https://i.pravatar.cc/80?img=13" alt="" />
-            <Avatar.Fallback className="dsv-avatar-fallback" delayMs={600}>
-              AL
-            </Avatar.Fallback>
-          </Avatar.Root>
-        </span>
-        <span className="dsv-avatar" title="no image → initials">
-          <Avatar.Root className="dsv-avatar-root">
-            <Avatar.Fallback className="dsv-avatar-fallback">GK</Avatar.Fallback>
-          </Avatar.Root>
-        </span>
+        <Avat name="Ada Lovelace" />
+        <Avat name="Grace Hopper" />
       </Demo>
 
       <Demo title="Avatar — sizes & presence">

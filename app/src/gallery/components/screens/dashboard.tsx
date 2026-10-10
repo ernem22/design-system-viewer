@@ -76,12 +76,12 @@ export default function DashboardBody() {
           <span className="dsv-badge dsv-badge--warning">Pending</span>
         </div>
         <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-4)" }}>
-          {[13, 5, 47, 22].map((n) => (
-            <HoverCard.Root key={n} openDelay={120}>
+          {["Ada Lovelace", "Grace Hopper", "Alan Turing", "Katherine Johnson"].map((name) => (
+            <HoverCard.Root key={name} openDelay={120}>
               <HoverCard.Trigger asChild>
                 <button
                   type="button"
-                  aria-label={`Contributor ${n} details`}
+                  aria-label={`Contributor ${name} details`}
                   style={{
                     display: "inline-flex",
                     background: "none",
@@ -90,14 +90,14 @@ export default function DashboardBody() {
                     cursor: "pointer",
                   }}
                 >
-                  <Avat n={n} />
+                  <Avat name={name} />
                 </button>
               </HoverCard.Trigger>
               <HoverCard.Portal container={portalContainer}>
                 <HoverCard.Content className="dsv-pop" sideOffset={6}>
                   <div className="dsv-hovercard">
                     <div>
-                      <div className="name">Contributor #{n}</div>
+                      <div className="name">{name}</div>
                       <div className="bio">24 commits, 3 PR reviews this month.</div>
                     </div>
                   </div>

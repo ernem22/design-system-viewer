@@ -1,16 +1,37 @@
 import type { ReactNode } from "react";
-import * as Avatar from "@radix-ui/react-avatar";
 import * as Separator from "@radix-ui/react-separator";
 
 // Shared bits for the full-page screen demos — ported from preview/src/screens.jsx.
 // size: token scale name (xs/sm/md/lg/xl) — resolves to --size-avatar-*.
-export function Avat({ n, size = "md" }: { n: number | string; size?: string }) {
+export function initialsForName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const initials = parts
+    .slice(0, 2)
+    .map((part) => part[0] ?? "")
+    .join("")
+    .toUpperCase();
+  return initials || "?";
+}
+
+export function avatarChartIndex(name: string): number {
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  }
+  return (hash % 8) + 1;
+}
+
+export function Avat({ name, size = "md" }: { name: string; size?: string }) {
+  const chartIndex = avatarChartIndex(name);
   return (
-    <span className={`dsv-avatar dsv-avatar--${size}`}>
-      <Avatar.Root style={{ width: "100%", height: "100%", display: "flex" }}>
-        <Avatar.Image src={`https://i.pravatar.cc/80?img=${n}`} alt="" />
-        <Avatar.Fallback className="dsv-avatar-fallback">{String(n).slice(0, 2)}</Avatar.Fallback>
-      </Avatar.Root>
+    <span
+      className={`dsv-avatar dsv-avatar--${size}`}
+      style={{ background: `var(--color-chart-${chartIndex})` }}
+      title={name}
+    >
+      <span className="dsv-avatar-fallback" style={{ color: "var(--color-text-on-accent)" }}>
+        {initialsForName(name)}
+      </span>
     </span>
   );
 }

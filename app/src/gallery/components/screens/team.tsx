@@ -16,8 +16,8 @@ export default function TeamBody() {
     <div style={{ maxWidth: 640, margin: "0 auto" }}>
       <div className="dsv-inline" style={{ justifyContent: "space-between", marginBottom: "var(--space-4)" }}>
         <div className="dsv-avatar-group">
-          {[13, 22, 31].map((n) => (
-            <Avat key={n} n={n} size="sm" />
+          {["Ada Lovelace", "Grace Hopper", "Alan Turing"].map((name) => (
+            <Avat key={name} name={name} size="sm" />
           ))}
           <span className="dsv-avatar dsv-avatar-more dsv-avatar--sm">+5</span>
         </div>
@@ -65,7 +65,7 @@ export default function TeamBody() {
               <tr key={name}>
                 <td>
                   <span className="dsv-inline">
-                    <Avat n={name.length + 10} size="sm" /> {name}
+                    <Avat name={name} size="sm" /> {name}
                   </span>
                 </td>
                 <td>{role}</td>
