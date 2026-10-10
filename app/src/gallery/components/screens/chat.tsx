@@ -14,7 +14,7 @@ export default function ChatBody() {
             borderBottom: "var(--border-width-thin) solid var(--color-divider)",
           }}
         >
-          <Avat n={12} />
+          <Avat name="Grace Hopper" />
           <div>
             <div style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)" }}>
               Grace Hopper

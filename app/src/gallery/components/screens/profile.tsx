@@ -14,7 +14,7 @@ export default function ProfileBody() {
     <div style={{ maxWidth: 620, margin: "0 auto" }}>
       <div className="dsv-card">
         <div className="dsv-inline" style={{ gap: "var(--space-4)", marginBottom: "var(--space-5)" }}>
-          <Avat n={31} size="xl" />
+          <Avat name="Ada Lovelace" size="xl" />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: "var(--font-size-lg)", fontWeight: "var(--font-weight-semibold)" }}>
               Ada Lovelace

@@ -1,9 +1,9 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import * as Avatar from "@radix-ui/react-avatar";
 import * as Popover from "@radix-ui/react-popover";
 import { Button, Demo, usePortalContainer } from "../ui.tsx";
 import { Icon } from "../../lib/icons.tsx";
+import { Avat } from "./screens/screenBits.tsx";
 import "./patterns.css";
 
 function CalendarDemo() {
@@ -395,15 +395,8 @@ function ChartThemeDemo() {
 function AvatarGroupDemo() {
   return (
     <div className="dsv-avatar-group">
-      {[13, 22, 31, 47].map((n) => (
-        <span key={n} className="dsv-avatar dsv-avatar--md">
-          <Avatar.Root style={{ width: "100%", height: "100%", display: "flex" }}>
-            <Avatar.Image src={`https://i.pravatar.cc/64?img=${n}`} alt="" />
-            <Avatar.Fallback className="dsv-avatar-fallback" delayMs={600}>
-              U{n % 10}
-            </Avatar.Fallback>
-          </Avatar.Root>
-        </span>
+      {["Ada Lovelace", "Grace Hopper", "Alan Turing", "Katherine Johnson"].map((name) => (
+        <Avat key={name} name={name} />
       ))}
       <span className="dsv-avatar dsv-avatar-more dsv-avatar--md">+3</span>
     </div>
