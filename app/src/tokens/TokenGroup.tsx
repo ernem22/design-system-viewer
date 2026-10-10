@@ -3,7 +3,7 @@ import type { Token, TokenGroup as TokenGroupData } from "../systems/store.ts";
 import {
   BarRow,
   BreakpointRow,
-  ColorGrid,
+  ColorGroup,
   EasingRow,
   FontFamilyRow,
   FontWeightRow,
@@ -77,7 +77,9 @@ function GroupBody({
 } & RowCallbacks) {
   const cb = { selectedName, onPick, editingName, onEdit, onSave };
   const { id, kind } = group;
-  if (kind === "color" || id === "gradient") return <ColorGrid tokens={tokens} {...cb} />;
+  // Scales (3+ numeric steps sharing a prefix) read as one continuous ramp;
+  // every other color group keeps the swatch grid (issue #308).
+  if (kind === "color" || id === "gradient") return <ColorGroup tokens={tokens} {...cb} />;
   if (id === "font-size" || id === "font-display") return <TypeRow tokens={tokens} {...cb} />;
   if (id === "font-family") return <FontFamilyRow tokens={tokens} {...cb} />;
   if (id === "font-weight") return <FontWeightRow tokens={tokens} {...cb} />;

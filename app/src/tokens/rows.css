@@ -116,6 +116,104 @@
   white-space: nowrap;
 }
 
+/* Scale ramp (issue #308): a color scale reads as one continuous strip, not
+   ten separate cards. Cells share the strip edge-to-edge with no gap and each
+   takes an equal share of the row; every size and ink below resolves from the
+   token layer. */
+.tok-scale {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* The strip's own scroll container: below 600 px cells hold a token
+   min-width so the ramp scrolls inside this box — the page never scrolls. */
+.tok-ramp-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.tok-ramp {
+  display: flex;
+  align-items: stretch;
+}
+
+.tok-ramp-cell {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+}
+
+.tok-ramp-cell:hover .tok-ramp-meta {
+  background: var(--color-hover-overlay);
+}
+
+.tok-ramp-cell[aria-selected="true"] {
+  outline: var(--border-width-medium) solid var(--color-accent-border);
+}
+
+.tok-ramp-cell[aria-selected="true"] .tok-ramp-meta {
+  background: var(--color-accent-subtle);
+}
+
+/* Full-bleed swatch: no margin, radius or border, so neighbouring chips meet
+   into one unbroken color strip. */
+.tok-ramp-chip {
+  height: var(--space-10);
+  background: var(--val);
+}
+
+.tok-ramp-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  min-width: 0;
+}
+
+.tok-ramp-step {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tok-ramp-value {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tok-ramp-ratio {
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tok-ramp-ratio[data-pass="true"] {
+  color: var(--color-accent-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+@media (max-width: 600px) {
+  .tok-ramp-cell {
+    min-width: var(--space-16);
+  }
+}
+
 .tok-bar {
   height: var(--space-3);
   max-width: 100%;
@@ -172,6 +270,7 @@
    reuse the selected accent outline for rows, swatches and schema rows. */
 .tok-row:focus-visible,
 .tok-swatch:focus-visible,
+.tok-ramp-cell:focus-visible,
 .tok-raw tr[data-token]:focus-visible {
   outline: 2px solid var(--color-accent-border);
   outline-offset: 1px;
