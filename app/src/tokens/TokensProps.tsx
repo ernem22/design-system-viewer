@@ -1,5 +1,7 @@
 import { coveragePercent } from "../systems/store.ts";
 import { RefBadge } from "./rows.tsx";
+import { TokenEditForm } from "./InlineEditor.tsx";
+import "./InlineEditor.css";
 import { isRef } from "./tokenUtils.ts";
 import type { TokensViewModel } from "./useTokensView.ts";
 import "./TokensProps.css";
@@ -7,10 +9,18 @@ import "./TokensProps.css";
 /**
  * Right rail for the Tokens tab: coverage summary (the old toolbar ring, as
  * a compact block) + the clicked token's inspector + lint summary. Nothing
- * to inspect yet → coverage + warnings only.
+ * to inspect yet → coverage + warnings only. The inspector hosts the edit
+ * form: saving goes through `onPatch` with the same "`--x updated`" toast
+ * the gallery popover used to show.
  */
-export function TokensProps({ view }: { view: TokensViewModel }) {
-  const { cov, selected, warnings, copyToken } = view;
+export function TokensProps({
+  view,
+  onPatch,
+}: {
+  view: TokensViewModel;
+  onPatch: (name: string, value: string) => void;
+}) {
+  const { cov, selected, warnings, copyToken, editingName, onEdit, pushToast } = view;
   const pct = coveragePercent(cov) ?? 0;
   const tone = pct >= 80 ? "ok" : pct >= 50 ? "warn" : "bad";
 
@@ -65,6 +75,21 @@ export function TokensProps({ view }: { view: TokensViewModel }) {
             <button className="tok-btn" onClick={() => copyToken(selected)}>
               Copy `--name: value;`
             </button>
+            <TokenEditForm
+              key={selected.name}
+              token={selected}
+              autoFocus={editingName === selected.name}
+              onSave={(name, value) => {
+                try {
+                  onPatch(name, value);
+                  pushToast(`${name} updated`, "ok");
+                } catch (e) {
+                  pushToast(`Save failed: ${e instanceof Error ? e.message : String(e)}`, "err");
+                }
+                onEdit(null);
+              }}
+              onCancel={() => onEdit(null)}
+            />
           </div>
         ) : (
           <p className="tok-props-empty">Click a token in the gallery to inspect it here.</p>

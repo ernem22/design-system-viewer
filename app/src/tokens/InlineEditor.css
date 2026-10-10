@@ -49,6 +49,29 @@
   box-sizing: border-box;
 }
 
+/* Inspector edit form: the popover form without the trigger — the input
+   reuses .tok-pop-input above, Save/Cancel replace blur-to-save. Spacing
+   from the token layer, no literals. */
+
+.tok-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tok-edit-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.tok-edit-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
 .tok-pop-hint {
   margin: var(--space-2) 0 0;
   font-size: var(--font-size-xs);

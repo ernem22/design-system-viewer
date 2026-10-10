@@ -11,8 +11,8 @@ import "./TokensView.css";
 
 /**
  * Tokens tab main column: lint row + toolbar + gallery/schema.
- * Click a token = copy + select it for the right-rail inspector; Update (or
- * double-click) opens the inline editor popover for that row.
+ * Click a token = copy + select it for the right-rail inspector;
+ * double-click selects it and focuses the inspector's edit form.
  */
 export function TokensView({
   system,

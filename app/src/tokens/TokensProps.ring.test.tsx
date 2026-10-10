@@ -56,7 +56,7 @@ async function renderAt(present: number, expected: number): Promise<HTMLElement>
   root = createRoot(host);
   const view = viewFor(present, expected);
   await act(async () => {
-    root!.render(<TokensProps view={view} />);
+    root!.render(<TokensProps view={view} onPatch={() => {}} />);
   });
   return host;
 }

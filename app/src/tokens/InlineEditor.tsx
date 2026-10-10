@@ -1,8 +1,95 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import type { Token } from "../systems/store.ts";
 import "./InlineEditor.css";
 
+/**
+ * Inspector edit form: the popover form above with the Radix trigger
+ * dropped — the gallery no longer edits in place, so the Token inspector
+ * hosts this instead. Same draft semantics (trimmed, empty/unchanged is a
+ * no-op close), but explicit Save/Cancel instead of blur-to-save: Enter
+ * submits, Esc cancels. `autoFocus` focuses + selects the input when it
+ * flips false→true after mount (the gallery double-click selects the token,
+ * mounting this form, then sets `editingName`) — never on mount, so opening
+ * the properties panel later does not steal focus.
+ */
+export function TokenEditForm({
+  token,
+  autoFocus,
+  onSave,
+  onCancel,
+}: {
+  token: Token;
+  autoFocus: boolean;
+  onSave: (name: string, value: string) => void;
+  onCancel: () => void;
+}) {
+  const [draft, setDraft] = useState(token.value);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const mounted = useRef(false);
+  const inputId = useId();
+
+  // The inspector reuses one form instance while the selection lives, so a
+  // new token (or a saved value coming back through the store) resets the
+  // draft instead of showing the previous token's text.
+  useEffect(() => {
+    setDraft(token.value);
+  }, [token.name, token.value]);
+
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    if (autoFocus) {
+      inputRef.current?.focus({ preventScroll: true });
+      inputRef.current?.select();
+    }
+  }, [autoFocus]);
+
+  const commit = () => {
+    const v = draft.trim();
+    if (v && v !== token.value) onSave(token.name, v);
+    onCancel();
+  };
+
+  return (
+    <form
+      className="tok-edit-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        commit();
+      }}
+    >
+      <label className="tok-edit-label" htmlFor={inputId}>
+        Token value
+        <input
+          id={inputId}
+          ref={inputRef}
+          className="tok-pop-input"
+          value={draft}
+          spellCheck={false}
+          autoComplete="off"
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              onCancel();
+            }
+          }}
+        />
+      </label>
+      <div className="tok-edit-actions">
+        <button type="submit" className="tok-btn tok-btn-primary">
+          Save
+        </button>
+        <button type="button" className="tok-btn" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
 /**
  * Inline single-token editor: a Radix Popover anchored to the token row,
  * opened by the per-row Update/Add button or by double-clicking the row

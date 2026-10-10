@@ -8,13 +8,13 @@
   gap: var(--space-1);
 }
 
-/* One row, one grid: name, value, demo and action are fixed tracks, so the
-   value column and the action sit at the same offset in every group and the
-   flat groups (no demo) keep those columns instead of a table. Tracks are
-   proportional and the gaps come from the token layer — no offset literals. */
+/* One row, one grid: name, value and demo are fixed tracks, so the value
+   column sits at the same offset in every group and the flat groups (no
+   demo) keep those columns instead of a table. Tracks are proportional
+   and the gaps come from the token layer — no offset literals. */
 .tok-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.4fr) max-content;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.4fr);
   align-items: center;
   column-gap: var(--space-4);
   padding: var(--space-2) var(--space-3);
@@ -63,12 +63,6 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-}
-
-.tok-row-action {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
 }
 
 .tok-swatches {
