@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as Accordion from "@radix-ui/react-accordion";
-import { Icon } from "../lib/icons.tsx";
+import { RailGroup } from "./RailGroup.tsx";
 import { useScrollSpy } from "../lib/scrollspy.ts";
 import { writeSectionHash } from "../lib/urlState.ts";
 import type { RailGroups } from "../lib/railTypes.ts";
@@ -19,6 +19,15 @@ export interface RailProps {
      only after App's initial #hash restore, so the first scan can't clobber
      a deep link before it lands. */
   syncSection?: boolean;
+  /** False while this Rail's own tab is inactive. Inactive tabs stay
+     forceMounted (display:none) to preserve scroll position and open groups,
+     so without this gate their scrollspy would still recompute on every
+     scroll of the one shared `.app-main` scroller — pure wasted DOM lookups
+     producing meaningless geometry. False skips the scroll/resize (and
+     wheel/touch/key unpin) subscriptions; re-activating resubscribes and
+     rescans, so tracking resumes without a fresh mount. Defaults true so
+     standalone/test usage keeps tracking. */
+  active?: boolean;
 }
 
 /** Sidebar content: shows sections grouped (collapse via Radix Accordion) and
@@ -27,7 +36,7 @@ export interface RailProps {
    collapsed it. The frame that scrolls it is owned once by Shell
    (RailFrame.tsx); this component renders inside it and finds that scroller to
    measure the indicator, so no tab can bring a second one. */
-export default function Rail({ groups, searching = false, syncSection = false }: RailProps) {
+export default function Rail({ groups, searching = false, syncSection = false, active = true }: RailProps) {
   // Memoized so `searching` mode (which uses this array as-is, see below)
   // doesn't hand Accordion/useLayoutEffect a new array identity every render.
   const labels = useMemo(() => groups.map(([label]) => label), [groups]);
@@ -47,7 +56,9 @@ export default function Rail({ groups, searching = false, syncSection = false }:
   // pinTo: clicking a link owns the highlight until the user's next own
   // scroll (see lib/scrollspy.ts) — the observer can't follow a click to a
   // demo that can never scroll up into its band (e.g. the last child).
-  const [activeId, pinTo] = useScrollSpy(linkIds);
+  // Disabled while this tab is inactive (see `active` above) so hidden
+  // forceMounted Rails do no scan work on the shared scroller's scrolls.
+  const [activeId, pinTo] = useScrollSpy(linkIds, active);
 
   // A collapsed group must never hide the section scrollspy just marked active.
   useEffect(() => {
@@ -110,28 +121,21 @@ export default function Rail({ groups, searching = false, syncSection = false }:
         onValueChange={setOpenGroups}
       >
         {groups.map(([label, links]) => (
-          <Accordion.Item key={label} value={label} className="app-rail-group">
-            <Accordion.Header>
-              <Accordion.Trigger className="app-rail-group-label">
-                <Icon name="chevronDown" size={11} className="app-rail-group-chevron" />
-                <span>{label}</span>
-                <span className="app-rail-count">{links.length}</span>
-              </Accordion.Trigger>
-            </Accordion.Header>
-            <Accordion.Content className="app-rail-group-items">
-              {links.map((l) => (
-                <a
-                  key={l.id}
-                  href={`#${l.id}`}
-                  className="app-rail-link"
-                  aria-current={l.id === activeId ? "true" : undefined}
-                  onClick={() => pinTo(l.id)}
-                >
-                  {l.label}
-                </a>
-              ))}
-            </Accordion.Content>
-          </Accordion.Item>
+          <RailGroup key={label} value={label} label={label} count={links.length} contentClassName="app-rail-group-items">
+            {links.map((l) => (
+              <a
+                key={l.id}
+                href={`#${l.id}`}
+                className="app-rail-link"
+                title={l.label}
+                aria-current={l.id === activeId ? "true" : undefined}
+                onClick={() => pinTo(l.id)}
+              >
+                <span className="app-rail-label">{l.label}</span>
+                {l.count != null && <span className="app-rail-item-count">{l.count}</span>}
+              </a>
+            ))}
+          </RailGroup>
         ))}
       </Accordion.Root>
     </>

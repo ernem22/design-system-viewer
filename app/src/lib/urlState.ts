@@ -14,6 +14,16 @@
 //   cv=diff                      compare mode — only when diff (the default
 //                                "component" is omitted, like legacy)
 //   cc=<id>                      compare component — only when non-default
+//   q=<text>                     Preview section search — only while the
+//                                Preview tab is active (empty omits, so a
+//                                default view keeps the bare-root URL)
+//   f=<text>                     Tokens filter — only while the Tokens tab is
+//                                active (empty omits, like q)
+//   tv=schema                    Tokens schema mode — only while the Tokens tab
+//                                is active (the default gallery mode omits,
+//                                like cv's default)
+// A legacy ?dark=1 is ignored on read and dropped on the next write: dark
+// mode is retired, every panel shows the base (light) values.
 // Section scroll position rides in location.hash (#<element-id>), like
 // legacy's gallery scrollspy (`history.replaceState(null, "", `#${best}`)`).
 // Rail's links are already plain <a href="#id"> anchors, so clicks deep-link
@@ -47,12 +57,17 @@ export interface ViewUrlState {
   cmp: string[];
   view: string | null;
   component: string | null;
+  q: string | null;
+  f: string | null;
+  tv: string | null;
 }
 
 /** Parse shareable state out of a querystring (defaults to the live URL).
  *  Values are returned raw — each caller validates against its own data
  *  (known slugs/option ids), so unknown values fall back to that caller's
- *  defaults instead of breaking. */
+ *  defaults instead of breaking. The one exception is tv: its only
+ *  non-default value is "schema", so anything else normalises to null here
+ *  (the default gallery mode), mirroring how unknown tabs read as null. */
 export function readViewUrl(search?: string): ViewUrlState {
   let params: URLSearchParams;
   try {
@@ -69,12 +84,18 @@ export function readViewUrl(search?: string): ViewUrlState {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+  const q = params.get("q");
+  const f = params.get("f");
+  const tv = params.get("tv");
   return {
     tab,
     sys: sys ? sys : null,
     cmp,
     view: params.get("cv") ?? params.get("v"),
     component: params.get("cc") ?? params.get("c"),
+    q: q ? q : null,
+    f: f ? f : null,
+    tv: tv === "schema" ? tv : null,
   };
 }
 
@@ -84,6 +105,9 @@ export interface WriteViewUrlParams {
   cmp?: string[] | null;
   view?: string | null;
   component?: string | null;
+  q?: string | null;
+  f?: string | null;
+  tv?: string | null;
 }
 
 /** Single replaceState writer for the querystring half of the URL — Rail owns
@@ -106,6 +130,22 @@ export function writeViewUrl(next: WriteViewUrlParams): void {
   else params.delete("cv");
   if (next.component) params.set("cc", next.component);
   else params.delete("cc");
+  // Tab-scoped search state follows the same rule as the tab-scoped compare
+  // params above: the Preview search rides only on the Preview tab, the
+  // Tokens filter and schema mode only on the Tokens tab (null/undefined tab
+  // is that tab — the default view), so switching tabs drops the other tab's
+  // params instead of leaking them onto the copied link. Empty is the default
+  // for q/f and gallery is the default for tv, so both omit.
+  const onPreview = next.tab === "preview";
+  const onTokens = !next.tab || next.tab === "tokens";
+  if (onPreview && next.q) params.set("q", next.q);
+  else params.delete("q");
+  if (onTokens && next.f) params.set("f", next.f);
+  else params.delete("f");
+  if (onTokens && next.tv === "schema") params.set("tv", next.tv);
+  else params.delete("tv");
+  // Dark mode is retired: a stale ?dark=1 opens normally and is dropped here.
+  params.delete("dark");
   params.delete("v");
   params.delete("c");
   const qs = params.toString();

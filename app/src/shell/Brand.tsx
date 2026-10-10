@@ -4,6 +4,8 @@
    sighted users can still hover for the full string.
    Icon ported 1:1 from the legacy dsv-brand mark (preview/src/App.jsx). */
 
+import HelpDialog from "./HelpDialog.tsx";
+
 function BrandMark() {
   return (
     <svg className="app-brand-mark" width="18" height="18" viewBox="0 0 22 22" fill="none" aria-hidden="true">
@@ -17,9 +19,12 @@ function BrandMark() {
 
 export default function Brand() {
   return (
-    <span className="app-brand" title="Design System Viewer">
-      <BrandMark />
-      <span className="app-brand-name">Design System Viewer</span>
-    </span>
+    <>
+      <span className="app-brand" title="Design System Viewer">
+        <BrandMark />
+        <span className="app-brand-name">Design System Viewer</span>
+      </span>
+      <HelpDialog />
+    </>
   );
 }

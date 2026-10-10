@@ -80,6 +80,7 @@ export function TokenEditControl({
             <input
               ref={focusOnMount}
               className="tok-pop-input"
+              name="token-value"
               value={draft}
               spellCheck={false}
               autoComplete="off"

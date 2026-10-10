@@ -39,13 +39,16 @@ OBSERVABLE ACCEPTANCE — worker_done body starts with exactly:
 status: pass | fail
 role: reviewer
 task: <task id from your preamble>
-commit: none
-tests: n/a
+commit: <short sha of the head you reviewed: git rev-parse --short HEAD>
+scope_ok: yes | no
+reason: <why, one line; required for fail>
+fix_required: <what must change; required for fail>
 
-THEN POST THE SAME BLOCK AS A PR COMMENT — the merge gate is computed by GitHub from
-comments, not from the coordinator reading your message:
-
-    gh pr comment <n> --body "$(printf '```dsv-verdict\nstatus: pass\nrole: reviewer\ncommit: %s\nscope_ok: yes\n```\n' "$(git rev-parse --short HEAD)")"
+DO NOT POST ANYTHING TO THE PR. Your worker_done body IS the verdict: the dispatcher reads
+it after you settle and posts the gate's `dsv-verdict` block itself through
+`tools/orchestration/verdict-post.sh`, which copies your lines verbatim and refuses an
+incomplete block. You have no permission to comment on the PR, by design: a verdict the
+worker could post under the owner's login is a verdict anyone could forge (hunter H-005).
 
 `commit:` must be the head you actually reviewed. A verdict whose commit is not the PR's
 current head does not count — a verdict about a different build is not evidence about

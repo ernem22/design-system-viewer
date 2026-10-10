@@ -23,7 +23,12 @@ export default function FilesBody() {
           <Icon name="plus" size={14} /> Upload
         </Button>
       </div>
-      <Progress.Root className="dsv-progress" value={61} style={{ width: "100%", marginBottom: "var(--space-5)" }}>
+      <Progress.Root
+        className="dsv-progress"
+        value={61}
+        aria-label="Storage usage"
+        style={{ width: "100%", marginBottom: "var(--space-5)" }}
+      >
         <Progress.Indicator className="dsv-progress-indicator" style={{ width: "61%" }} />
       </Progress.Root>
       <div className="dsv-card" style={{ padding: 0, overflow: "hidden" }}>

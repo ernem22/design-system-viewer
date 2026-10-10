@@ -232,6 +232,8 @@ export default function LayoutBody() {
             <img
               src="https://images.unsplash.com/photo-1503264116251-35a269479413?w=400&q=60"
               alt=""
+              width={400}
+              height={225}
               loading="lazy"
               decoding="async"
               onError={(e) => {

@@ -4,6 +4,10 @@
 export interface RailLink {
   id: string;
   label: string;
+  /** Trailing count shown in its own right-aligned tabular-nums column
+     (issue #286) — carried as data so the name truncates on its own line
+     while the count stays visible. Absent for plain outline links. */
+  count?: string | number;
 }
 
 /** What every tab feeds the shared Rail: parent labels with their links.

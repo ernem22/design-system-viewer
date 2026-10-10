@@ -1,21 +1,18 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// The full component gallery is irrelevant here (and heavy); this test is
-// about App's dark-flag wiring, so render the shell with no gallery entries.
+// The full component gallery is irrelevant here; render the shell with no
+// gallery entries.
 vi.mock("./gallery/components/index.ts", () => ({ COMPONENT_ENTRIES: [] }));
 
 import { act } from "react";
 import type { Root } from "react-dom/client";
 import App from "./App.tsx";
 import type { DesignSystem } from "./systems/store.ts";
-import { selectScope } from "./lib/tokenOverrides.ts";
+import { getInspectorState, selectScope } from "./lib/tokenOverrides.ts";
 
-// Issue #37, App-wiring follow-up: the fixer commit `bc61a74` taught the
-// Tokens model and the Preview inspector to take a `dark` flag, but the live
-// app never passed it, so the `themes.dark` overlay could not take effect.
-// This mounts the real App against a dark-themed system, turns the topbar
-// Dark switch on, and reads the value each panel actually renders.
+// Issue #37, App-wiring follow-up: the Tokens model and the Preview inspector
+// share one token-value source (see PreviewProps.test.tsx).
 
 const TOKEN = "--color-accent";
 
@@ -31,7 +28,6 @@ const darkThemed = {
       tokens: [{ name: TOKEN, value: "#111111" }],
     },
   ],
-  themes: { dark: [{ name: TOKEN, value: "#000000" }] },
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
 } as unknown as DesignSystem;
@@ -50,16 +46,6 @@ async function mountApp(): Promise<HTMLDivElement> {
   return host;
 }
 
-/** Tokens tab inspector value — read through useTokensView's valueMap. */
-function tokensValue(el: HTMLElement): string {
-  return el.querySelector(".tok-inspector-value")?.textContent ?? "";
-}
-
-/** Preview tab inspector value — read through PreviewProps' valueOf. */
-function previewValue(el: HTMLElement): string {
-  return el.querySelector(".dsv-token-row-value")?.textContent ?? "";
-}
-
 beforeEach(() => {
   localStorage.clear();
   localStorage.setItem("dsv.app.systems", JSON.stringify([darkThemed]));
@@ -73,42 +59,6 @@ afterEach(() => {
   host = null;
   selectScope(null);
   localStorage.clear();
-});
-
-describe("App dark-variant wiring", () => {
-  it("shows the dark override in both token panels once Dark is on", async () => {
-    const el = await mountApp();
-
-    // Open the Preview inspector on the same token the Tokens inspector will
-    // show, so both panels read the one shared token-value source.
-    await act(async () => {
-      selectScope({ id: "wire", title: "Wire", tokens: [TOKEN] });
-    });
-
-    // Select the token in the Tokens gallery -> TokensProps shows valueMap's
-    // value for it (not the raw group value).
-    const swatch = el.querySelector<HTMLElement>(`.tok-swatch[data-token="${TOKEN}"]`);
-    expect(swatch).not.toBeNull();
-    await act(async () => {
-      swatch!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    // Dark off: both panels show the light value.
-    expect(tokensValue(el)).toBe("#111111");
-    expect(previewValue(el)).toBe("#111111");
-
-    // Flip the topbar Dark switch.
-    const toggle = el.querySelector<HTMLElement>(".app-dark-switch");
-    expect(toggle).not.toBeNull();
-    await act(async () => {
-      toggle!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    // With dark on, the value both panels show for the dark-overridden token
-    // must be the dark value.
-    expect(tokensValue(el)).toBe("#000000");
-    expect(previewValue(el)).toBe("#000000");
-  });
 });
 
 // Issue #95: App.tsx rendered a full <Rail>/<CompareRail> (each with its own
@@ -142,6 +92,61 @@ describe("App shell rail frame (issue #95)", () => {
   });
 });
 
+// Issue #119: the docked Preview inspector's Escape belonged to no surface —
+// a global document listener live whenever a scope was selected. Because Shell
+// force-mounts every tab's props panel, Escape on the Tokens tab reached it and
+// silently cleared the Preview selection, and the token-filter Escape
+// double-fired into it. These drive the real App with a scope selected while
+// the Tokens tab is showing.
+describe("docked inspector Escape scoping (#119)", () => {
+  function pressEscape(): KeyboardEvent {
+    return new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+  }
+
+  it("does not close the Preview inspector on Escape from the Tokens tab", async () => {
+    await mountApp();
+    // The default tab is Tokens; select a Preview scope as if it had been
+    // opened there and the user tabbed away.
+    await act(async () => {
+      selectScope({ id: "wire", title: "Wire", tokens: [TOKEN] });
+    });
+    expect(getInspectorState().selected).not.toBeNull();
+
+    await act(async () => {
+      document.body.dispatchEvent(pressEscape());
+    });
+
+    // On the parent commit the force-mounted panel's document listener ran and
+    // cleared this to null.
+    expect(getInspectorState().selected).not.toBeNull();
+  });
+
+  it("clears the token filter with Escape without closing the Preview inspector", async () => {
+    const el = await mountApp();
+    await act(async () => {
+      selectScope({ id: "wire", title: "Wire", tokens: [TOKEN] });
+    });
+    const filter = el.querySelector<HTMLInputElement>(".tok-filter")!;
+    expect(filter).not.toBeNull();
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      setter.call(filter, "ac");
+      filter.dispatchEvent(new Event("input", { bubbles: true }));
+      filter.focus();
+    });
+    expect(filter.value).toBe("ac");
+
+    await act(async () => {
+      filter.dispatchEvent(pressEscape());
+    });
+
+    // Clearing the filter is the field's own Escape; it must not reach the
+    // docked panel. On the parent commit the panel closed here too.
+    expect(filter.value).toBe("");
+    expect(getInspectorState().selected).not.toBeNull();
+  });
+});
+
 // Issue #95, second region: the props frame was still per-tab — each tab
 // rendered its own <Props> (a `.app-props-clip`/`.app-props-inner` pair), so
 // the shell-owned-one-frame contract held for the rail but not one region
@@ -172,5 +177,19 @@ describe("App shell props frame (issue #95)", () => {
     expect(after).toHaveLength(1);
     expect(after[0]).toBe(frame);
     expect(after[0].scrollTop).toBe(200);
+  });
+});
+
+// Issue #117: the document had 0 <h1> and 94 <h2> — the outline had no top at
+// all. The shell supplies exactly one h1 for the page; sections and blocks stay
+// below it. This fails on the parent commit with 0 h1 nodes.
+describe("App heading outline (issue #117)", () => {
+  it("renders exactly one h1 as the document's outline root", async () => {
+    const el = await mountApp();
+    const h1s = el.querySelectorAll("h1");
+    expect(h1s).toHaveLength(1);
+    expect(h1s[0].textContent).toBe("Design System Viewer");
+    // The sections it introduces remain lower in the outline.
+    expect(el.querySelectorAll("h2").length).toBeGreaterThan(0);
   });
 });

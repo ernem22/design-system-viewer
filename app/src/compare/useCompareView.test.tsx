@@ -16,6 +16,30 @@ function system(slug: string, name = slug): DesignSystem {
   return { slug, name, css: "", groups: [], createdAt: "", updatedAt: "" };
 }
 
+/** Issue #22: a system that ships a dark variant overriding one of its two
+    group tokens, so a resolved-for-dark read is distinguishable from light. */
+function darkSystem(): DesignSystem {
+  return {
+    slug: "aurora",
+    name: "Aurora",
+    css: ":root { --color-bg: #f8fafc; --color-accent: #6366f1; }",
+    groups: [
+      {
+        id: "surface",
+        label: "Surface / Elevation",
+        kind: "color",
+        tokens: [
+          { name: "--color-bg", value: "#f8fafc" },
+          { name: "--color-accent", value: "#6366f1" },
+        ],
+      },
+    ],
+    themes: { dark: [{ name: "--color-bg", value: "#0a0f1c" }] },
+    createdAt: "",
+    updatedAt: "",
+  };
+}
+
 const firstTwo = ["aurora", "chatgpt"];
 
 let root: Root | null = null;
@@ -100,5 +124,32 @@ describe("useCompareView default selection", () => {
 
     await rerender([system("aurora"), system("chatgpt"), system("claude")]);
     expect(view!.picked).toEqual(firstTwo);
+  });
+});
+
+describe("useCompareView base values (#277)", () => {
+  it("resolves styleFor to the base value even when a dark theme is stored", async () => {
+    await mount([darkSystem()]);
+    expect(view!.styleFor.get("aurora")?.["--color-bg"]).toBe("#f8fafc");
+  });
+
+  it("leaves non-overridden tokens at their base values", async () => {
+    await mount([darkSystem()]);
+    expect(view!.styleFor.get("aurora")?.["--color-accent"]).toBe("#6366f1");
+  });
+
+  it("feeds the diff table's groups the base value, never the dark override", async () => {
+    await mount([darkSystem()]);
+    const token = view!.cols[0]?.groups
+      .flatMap((g) => g.tokens)
+      .find((t) => t.name === "--color-bg");
+    expect(token?.value).toBe("#f8fafc");
+  });
+
+  it("never mutates the stored system", async () => {
+    const sys = darkSystem();
+    await mount([sys]);
+    expect(sys.groups[0]?.tokens[0]?.value).toBe("#f8fafc");
+    expect(sys.themes?.dark?.[0]?.value).toBe("#0a0f1c");
   });
 });

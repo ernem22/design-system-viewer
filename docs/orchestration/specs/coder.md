@@ -31,8 +31,15 @@ EVIDENCE — run all of these and paste the real numbers into the PR body:
     and paste its failing assertion.
   - Anything you could not run, in a `## Not verified` section — no guessing.
 
-DELIVERY: commit with a `[coder]` prefix in the subject, push your branch, open a
-PR against `refactor/full-react-migration` titled
+DELIVERY: set your worktree identity first — `bash tools/orchestration/identity.sh coder`
+(sets `user.name=orca-coder`, `user.email=$BOT_EMAIL`; never `ernem22`, never a
+model name). If your branch predates that script, run the coordinator checkout's copy
+from inside your own worktree —
+`bash <coordinator-checkout>/tools/orchestration/identity.sh coder` — which reads the
+`identity.env` beside itself and writes `--worktree` config for the worktree you are
+standing in, so your branch gains no files. Then commit with a `[coder]` prefix in the
+subject, push your branch,
+open a PR against `refactor/full-react-migration` titled
 `[coder] <fix|feat|perf>(app): <what changed> (#<n>)`, and label the issue
 `needs-review`. Do not merge, do not close the issue, do not approve anything.
 
@@ -69,9 +76,11 @@ TWO OPERATIONAL RULES, both learned from a real failure:
     terminal output — the coordinator can read a retained terminal — and say in it
     that the settlement was empty.
 
-If the issue leaves a requirement genuinely ambiguous, ask instead of guessing — with
-`--type question`, using the command shape from your dispatch preamble again
-(`--to <coordinator terminal handle from your preamble>`, plus `--task-id`,
-`--dispatch-id` and the capability token), never a retyped one.
+If the issue leaves a requirement genuinely ambiguous, do not guess and do not ask: no
+coordinator answers questions, and a worker waiting on an answer sits until its deadline
+(measured 2026-10-05, coder-116). Settle with `status: blocked` and a `reason:` line.
+If the remaining work needs a file held by an open PR, that is `blocked`
+(`reason: needs <files> held by #<pr>`), not `unreproducible` — an open PR has not
+delivered anything yet.
 
-then wait. Never invent a requirement.
+Never invent a requirement.

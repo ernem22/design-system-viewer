@@ -40,10 +40,17 @@ export function CompareColumn({
       </InCompareContext.Provider>
     </CompareIdPrefixContext.Provider>
   );
+  // Re-substitute the head role inside this column's scope. `--heading-column`
+  // is aliased to `--font-size-lg` at :root, so it computes once there (18px)
+  // and every column inherits that fixed px; declaring it on this element makes
+  // it re-resolve against this column's own type scale (issue #117). Kept
+  // inline, not in compare.css, so no stylesheet redeclares a heading role.
+  const columnStyle = { ...style, "--heading-column": "var(--font-size-lg)" } as CSSProperties;
+
   return (
-    <section className="cmp-col" style={style}>
+    <section className="cmp-col" style={columnStyle}>
       <h3 className="cmp-col-head">
-        <span className="cmp-swatch" style={{ background: "var(--color-accent)" }} />
+        <span className="cmp-swatch" aria-hidden="true" style={{ background: "var(--color-accent)" }} />
         {name}
         <span className="cmp-cov">{pct != null ? `${pct}%` : ""}</span>
       </h3>

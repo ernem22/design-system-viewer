@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import * as Switch from "@radix-ui/react-switch";
 import Shell, { type AppTab, type ShellTab } from "./shell/Shell.tsx";
 import ErrorBoundary from "./shell/ErrorBoundary.tsx";
 import Brand from "./shell/Brand.tsx";
@@ -9,13 +8,14 @@ import { SectionSearch } from "./shell/SectionSearch.tsx";
 import { Toasts } from "./shell/Toasts.tsx";
 import { DropOverlay, Welcome } from "./shell/Welcome.tsx";
 import { copyLinkToView } from "./lib/copyLink.ts";
-import { readCssFile, useCssFileDrop } from "./lib/cssImport.ts";
+import { isJsonFile, readCssFile, useCssFileDrop } from "./lib/cssImport.ts";
+import { readSystemJson } from "./lib/systemImport.ts";
 import { useGoogleFonts } from "./lib/googleFonts.ts";
 import { Icon } from "./lib/icons.tsx";
 import { useToasts } from "./lib/toasts.ts";
-import { clearAllSwaps, useInspector } from "./lib/tokenOverrides.ts";
+import { clearAll, countOverrides, useInspector } from "./lib/tokenOverrides.ts";
 import { useSystems, resolveSystemTokens } from "./systems/store.ts";
-import { usePanelOpen } from "./lib/panelStorage.ts";
+import { usePanels } from "./lib/panelStorage.ts";
 import SystemSwitcher from "./systems/SystemSwitcher.tsx";
 import { AddSystemDialog } from "./systems/AddSystemDialog.tsx";
 import "./systems/AddSystemDialog.css";
@@ -32,6 +32,7 @@ import { CompareRail } from "./compare/CompareRail.tsx";
 import { CompareProps } from "./compare/CompareProps.tsx";
 import { useCompareView, DEFAULT_COMPONENT_ID } from "./compare/useCompareView.ts";
 import { PreviewProps, PreviewScopeDialog } from "./preview/PreviewProps.tsx";
+import { PreviewSystems } from "./preview/PreviewSystems.tsx";
 import { PreviewNotes } from "./preview/PreviewNotes.tsx";
 import { initialSectionHash, readViewUrl, scrollToSection, writeViewUrl } from "./lib/urlState.ts";
 import "./gallery/gallery.css";
@@ -48,18 +49,51 @@ function App() {
     error: loadError,
     active,
     activeSlug,
+    retry,
     setActiveSlug,
     addSystem,
     mergeCss,
+    replaceSystem,
     patchToken,
     removeSystem,
   } = useSystems();
   const [toasts, pushToast] = useToasts();
   // Panel collapse lives here so the toggles can sit in the topbar —
   // no floating edge handle next to the main scrollbar. Same storage
-  // keys as before, so persisted choices survive the move.
-  const [railOpen, toggleRail] = usePanelOpen("dsv.app.rail");
-  const [propsOpen, toggleProps, revealProps] = usePanelOpen("dsv.app.props");
+  // keys as before, so persisted choices survive the move. On narrow
+  // viewports (issue #282) the two panels are overlay drawers instead:
+  // both start closed, opening one closes the other, and toggles there
+  // never touch the stored desktop preference.
+  const {
+    railOpen,
+    propsOpen,
+    narrow: narrowPanels,
+    toggleRail,
+    toggleProps,
+    revealProps,
+    closePanels,
+  } = usePanels();
+
+  // Narrow drawers are dismissible: Esc or a pointer outside both drawers
+  // (and outside the topbar, whose toggles own their own clicks) closes the
+  // open one. Desktop panels are unaffected — Esc never collapses them.
+  useEffect(() => {
+    if (!narrowPanels || (!railOpen && !propsOpen)) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closePanels();
+    };
+    const onPointer = (e: PointerEvent) => {
+      const target = e.target as Element | null;
+      if (target?.closest?.(".app-rail, .app-props, .app-topbar, .app-toasts")) return;
+      closePanels();
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+    };
+  }, [narrowPanels, railOpen, propsOpen, closePanels]);
   // Active tab lives here (not in Shell) so the URL sync below sees every
   // switch — Shell stays a controlled chrome shell. A deep-linked ?tab=
   // wins; otherwise this is "tokens", exactly as before.
@@ -67,12 +101,9 @@ function App() {
   // Section-hash sync stays off until the initial deep-link restore lands,
   // so the first scrollspy scan can't clobber a #section before it scrolls.
   const [sectionSyncArmed, setSectionSyncArmed] = useState(false);
-  const [query, setQuery] = useState("");
-  // Dark variant is per-view, not persisted (legacy parity); it only exists
-  // for systems that ship a `themes.dark` block.
-  const [dark, setDark] = useState(false);
-  const hasDark = !!active?.themes?.dark?.length;
-  const darkOn = dark && hasDark;
+  // Seeded from ?q= so a copied Preview link reopens with the same search —
+  // the writer below keeps the URL in sync while the Preview tab is active.
+  const [query, setQuery] = useState(() => readViewUrl().q ?? "");
 
   const [addOpen, setAddOpen] = useState(false);
   const [addCss, setAddCss] = useState("");
@@ -104,7 +135,7 @@ function App() {
   // Tokens tab view model — one hook instance feeds its main content, its
   // left-rail group nav and its right-rail inspector (lifted to App, passed
   // down as props; no context).
-  const tokensView = useTokensView(active, pushToast, darkOn);
+  const tokensView = useTokensView(active, pushToast);
 
   // Compare tab view model — same lifted-to-App.tsx shape as tokensView,
   // fed its own tab's rail/content/props (see Scope note in issue #1).
@@ -132,8 +163,11 @@ function App() {
     [removeSystem, pushToast],
   );
 
-  // A dropped/picked .css file merges into the active system, or seeds the
-  // Add dialog when there is none yet (legacy drop behavior).
+  // A dropped/picked file merges into the active system, or seeds the
+  // Add dialog when there is none yet (legacy drop behavior). CSS arrives as
+  // text; our own JSON export arrives as raw JSON — without an active system
+  // it opens the dialog unparsed so the dialog keeps its name, with one it
+  // merges the exported CSS.
   const importCss = useCallback(
     (css: string) => {
       if (!active) {
@@ -152,14 +186,33 @@ function App() {
   const importFile = useCallback(
     (file: File | null) => {
       if (!file) {
-        pushToast("Only .css files", "warn");
+        pushToast("Only .css/.json files", "warn");
+        return;
+      }
+      if (isJsonFile(file)) {
+        file.text().then(
+          (text) => {
+            if (!active) {
+              // Raw JSON: the dialog detects and parses it on open, keeping
+              // the exported name for the collision flow.
+              openAdd(text);
+              return;
+            }
+            try {
+              importCss(readSystemJson(text).css);
+            } catch (e) {
+              pushToast(e instanceof Error ? e.message : String(e), "warn");
+            }
+          },
+          (e: unknown) => pushToast(e instanceof Error ? e.message : String(e), "warn"),
+        );
         return;
       }
       readCssFile(file).then(importCss, (e: unknown) =>
         pushToast(e instanceof Error ? e.message : String(e), "warn"),
       );
     },
-    [importCss, pushToast],
+    [active, importCss, openAdd, pushToast],
   );
   const dragging = useCssFileDrop(importFile);
 
@@ -167,7 +220,7 @@ function App() {
   // out of the active system so stale props never accumulate on <html>.
   const appliedTokensRef = useRef<string[]>([]);
   useLayoutEffect(() => {
-    const tokens = resolveSystemTokens(active, darkOn);
+    const tokens = resolveSystemTokens(active);
     const style = document.documentElement.style;
     const names = new Set(tokens.map((t) => t.name));
     // Drop props from the previous system/variant that the new list no
@@ -176,7 +229,7 @@ function App() {
     for (const n of appliedTokensRef.current) if (!names.has(n)) style.removeProperty(n);
     for (const t of tokens) style.setProperty(t.name, t.value);
     appliedTokensRef.current = tokens.map((t) => t.name);
-  }, [active, darkOn]);
+  }, [active]);
 
   useEffect(() => {
     document.title = active ? `${active.name} — ${APP_TITLE}` : APP_TITLE;
@@ -184,12 +237,12 @@ function App() {
 
   // Selecting a component's token badge with the panel closed would look
   // like a dead click — selecting always reveals the panel (legacy).
-  const { selected: inspected, swaps } = useInspector();
-  const inspectedId = inspected?.id;
+  const inspector = useInspector();
+  const inspectedId = inspector.selected?.id;
   useEffect(() => {
     if (inspectedId) revealProps();
   }, [inspectedId, revealProps]);
-  const swapCount = Object.values(swaps).reduce((n, m) => n + Object.keys(m).length, 0);
+  const overrideCount = countOverrides(inspector);
 
   // Dynamic Google Fonts, scoped per consumer (issue #40): the active system's
   // families serve Tokens/Preview, Compare owns its picked columns'. Each scope
@@ -207,10 +260,13 @@ function App() {
   // replaceState writer, so switches never spam back/forward and never
   // reload. The section-hash half is owned by the active Rail; both halves
   // preserve each other, and copyLinkToView captures their union for free.
-  // Compare params are scoped to the compare tab, like legacy's syncUrl.
+  // Compare params are scoped to the compare tab, like legacy's syncUrl;
+  // q/f/tv are scoped the same way (Preview/Tokens/Tokens) inside the
+  // writer, so the effect passes each tab's live state unconditionally.
   // Held until the first system load lands: writing earlier would drop a
   // deep-linked ?sys= before the store could read it.
   const { picked, mode, componentId } = compareView;
+  const { filter: tokensFilter, schemaMode } = tokensView;
   useEffect(() => {
     if (loading) return;
     writeViewUrl({
@@ -220,8 +276,11 @@ function App() {
       view: tab === "compare" && mode === "diff" ? mode : null,
       component:
         tab === "compare" && componentId !== DEFAULT_COMPONENT_ID ? componentId : null,
+      q: query || null,
+      f: tokensFilter || null,
+      tv: schemaMode ? "schema" : null,
     });
-  }, [loading, tab, activeSlug, picked, mode, componentId]);
+  }, [loading, tab, activeSlug, picked, mode, componentId, query, tokensFilter, schemaMode]);
 
   // Hash half restore: client-rendered sections miss the browser's native
   // initial jump, so redo it once layout settles (double rAF, like legacy's
@@ -283,6 +342,7 @@ function App() {
           groups={tokensView.railGroups}
           searching={tokensView.searching}
           syncSection={sectionSyncArmed && tab === "tokens"}
+          active={tab === "tokens"}
         />
       ),
       propsPanel: active && <TokensProps view={tokensView} />,
@@ -292,12 +352,12 @@ function App() {
       label: "Preview",
       content: active ? (
         <>
-          <PreviewNotes system={active} error={loadError} />
+          <PreviewNotes system={active} error={loadError} onRetry={retry} />
           {shownEntries?.size === 0 && <div className="dsv-err">No sections match “{query.trim()}”.</div>}
           {COMPONENT_ENTRIES.map((entry) => (
             <GallerySection key={entry.id} {...entry} hidden={shownEntries ? !shownEntries.has(entry.id) : false} />
           ))}
-          <PreviewScopeDialog system={active} onPatch={handlePatch} dark={darkOn} />
+          <PreviewScopeDialog system={active} />
         </>
       ) : (
         <PreviewNotes
@@ -306,16 +366,21 @@ function App() {
           error={loadError}
           onPaste={() => openAdd()}
           onUpload={() => fileInputRef.current?.click()}
+          onRetry={retry}
         />
       ),
       rail: (
-        <Rail
-          groups={railGroups}
-          searching={searching}
-          syncSection={sectionSyncArmed && tab === "preview"}
-        />
+        <>
+          <PreviewSystems systems={systems} activeSlug={activeSlug} onSelect={setActiveSlug} />
+          <Rail
+            groups={railGroups}
+            searching={searching}
+            syncSection={sectionSyncArmed && tab === "preview"}
+            active={tab === "preview"}
+          />
+        </>
       ),
-      propsPanel: <PreviewProps system={active} onPatch={handlePatch} dark={darkOn} />,
+      propsPanel: <PreviewProps system={active} active={tab === "preview" && propsOpen} />,
     },
     {
       id: "compare",
@@ -348,32 +413,28 @@ function App() {
               active={active}
               activeSlug={activeSlug}
               onSelect={setActiveSlug}
-              onAddClick={() => openAdd()}
             />
           }
           actions={
             <>
-              {tab === "preview" && swapCount > 0 && (
+              {tab === "preview" && overrideCount > 0 && (
                 <button
                   type="button"
                   className="app-pill"
-                  onClick={clearAllSwaps}
-                  title="Reset every scoped token swap"
+                  onClick={clearAll}
+                  title="Reset every Preview token edit (values and swaps)"
                 >
-                  {swapCount} swap{swapCount === 1 ? "" : "s"}
+                  {overrideCount} edit{overrideCount === 1 ? "" : "s"}
                   <span className="app-pill-reset">Reset</span>
                 </button>
               )}
-              {tab !== "compare" && hasDark && (
-                <label className="app-dark" title="Toggle the system's dark variant">
-                  <Switch.Root className="app-dark-switch" checked={dark} onCheckedChange={setDark}>
-                    <Switch.Thumb className="app-dark-thumb" />
-                  </Switch.Root>
-                  Dark
-                </label>
-              )}
               {tab === "preview" && <SectionSearch value={query} onChange={setQuery} />}
               <IconActionButton onClick={copyLink} icon={<Icon name="link" size={15} />} label="Copy link to this view" />
+              <IconActionButton
+                onClick={() => openAdd()}
+                icon={<Icon name="plus" size={15} />}
+                label="Add a design system"
+              />
               <IconToggleButton
                 pressed={propsOpen}
                 onPressedChange={toggleProps}
@@ -395,13 +456,16 @@ function App() {
         initialCss={addCss}
         onOpenChange={setAddOpen}
         onAdd={addSystem}
+        onMerge={mergeCss}
+        onReplace={replaceSystem}
+        systems={systems}
         onToast={pushToast}
         onSaved={setTab}
       />
       <input
         ref={fileInputRef}
         type="file"
-        accept=".css,text/css"
+        accept=".css,.json,text/css,application/json"
         hidden
         onChange={(e) => {
           const file = e.target.files?.[0];

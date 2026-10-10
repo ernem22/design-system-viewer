@@ -59,7 +59,9 @@ export function TokensView({
     <div className="tok-view">
       {warnings.length > 0 && (
         <details className="tok-warns">
-          <summary>⚠ {warnings.length} possible value issues</summary>
+          <summary>
+            <span aria-hidden="true">⚠</span> {warnings.length} possible value issues
+          </summary>
           {warnings.map((w) => (
             <div key={w.name}>
               <code>
@@ -123,8 +125,9 @@ export function TokensView({
           )}
           {/* Contrast is global to the system, not to the filter — legacy
               appendContrast only ran filter-less (and never in schema mode,
-              which this branch already excludes). */}
-          {!searching && <ContrastSection tokens={view.tokens} />}
+              which this branch already excludes). It reads the resolved
+              value map. */}
+          {!searching && <ContrastSection values={view.valueMap} />}
         </div>
       )}
     </div>

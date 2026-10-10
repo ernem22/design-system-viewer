@@ -103,10 +103,13 @@
   border-radius: var(--radius-md);
   background: var(--color-surface-raised);
   color: var(--color-text);
+  font-family: var(--font-sans);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   cursor: pointer;
   white-space: nowrap;
+  /* No double-tap zoom delay on touch: the button fires on the first tap. */
+  touch-action: manipulation;
 }
 
 .tok-btn:hover {
@@ -118,8 +121,12 @@
   border-color: var(--color-accent-border);
 }
 
+/* --color-danger is a fill token: on --color-surface-raised it fell below AA
+   (perp-ultra-v2 2.84:1). The danger text token on its designed -subtle
+   surface is the same pairing #88 used for the gallery's error text. */
 .tok-btn-danger {
-  color: var(--color-danger);
+  color: var(--color-danger-text);
+  background: var(--color-danger-subtle);
 }
 
 .tok-menu {
@@ -162,6 +169,8 @@
   inset: 0;
   background: var(--color-hover-overlay);
   z-index: var(--z-overlay);
+  /* Wheel/touch chains must stop at the modal, not scroll the page behind. */
+  overscroll-behavior: contain;
 }
 
 .tok-dialog {
@@ -179,6 +188,8 @@
   /* long previews (missing list, warnings) must scroll, not overflow */
   max-height: 90vh;
   overflow-y: auto;
+  /* The dialog is itself the scroll container: keep its own scroll chained. */
+  overscroll-behavior: contain;
 }
 
 .tok-dialog-title {

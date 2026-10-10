@@ -1,17 +1,21 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { Button, Field, usePortalContainer } from "../../ui.tsx";
 import { Icon } from "../../../lib/icons.tsx";
 import "./screens.css";
 
-const ROWS: [string, string, string, string][] = [
-  ["INV-1001", "Ada Lovelace", "Paid", "₺1.200"],
-  ["INV-1002", "Grace Hopper", "Pending", "₺840"],
-  ["INV-1003", "Alan Turing", "Overdue", "₺2.100"],
-  ["INV-1004", "Katherine Johnson", "Paid", "₺560"],
-  ["INV-1005", "Edsger Dijkstra", "Pending", "₺1.940"],
-  ["INV-1006", "Barbara Liskov", "Paid", "₺720"],
+const ROWS: [string, string, string, number][] = [
+  ["INV-1001", "Ada Lovelace", "Paid", 1200],
+  ["INV-1002", "Grace Hopper", "Pending", 840],
+  ["INV-1003", "Alan Turing", "Overdue", 2100],
+  ["INV-1004", "Katherine Johnson", "Paid", 560],
+  ["INV-1005", "Edsger Dijkstra", "Pending", 1940],
+  ["INV-1006", "Barbara Liskov", "Paid", 720],
 ];
+
+// Grouped locale amounts — tr-TR grouping keeps the shown "₺1.200" shapes.
+const intAmount = new Intl.NumberFormat("tr-TR");
 
 const BADGE: Record<string, string> = { Paid: "success", Pending: "warning", Overdue: "danger" };
 
@@ -82,9 +86,14 @@ export default function TableBody() {
         <table className="dsv-table">
           <thead>
             <tr>
-              {["Invoice", "Customer", "Status", "Amount", ""].map((h) => (
-                <th key={h}>{h}</th>
+              {["Invoice", "Customer", "Status", "Amount"].map((h) => (
+                <th key={h} scope="col">
+                  {h}
+                </th>
               ))}
+              <th scope="col">
+                <VisuallyHidden.Root>Actions</VisuallyHidden.Root>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -95,7 +104,7 @@ export default function TableBody() {
                 <td>
                   <span className={`dsv-badge dsv-badge--${BADGE[st]}`}>{st}</span>
                 </td>
-                <td>{amt}</td>
+                <td>₺{intAmount.format(amt)}</td>
                 <td style={{ textAlign: "right" }}>
                   <DropdownMenu.Root>
                     <DropdownMenu.Trigger asChild>

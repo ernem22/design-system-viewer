@@ -9,7 +9,7 @@
 
 .tok-props-block h3 {
   margin: 0 0 var(--space-2);
-  font-size: var(--font-size-xs);
+  font-size: var(--heading-label);
   font-weight: var(--font-weight-semibold);
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-wide);
@@ -67,6 +67,14 @@
   justify-content: center;
   padding-top: 12px;
   font-size: var(--font-size-sm);
+  /* Coverage % must not jitter as the digits change. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* Three digits ("100%") at the base size run into the stroke on both sides;
+   drop just that case to the next token step down. The ring stays 44px. */
+.tok-cov-ring.tok-cov-3dig b {
+  font-size: var(--font-size-xs);
 }
 
 .tok-cov-ring b i {

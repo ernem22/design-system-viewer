@@ -28,7 +28,7 @@ export function CompareView({ view }: { view: CompareViewModel }) {
             Token diff
           </Toggle.Root>
         </div>
-        <span className="cmp-hint">
+        <span className="cmp-hint" aria-live="polite">
           {picked.length}/{maxColumns} selected
         </span>
       </header>

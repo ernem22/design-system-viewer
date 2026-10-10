@@ -1,6 +1,7 @@
-import { Fragment, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import * as Checkbox from "@radix-ui/react-checkbox";
 import { Icon } from "../lib/icons.tsx";
+import { cssValueEq } from "../lib/cssValueEq.ts";
 import type { DesignSystem } from "../systems/store.ts";
 
 /* CSS-wide keywords the parser accepts as valid `color` values but which are
@@ -91,7 +92,10 @@ export function DiffTable({ cols }: { cols: DesignSystem[] }) {
         .map((name) => {
           const vals = valueMaps.map((m) => m.get(name));
           const present = vals.filter((v) => v != null);
-          const same = present.length === vals.length && present.every((v) => v === present[0]);
+          // Compare after notation normalisation (`cssValueEq`): values CSS
+          // treats as equal (`.5rem` vs `0.5rem`) are the same token value.
+          // Cells still render `v` exactly as authored.
+          const same = present.length === vals.length && present.every((v) => cssValueEq(v ?? "", present[0] ?? ""));
           total++;
           if (!same) diffs++;
           return { name, vals, same, categories: categories.get(name) ?? [] };
@@ -119,49 +123,53 @@ export function DiffTable({ cols }: { cols: DesignSystem[] }) {
       <table className="cmp-diff-table">
         <thead>
           <tr>
-            <th>token</th>
+            <th scope="col">token</th>
             {cols.map((s) => (
-              <th key={s.slug}>{s.name}</th>
+              <th key={s.slug} scope="col">
+                {s.name}
+              </th>
             ))}
           </tr>
         </thead>
-        <tbody>
-          {sections.map(({ label, rows }) => (
-            <Fragment key={label}>
-              <tr className="cmp-diff-cat">
-                <td colSpan={cols.length + 1}>{label}</td>
-              </tr>
-              {rows.map(({ name, vals, same, categories: cats }) => (
-                <tr key={name} className={same ? "" : "is-diff"}>
-                  <td className="cmp-diff-name">
-                    {name}
-                    {cats.length > 1 && (
-                      <span
-                        className="dsv-muted"
-                        style={{ marginLeft: "var(--space-2)", fontSize: "var(--font-size-xs)" }}
-                        title={cats.join(" · ")}
-                      >
-                        {cats.join(" · ")}
+        {sections.map(({ label, rows }) => (
+          /* One tbody per category (issue #279): each category is its own
+             content-visibility unit, with the category row first in it. */
+          <tbody key={label}>
+            <tr className="cmp-diff-cat">
+              <th colSpan={cols.length + 1} scope="rowgroup">
+                {label}
+              </th>
+            </tr>
+            {rows.map(({ name, vals, same, categories: cats }) => (
+              <tr key={name} className={same ? "" : "is-diff"}>
+                <td className="cmp-diff-name">
+                  {name}
+                  {cats.length > 1 && (
+                    <span
+                      className="dsv-muted"
+                      style={{ marginLeft: "var(--space-2)", fontSize: "var(--font-size-xs)" }}
+                      title={cats.join(" · ")}
+                    >
+                      {cats.join(" · ")}
+                    </span>
+                  )}
+                </td>
+                {vals.map((v, i) => (
+                  <td key={i} className="cmp-diff-val">
+                    {v == null ? (
+                      <span className="cmp-diff-missing">—</span>
+                    ) : (
+                      <span className="cmp-diff-cell">
+                        {isColor(v) && <span className="cmp-diff-chip" style={{ background: v }} />}
+                        <code spellCheck={false}>{v}</code>
                       </span>
                     )}
                   </td>
-                  {vals.map((v, i) => (
-                    <td key={i} className="cmp-diff-val">
-                      {v == null ? (
-                        <span className="cmp-diff-missing">—</span>
-                      ) : (
-                        <span className="cmp-diff-cell">
-                          {isColor(v) && <span className="cmp-diff-chip" style={{ background: v }} />}
-                          <code>{v}</code>
-                        </span>
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </Fragment>
-          ))}
-        </tbody>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        ))}
       </table>
       {!sections.length && (
         <p className="dsv-muted" style={{ padding: "var(--space-4)" }}>

@@ -57,6 +57,8 @@ export default function MarketingBody() {
           src="https://images.unsplash.com/photo-1503264116251-35a269479413?w=900&q=60"
           alt="Product preview"
           loading="lazy"
+          width={900}
+          height={506}
         />
         <span className="dsv-hero-img-cap">
           <span className="dsv-badge dsv-badge--on-dark">Live preview</span>
@@ -93,11 +95,13 @@ export default function MarketingBody() {
           flexWrap: "wrap",
           marginBottom: "var(--space-8)",
         }}
+        role="list"
         aria-label="Trusted by"
       >
         {LOGOS.map((w) => (
           <span
             key={w}
+            role="listitem"
             className="dsv-muted"
             style={{
               fontSize: "var(--font-size-xs)",

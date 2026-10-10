@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, createElement } from "react";
+import type { Root } from "react-dom/client";
 
 // Count actual parses so a cache *hit* is distinguishable from a mere
 // correctness match: an LRU that keeps a warm entry never re-parses it.
@@ -20,6 +22,7 @@ import {
   coveragePercent,
   PCT_CACHE_MAX,
   systemCoveragePercent,
+  useSystems,
   type DesignSystem,
 } from "./store.ts";
 
@@ -147,5 +150,105 @@ describe("pctCache bounded LRU", () => {
     // `cold` was evicted: its next lookup re-parses.
     expect(systemCoveragePercent(cold)).toBe(5);
     expect(parseSpy.calls).toBe(after + 1);
+  });
+});
+
+// Issue #121: a failed index load left the viewer on fallback tokens with no
+// in-product recovery. `retry` re-runs the *same* boot load (fetchBundled) —
+// not a page reload — and re-settles the load states in place.
+describe("useSystems retry", () => {
+  let root: Root | null = null;
+  let host: HTMLDivElement | null = null;
+  let current: ReturnType<typeof useSystems> | null = null;
+
+  function Harness() {
+    current = useSystems();
+    return null;
+  }
+
+  async function mount(): Promise<void> {
+    const { createRoot } = await import("react-dom/client");
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root!.render(createElement(Harness));
+    });
+    // The fetch resolves on a microtask after the effect runs; flush it.
+    await act(async () => {});
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  });
+
+  afterEach(() => {
+    act(() => root?.unmount());
+    root = null;
+    host?.remove();
+    host = null;
+    current = null;
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  it("re-attempts the load on retry and clears the failure on success", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            {
+              slug: "recovered",
+              name: "Recovered",
+              css: "",
+              groups: [],
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          ]),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    await mount();
+    expect(current!.error).toBe("Failed to fetch");
+    expect(current!.systems).toHaveLength(1); // seed fallback
+
+    await act(async () => {
+      current!.retry();
+    });
+    await act(async () => {});
+
+    // Same path, second attempt: the loaded list replaces the fallback.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(current!.error).toBeNull();
+    expect(current!.systems.map((s) => s.slug)).toEqual(["recovered"]);
+    expect(current!.loading).toBe(false);
+  });
+
+  it("keeps the failure and the fallback when the retry fails again, without a loading flash", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+    await mount();
+    expect(current!.error).toBe("Failed to fetch");
+
+    await act(async () => {
+      current!.retry();
+    });
+    await act(async () => {});
+
+    // The notice stays put: the reason is unchanged and `loading` never flips
+    // back, so the alert element is not unmounted and re-announced.
+    expect(current!.error).toBe("Failed to fetch");
+    expect(current!.loading).toBe(false);
+    expect(current!.systems).toHaveLength(1);
   });
 });

@@ -52,14 +52,18 @@
   border-radius: var(--radius-lg); overflow: hidden;
 }
 .cmp-col-head {
+  /* A .cmp-col re-scopes every --font-size-* inline, so the head names its own
+     --heading-column role (the column's lg step) instead of overriding the
+     shared --heading-label alias: a role must resolve to one size wherever it
+     appears, and in gs5 the label step falls under the column's base copy. */
   display: flex; align-items: center; gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold);
+  font-size: var(--heading-column); font-weight: var(--font-weight-semibold);
   background: var(--color-surface); color: var(--color-text);
   border-bottom: var(--border-width-thin) solid var(--color-divider);
 }
 .cmp-swatch { width: var(--size-icon-sm); height: var(--size-icon-sm); border-radius: var(--radius-sm); border: var(--border-width-thin) solid var(--color-border-strong); flex: none; }
-.cmp-cov { margin-left: auto; font-size: var(--font-size-xs); font-weight: var(--font-weight-regular); color: var(--color-text-muted); font-family: var(--font-mono); }
+.cmp-cov { margin-left: auto; font-size: var(--font-size-xs); font-weight: var(--font-weight-regular); color: var(--color-text-muted); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .cmp-col-body { padding: var(--space-4); }
 .cmp-stack { display: flex; flex-direction: column; gap: var(--space-3); }
 
@@ -76,17 +80,27 @@
 .cmp-diff-bar { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-3); font-size: var(--font-size-sm); }
 .cmp-diff-bar b { color: var(--color-text); }
 .cmp-diff-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
-.cmp-diff-table th {
+/* Scoped to thead: the category rows are th[scope="rowgroup"] in tbody and
+   must not inherit the sticky column-header treatment. */
+.cmp-diff-table thead th {
   position: sticky; top: 0; text-align: left; z-index: 1;
+  scroll-margin-top: var(--space-4);
   background: var(--color-surface); color: var(--color-text-muted);
   font-size: var(--font-size-xs); font-weight: var(--font-weight-medium);
   padding: var(--space-2) var(--space-3); border-bottom: var(--border-width-thin) solid var(--color-border-subtle);
 }
-.cmp-diff-table td { padding: var(--space-2) var(--space-3); border-bottom: var(--border-width-thin) solid var(--color-border-subtle); vertical-align: top; }
-.cmp-diff-cat td {
+.cmp-diff-table td { padding: var(--space-2) var(--space-3); border-bottom: var(--border-width-thin) solid var(--color-border-subtle); vertical-align: top; font-variant-numeric: tabular-nums; }
+/* Issue #279: one containment unit per category (DiffTable renders one tbody
+   per category). Rows stay in the DOM, so find-in-page keeps working; the
+   320px placeholder sits near the measured mean category height (~324px). */
+.cmp-diff-table tbody {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
+}
+.cmp-diff-cat th {
   background: var(--color-surface-sunken); color: var(--color-text-muted);
   font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: var(--letter-spacing-wide);
-  font-weight: var(--font-weight-semibold); padding: var(--space-1-5) var(--space-3);
+  font-weight: var(--font-weight-semibold); padding: var(--space-1-5) var(--space-3); text-align: left;
 }
 .cmp-diff-name { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-secondary); white-space: nowrap; }
 tr.is-diff .cmp-diff-name { color: var(--color-text); }
@@ -108,6 +122,7 @@ tr.is-diff td { background: color-mix(in srgb, var(--color-warning) 8%, transpar
   position: relative;
   display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer;
   font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); min-height: 34px;
+  min-width: 0; white-space: nowrap;
   padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
   border: var(--border-width-thin) solid var(--color-border-subtle); border-radius: var(--radius-md);
   color: var(--color-text-secondary); background: var(--color-surface);
@@ -117,10 +132,13 @@ tr.is-diff td { background: color-mix(in srgb, var(--color-warning) 8%, transpar
 .cmp-chip:has(.dsv-check:focus-visible) { outline: var(--focus-ring-width) solid var(--color-focus-ring); outline-offset: var(--focus-ring-offset); }
 .cmp-dot { width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--color-border-strong); flex: none; }
 .cmp-chip.on .cmp-dot { background: var(--color-accent); }
-.cmp-pct { margin-left: auto; font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-muted); background: var(--color-surface-sunken); border-radius: var(--radius-full); padding: 1px var(--space-2); }
+.cmp-pct { margin-left: auto; flex: none; white-space: nowrap; font-family: var(--font-mono); font-size: var(--font-size-xs); font-variant-numeric: tabular-nums; color: var(--color-text-muted); background: var(--color-surface-sunken); border-radius: var(--radius-full); padding: 1px var(--space-2); }
+/* System names stay on one line (issue #286): the name truncates while the
+   % badge keeps its own right-aligned column. No literal sizes here. */
+.cmp-chip-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cmp-chip.on .cmp-pct { color: var(--color-accent-text); background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
-.cmp-chip[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
-.cmp-chip[aria-disabled="true"]:hover { border-color: var(--color-border-subtle); color: var(--color-text-secondary); }
+.cmp-chip[data-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+.cmp-chip[data-disabled="true"]:hover { border-color: var(--color-border-subtle); color: var(--color-text-secondary); }
 
 /* Component picker rows are <button>s reusing the rail's link look — reset
    native button chrome, and mark the pick without Rail's sliding indicator. */
@@ -133,8 +151,17 @@ button.app-rail-link[aria-current="true"] { background: var(--color-accent-subtl
 /* ── props panel ── */
 .cmp-props { padding: var(--space-4); }
 .cmp-props-block + .cmp-props-block { margin-top: var(--space-4); }
-.cmp-props-block h3 { margin: 0 0 var(--space-2); font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: var(--letter-spacing-wide); color: var(--color-text-muted); }
+.cmp-props-block h3 { margin: 0 0 var(--space-2); font-size: var(--heading-label); font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: var(--letter-spacing-wide); color: var(--color-text-muted); }
 .cmp-props-list { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
-.cmp-props-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); font-size: var(--font-size-sm); }
+.cmp-props-list li { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm); }
+.cmp-props-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cmp-props-pct { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-muted); }
+.cmp-props-remove {
+  appearance: none; flex: none; display: grid; place-items: center;
+  width: var(--size-icon-lg); height: var(--size-icon-lg);
+  padding: 0; border: none; border-radius: var(--radius-sm);
+  background: none; color: var(--color-text-muted); cursor: pointer;
+}
+.cmp-props-remove:hover { background: var(--color-hover-overlay); color: var(--color-text); }
+.cmp-props-remove:focus-visible { outline: var(--focus-ring-width) solid var(--color-focus-ring); outline-offset: var(--focus-ring-offset); }
 .cmp-props-empty { margin: 0; font-size: var(--font-size-sm); color: var(--color-text-muted); }

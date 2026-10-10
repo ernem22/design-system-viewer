@@ -21,6 +21,21 @@ export interface TokenGroup {
   tokens: Token[];
 }
 
+/** Where an imported system came from. Additive metadata: the bundled systems
+    and hand-made ones have none, and `ensureGroups` carries it through the
+    rebuild. It is what a later "refresh from source" diff needs. `importedAt`
+    is set when the import is written. */
+export interface SourceProvenance {
+  kind: string;
+  url?: string;
+  filename?: string;
+  importedAt: string;
+}
+
+/** A source before it is written — the dialog captures how the text arrived,
+    the store stamps `importedAt` at save time. */
+export type SourceDescriptor = Omit<SourceProvenance, "importedAt">;
+
 export interface DesignSystem {
   slug: string;
   name: string;
@@ -30,6 +45,17 @@ export interface DesignSystem {
   themes?: { dark?: Token[] };
   createdAt: string;
   updatedAt: string;
+  source?: SourceProvenance;
+}
+
+/** `slug` with the first free `-2`, `-3`… suffix for the names in `taken`.
+    The collision-resolution primitive behind addSystem's rename. */
+export function nextFreeSlug(slug: string, taken: Iterable<string>): string {
+  const used = new Set(taken);
+  if (!used.has(slug)) return slug;
+  let n = 2;
+  while (used.has(`${slug}-${n}`)) n++;
+  return `${slug}-${n}`;
 }
 
 export function coveragePercent(cov: DesignSystem["coverage"]): number | null {
@@ -218,6 +244,11 @@ export function useSystems() {
   const [loading, setLoading] = useState(stored === null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeSlug, setActiveSlugState] = useState<string>(() => readActive(systems));
+  // Retry re-runs the boot load through this same effect — bumping the attempt
+  // re-attempts `fetchBundled`, not a page reload. `loading` is deliberately
+  // not re-raised, so on failure the notice stays mounted and is not
+  // re-announced; only a success swaps the fallback out.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (stored !== null) return;
@@ -232,7 +263,9 @@ export function useSystems() {
     return () => {
       alive = false;
     };
-  }, [stored]);
+  }, [stored, attempt]);
+
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
   const setActiveSlug = useCallback((slug: string) => {
     setActiveSlugState(slug);
@@ -255,31 +288,59 @@ export function useSystems() {
 
   /** Every mutation rebuilds through buildSystem/mergeSystem (groups +
      coverage + warnings stay derived, never hand-edited) and persists. */
+  /** A colliding slug is renamed (`-2`, `-3`…) rather than thrown: importing
+      a name that already exists is a normal choice, not an error (issue #125).
+      The dialog offers merge/replace instead; this is the rename fallback. */
   const addSystem = useCallback(
-    (name: string, css: string): DesignSystem => {
+    (name: string, css: string, source?: SourceProvenance): DesignSystem => {
       const built = buildSystem({ name, css }) as DesignSystem;
-      if (systems.some((s) => s.slug === built.slug))
-        throw new Error(`"${built.slug}" already exists — use Add Tokens to merge`);
-      const next = [...systems, built];
+      const slug = nextFreeSlug(built.slug, systems.map((s) => s.slug));
+      const system: DesignSystem = slug === built.slug ? built : { ...built, slug };
+      if (source) system.source = source;
+      const next = [...systems, system];
       setSystems(next);
       persist(next);
-      setActiveSlug(built.slug);
-      return built;
+      setActiveSlug(system.slug);
+      return system;
     },
     [systems, persist, setActiveSlug],
   );
 
   const mergeCss = useCallback(
-    (slug: string, css: string): DesignSystem => {
+    (slug: string, css: string, source?: SourceProvenance): DesignSystem => {
       const existing = systems.find((s) => s.slug === slug);
       if (!existing) throw new Error("system to merge not found");
       const merged = mergeSystem(existing, css) as DesignSystem;
+      if (source) merged.source = source;
       const next = systems.map((s) => (s.slug === slug ? merged : s));
       setSystems(next);
       persist(next);
       return merged;
     },
     [systems, persist],
+  );
+
+  /** Overwrite an existing system in place — the collision "replace" choice.
+      Keeps its slug and createdAt; the tokens are rebuilt from `css`. */
+  const replaceSystem = useCallback(
+    (slug: string, name: string, css: string, source?: SourceProvenance): DesignSystem => {
+      const existing = systems.find((s) => s.slug === slug);
+      if (!existing) throw new Error("system to replace not found");
+      const built = buildSystem({ name, css }) as DesignSystem;
+      const system: DesignSystem = {
+        ...built,
+        slug,
+        createdAt: existing.createdAt,
+        updatedAt: new Date().toISOString(),
+      };
+      if (source) system.source = source;
+      const next = systems.map((s) => (s.slug === slug ? system : s));
+      setSystems(next);
+      persist(next);
+      setActiveSlug(slug);
+      return system;
+    },
+    [systems, persist, setActiveSlug],
   );
 
   /** Single-token write — the inline editor's path. One bare line,
@@ -306,9 +367,11 @@ export function useSystems() {
     error: loadError,
     active,
     activeSlug: active?.slug ?? "",
+    retry,
     setActiveSlug,
     addSystem,
     mergeCss,
+    replaceSystem,
     patchToken,
     removeSystem,
   };
@@ -364,10 +427,8 @@ export function systemCoveragePercent(system: DesignSystem | null | undefined): 
   return pct;
 }
 
-/** Flat token list for a system — base values, plus its dark variant on
-   top (later wins) when `dark` is on and the system ships one. */
-export function resolveSystemTokens(system: DesignSystem | null, dark = false): Token[] {
-  const base = system?.groups?.flatMap((g) => g.tokens) ?? [];
-  const darkTokens = dark ? (system?.themes?.dark ?? []) : [];
-  return darkTokens.length ? [...base, ...darkTokens] : base;
+/** Flat token list for a system — the base values. A stored `themes.dark`
+   block is never read: dark mode is retired and every panel shows light. */
+export function resolveSystemTokens(system: DesignSystem | null): Token[] {
+  return system?.groups?.flatMap((g) => g.tokens) ?? [];
 }

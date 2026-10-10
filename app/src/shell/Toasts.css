@@ -1,6 +1,7 @@
 .app-toasts {
   position: fixed;
-  bottom: var(--space-5);
+  /* Home-indicator clearance: the stack floats above the OS gesture bar. */
+  bottom: calc(var(--space-5) + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -9,6 +10,8 @@
   gap: var(--space-2);
   z-index: var(--z-toast);
   pointer-events: none;
+  /* The stack never exceeds the viewport — children wrap inside it. */
+  max-width: 90vw;
 }
 
 .app-toast {
@@ -19,7 +22,55 @@
   color: var(--color-text);
   font-size: var(--font-size-sm);
   box-shadow: var(--shadow-md);
-  white-space: nowrap;
+  /* Long messages wrap and break inside the 90vw stack instead of
+     overflowing the viewport (nowrap painted them off-screen). */
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-align: center;
+  /* Occasional UI enters with a standard ease-out under 300ms. A transition
+     (not keyframes) retargets when toasts stack in quick succession instead
+     of restarting. Durations/easing resolve from the viewer-private --app-*
+     tokens: the inspected system overwrites the shared --duration-* /
+     --motion-* names inline, which would freeze this motion at 0ms. */
+  transition:
+    transform var(--app-duration-normal) var(--app-ease-out),
+    opacity var(--app-duration-normal) var(--app-ease-out);
+}
+
+/* Enter-from state for the transition above: the toast slides up from
+   translateY(8px) (--app-motion-distance-md) and fades in over ~200ms. */
+@starting-style {
+  .app-toast {
+    transform: translateY(var(--app-motion-distance-md));
+    opacity: 0;
+  }
+}
+
+/* Exit runs shorter (100ms fast token) so a dismissed toast is gone within
+   150ms. Toasts.tsx keeps the node mounted with data-leaving until the fade
+   completes; the leaving toast stays in flow so the stack below never jumps. */
+.app-toast[data-leaving="true"] {
+  transform: translateY(var(--app-motion-distance-sm));
+  opacity: 0;
+  transition-duration: var(--app-duration-fast);
+  transition-timing-function: var(--app-ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Reduced motion fades with opacity only — no sliding on enter or exit. */
+  .app-toast {
+    transition: opacity var(--app-duration-fast) var(--app-ease-out);
+  }
+  @starting-style {
+    .app-toast {
+      transform: none;
+      opacity: 0;
+    }
+  }
+  .app-toast[data-leaving="true"] {
+    transform: none;
+  }
 }
 
 .app-toast-warn {

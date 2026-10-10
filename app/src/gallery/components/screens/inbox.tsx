@@ -30,22 +30,23 @@ export default function InboxBody() {
             style={{ flex: 1, minWidth: 0 }}
           />
         </div>
-        {MAILS.map(([from, subj, body, when], i) => (
-          <div
-            key={subj}
-            role="option"
-            aria-selected={sel === i}
-            tabIndex={0}
-            className={`dsv-list-item ${sel === i ? "is-selected" : ""}`}
-            style={{ borderRadius: 0, padding: "var(--space-3)" }}
-            onClick={() => setSel(i)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                setSel(i);
-              }
-            }}
-          >
+        <div role="listbox" aria-label="Messages" style={{ display: "contents" }}>
+          {MAILS.map(([from, subj, body, when], i) => (
+            <div
+              key={subj}
+              role="option"
+              aria-selected={sel === i}
+              tabIndex={0}
+              className={`dsv-list-item ${sel === i ? "is-selected" : ""}`}
+              style={{ borderRadius: 0, padding: "var(--space-3)" }}
+              onClick={() => setSel(i)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setSel(i);
+                }
+              }}
+            >
             <div style={{ minWidth: 0 }}>
               <div className="dsv-inline" style={{ justifyContent: "space-between" }}>
                 <strong style={{ fontSize: "var(--font-size-sm)" }}>{from}</strong>
@@ -67,7 +68,8 @@ export default function InboxBody() {
               </div>
             </div>
           </div>
-        ))}
+          ))}
+        </div>
       </div>
       <div style={{ padding: "var(--space-5)", background: "var(--color-bg)", minWidth: 0 }}>
         <div className="dsv-inline" style={{ marginBottom: "var(--space-3)" }}>

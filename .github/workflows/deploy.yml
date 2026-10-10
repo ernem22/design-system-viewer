@@ -21,24 +21,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
-          cache-dependency-path: preview/package-lock.json
-      - name: Install preview deps
-        run: npm --prefix preview ci
-      - name: Build preview (GitHub Pages base)
-        run: GITHUB_PAGES=true npm --prefix preview run build
-      - name: Generate static systems index
-        run: node scripts/build-static.mjs
+          cache-dependency-path: app/package-lock.json
+      - name: Install app deps
+        run: npm --prefix app ci
+      - name: Build the app (React + TS, app/)
+        run: npm --prefix app run build
       - name: Prepare Pages artifact
         run: |
           set -e
           rm -rf _site
-          mkdir -p _site/preview _site/systems
-          cp index.html _site/
-          cp -r src _site/src
-          cp systems/*.json _site/systems/
-          cp -r preview/dist/* _site/preview/
+          cp -r app/dist _site
           touch _site/.nojekyll
           echo "systems bundled: $(node -e "console.log(require('./_site/systems/index.json').length)")"
       - uses: actions/upload-pages-artifact@v3

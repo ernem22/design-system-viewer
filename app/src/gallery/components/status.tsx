@@ -54,6 +54,11 @@ const BLUR_TILES: [string, string][] = [
   ["xl", "--blur-xl"],
 ];
 
+const MAINTENANCE_START = new Date(2026, 5, 5, 2, 0);
+const MAINTENANCE_END = new Date(2026, 5, 5, 4, 0);
+const MAINTENANCE_DAY = new Intl.DateTimeFormat(undefined, { weekday: "long" }).format(MAINTENANCE_START);
+const MAINTENANCE_TIME = `${new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(MAINTENANCE_START)}–${new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(MAINTENANCE_END)}`;
+
 export default function StatusBody() {
   const [banner, setBanner] = useState(true);
   return (
@@ -95,7 +100,7 @@ export default function StatusBody() {
       <Demo title="Banner (dismissible)">
         {banner ? (
           <div className="dsv-banner" style={{ maxWidth: 460, width: "100%" }}>
-            <Icon name="bell" size={14} /> Friday 02:00–04:00 maintenance window.
+            <Icon name="bell" size={14} /> {MAINTENANCE_DAY} {MAINTENANCE_TIME} maintenance window.
             <button className="close" aria-label="Close" onClick={() => setBanner(false)}>
               <Icon name="x" size={14} />
             </button>
@@ -114,7 +119,7 @@ export default function StatusBody() {
               <Icon name="search" size={24} />
             </span>
             <h4>No results</h4>
-            <p>No matching records found for "lorem ipsum".</p>
+            <p>No matching records found for “lorem ipsum”.</p>
             <Button variant="soft" size="sm">
               Clear filters
             </Button>
@@ -143,7 +148,7 @@ export default function StatusBody() {
       <Demo title="Spinner">
         <span className="dsv-spinner" />
         <Button disabled>
-          <span className="dsv-spinner dsv-spinner--sm" /> Loading
+          <span className="dsv-spinner dsv-spinner--sm" /> Loading…
         </Button>
       </Demo>
 

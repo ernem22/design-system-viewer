@@ -19,10 +19,16 @@ export default function CheckoutBody() {
         <h3 style={{ margin: "0 0 var(--space-4)", fontSize: "var(--font-size-lg)" }}>Payment</h3>
         <div className="dsv-stack">
           <Field label="Name on card" id="c-name">
-            <input id="c-name" className="dsv-input" defaultValue="Ada Lovelace" />
+            <input id="c-name" className="dsv-input" defaultValue="Ada Lovelace" autoComplete="cc-name" />
           </Field>
           <Field label="Card number" id="c-num">
-            <input id="c-num" className="dsv-input" placeholder="•••• •••• •••• ••••" inputMode="numeric" />
+            <input
+              id="c-num"
+              className="dsv-input"
+              placeholder="•••• •••• •••• ••••"
+              inputMode="numeric"
+              autoComplete="cc-number"
+            />
           </Field>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "var(--space-3)" }}>
             <Field label="Expiry" id="c-exp">

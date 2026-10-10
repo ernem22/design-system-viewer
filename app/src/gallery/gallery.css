@@ -37,7 +37,7 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
    (same badge flow as .dsv-block-head, one level up — screens have no Demo
    blocks, so this is their inspector entry point). */
 .dsv-section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin: 0 0 var(--space-1); }
-.dsv-section-head h2 { font-size: var(--font-size-2xl); font-weight: var(--font-weight-semibold); margin: 0; }
+.dsv-section-head h2 { font-size: var(--heading-section); font-weight: var(--font-weight-semibold); margin: 0; }
 .dsv-section > p { color: var(--color-text-muted); margin: 0 0 var(--space-6); }
 /* Anchor-scroll target for Rail's per-demo links: without this, clicking
    one lands its top flush with .app-main's edge — above the scrollspy band
@@ -49,7 +49,7 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
   margin: 0 0 var(--space-3); padding-bottom: var(--space-2);
   border-bottom: var(--border-width-thin) solid var(--color-border-subtle);
 }
-.dsv-block-head h3 { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-text-secondary); margin: 0; }
+.dsv-block-head h3 { font-size: var(--heading-subsection); font-weight: var(--font-weight-semibold); color: var(--color-text-secondary); margin: 0; }
 .dsv-row { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center; }
 
 /* Preview-level notices (schema extras, unavailable fonts, empty search). */
@@ -77,7 +77,16 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
   transition: background var(--motion-hover), border-color var(--motion-hover), transform var(--motion-press);
 }
 .dsv-btn:active:not(:disabled) { transform: scale(var(--motion-scale-active)); }
-.dsv-btn:disabled, .dsv-btn[data-disabled] { opacity: 0.5; cursor: not-allowed; }
+/* Disabled is a token state, not a faded live control: opacity fades the
+   accent fill and its on-accent text together, so both drop under AA in the
+   dark variant. Swap the pair for the disabled-surface tokens instead. */
+.dsv-btn:disabled, .dsv-btn[data-disabled] {
+  opacity: 1;
+  cursor: not-allowed;
+  background: var(--color-surface-disabled);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-disabled);
+}
 .dsv-btn--sm { height: var(--button-height-sm); font-size: var(--font-size-xs); padding: 0 var(--button-padding-x-sm); }
 .dsv-btn--lg { height: var(--button-height-lg); font-size: var(--font-size-base); padding: 0 var(--button-padding-x-lg); }
 .dsv-btn--xl { height: var(--button-height-xl); font-size: var(--font-size-base); padding: 0 var(--button-padding-x-xl); }
@@ -117,7 +126,7 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
 .dsv-input:disabled, .dsv-textarea:disabled { background: var(--color-surface-sunken); color: var(--color-text-disabled); cursor: not-allowed; }
 .dsv-input[aria-invalid="true"] { border-color: var(--color-input-border-error); }
 .dsv-hint { font-size: var(--font-size-xs); color: var(--color-text-muted); }
-.dsv-hint--err { color: var(--color-danger-text); }
+.dsv-hint--err { color: var(--color-danger-text); background: var(--color-danger-subtle); display: inline-block; padding: var(--space-0-5) var(--space-1); border-radius: var(--radius-sm); }
 
 /* ── generic utility ── */
 .dsv-muted { color: var(--color-text-muted); }
@@ -153,7 +162,7 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
   animation: dsv-pop var(--motion-modal); overflow: auto;
 }
 @media (min-width: 900px) { .dsv-modal { border-radius: var(--radius-2xl); } }
-.dsv-modal h3 { margin: 0 0 var(--space-2); font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); }
+.dsv-modal h3 { margin: 0 0 var(--space-2); font-size: var(--heading-subsection); font-weight: var(--font-weight-semibold); }
 .dsv-modal p { margin: 0 0 var(--space-5); color: var(--color-text-secondary); font-size: var(--font-size-sm); }
 .dsv-modal-actions { display: flex; justify-content: flex-end; gap: var(--space-3); }
 .dsv-pop {
@@ -240,10 +249,13 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
 .dsv-badge--warning { background: var(--color-warning-subtle); color: var(--color-warning-text); border-color: var(--color-warning-border); }
 .dsv-badge--danger { background: var(--color-danger-subtle); color: var(--color-danger-text); border-color: var(--color-danger-border); }
 .dsv-badge--info { background: var(--color-info-subtle); color: var(--color-info-text); border-color: var(--color-info-border); }
-.dsv-badge--success-solid { background: var(--color-success); color: var(--color-on-success); border-color: transparent; }
-.dsv-badge--warning-solid { background: var(--color-warning); color: var(--color-on-warning); border-color: transparent; }
+/* Solid fills are darkened against --color-neutral-1000 so the existing
+   on-<variant> text token clears 4.5:1 (the raw -success/-warning/-info
+   tokens sat at 4.18/3.84/4.26 with on-<variant>). */
+.dsv-badge--success-solid { background: color-mix(in srgb, var(--color-success) 80%, var(--color-neutral-1000)); color: var(--color-on-success); border-color: transparent; }
+.dsv-badge--warning-solid { background: color-mix(in srgb, var(--color-warning) 80%, var(--color-neutral-1000)); color: var(--color-on-warning); border-color: transparent; }
 .dsv-badge--danger-solid { background: var(--color-danger); color: var(--color-on-danger); border-color: transparent; }
-.dsv-badge--info-solid { background: var(--color-info); color: var(--color-on-info); border-color: transparent; }
+.dsv-badge--info-solid { background: color-mix(in srgb, var(--color-info) 80%, var(--color-neutral-1000)); color: var(--color-on-info); border-color: transparent; }
 .dsv-kbd {
   font-family: var(--font-mono); font-size: var(--font-size-xs);
   background: var(--color-surface-sunken); color: var(--color-text-secondary);
@@ -277,7 +289,7 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
   color: var(--color-text-secondary); margin-bottom: var(--space-4);
   border: var(--border-width-thin) solid var(--color-border-subtle); box-shadow: var(--shadow-xs);
 }
-.dsv-empty h4 { margin: 0 0 var(--space-1); color: var(--color-text); font-size: var(--font-size-base); }
+.dsv-empty h4 { margin: 0 0 var(--space-1); color: var(--color-text); font-size: var(--heading-subsection); }
 .dsv-empty p { margin: 0 0 var(--space-4); font-size: var(--font-size-sm); }
 
 @keyframes dsv-fade { from { opacity: 0; } to { opacity: 1; } }
@@ -313,7 +325,12 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
 
 .dsv-banner .close { margin-left: auto; background: none; border: none; color: inherit; opacity: 0.8; cursor: pointer; padding: var(--space-1); }
 
-.dsv-banner--on-dark { background: var(--color-surface-inverse); color: var(--color-text-on-accent); }
+.dsv-banner--on-dark { background: var(--color-surface-inverse); color: var(--color-text-inverse); }
+/* Ghost buttons inherit the inverse text pairing on the light banner instead
+   of --color-text-secondary (1.42:1 on surface-inverse). */
+.dsv-banner--on-dark .dsv-btn--ghost { color: var(--color-text-inverse); }
+.dsv-banner--on-dark .dsv-btn--ghost:hover:not(:disabled),
+.dsv-banner--on-dark .dsv-btn--ghost:active:not(:disabled) { color: var(--color-text-inverse); }
 
 .dsv-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
 
@@ -343,11 +360,11 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
 
 .dsv-stat .v { font-size: var(--font-size-2xl); font-weight: var(--font-weight-semibold); margin: var(--space-1) 0; }
 
-.dsv-stat .d { font-size: var(--font-size-xs); }
+.dsv-stat .d { font-size: var(--font-size-xs); display: inline-block; padding: var(--space-0-5) var(--space-1-5); border-radius: var(--radius-sm); }
 
-.dsv-stat .d.up { color: var(--color-success-text); }
+.dsv-stat .d.up { color: var(--color-success-text); background: var(--color-success-subtle); }
 
-.dsv-stat .d.down { color: var(--color-danger-text); }
+.dsv-stat .d.down { color: var(--color-danger-text); background: var(--color-danger-subtle); }
 
 .dsv-code {
   background: var(--color-surface-sunken); color: var(--color-text);
@@ -486,6 +503,11 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
 
 .dsv-list-item.is-selected > svg, .dsv-table tr.is-selected td .dsv-muted { opacity: var(--opacity-selected); }
 
+/* --color-selected is too dark for --color-text-muted (3.97:1); muted text
+   inside a selected surface uses the secondary text token instead. */
+.dsv-list-item.is-selected .dsv-muted,
+.dsv-card.is-picked .dsv-muted { color: var(--color-text-secondary); }
+
 .dsv-card--tint { background: var(--color-tint-subtle); }
 
 .dsv-card--lift { transition: box-shadow var(--motion-hover), transform var(--motion-hover); z-index: var(--z-base); }
@@ -561,3 +583,17 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
 @keyframes dsv-pulse { 0%, 100% { opacity: 1; } 50% { opacity: var(--opacity-overlay); } }
 
 @keyframes dsv-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(calc(-1 * var(--space-3))); } }
+
+/* Issue 220: the shared animation set must honour prefers-reduced-motion.
+   Infinite motion (dsv-spin) stops; entrance motion (dsv-fade/dsv-pop/
+   dsv-scale) drops to none so surfaces appear in their final state. */
+@media (prefers-reduced-motion: reduce) {
+  .dsv-overlay,
+  .dsv-modal,
+  .dsv-pop,
+  .dsv-menu,
+  .dsv-tooltip,
+  .dsv-spinner {
+    animation: none;
+  }
+}

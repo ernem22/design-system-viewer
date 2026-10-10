@@ -6,6 +6,9 @@ import "./screens.css";
 
 // [name, yearly price, monthly price, features] — matches preview's
 // `yearly ? 12 : 15` inline pricing.
+// Whole-lira plan prices through Intl ("12", "15", …) — the ₺ prefix stays
+// literal so the shown "₺12"/mo shape is unchanged.
+const intPrice = new Intl.NumberFormat("tr-TR", { useGrouping: false });
 const PLANS: [string, number, number, string[]][] = [
   ["Starter", 0, 0, ["1 project", "Community support", "1 GB storage"]],
   ["Pro", 12, 15, ["Unlimited projects", "Priority support", "50 GB storage", "Analytics"]],
@@ -48,7 +51,7 @@ export default function PricingBody() {
             <div style={{ fontWeight: "var(--font-weight-semibold)" }}>{name}</div>
             <div style={{ margin: "var(--space-2) 0" }}>
               <span style={{ fontSize: "var(--font-size-3xl)", fontWeight: "var(--font-weight-bold)" }}>
-                ₺{yearly ? yearlyPrice : monthlyPrice}
+                ₺{intPrice.format(yearly ? yearlyPrice : monthlyPrice)}
               </span>
               <span className="dsv-muted" style={{ fontSize: "var(--font-size-sm)" }}>
                 /mo

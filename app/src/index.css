@@ -1,5 +1,9 @@
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  /* The viewer ships the design system's own stack. The full fallback chain
+     lives on --font-sans in tokens.css (a system layer may overwrite it), so
+     a system with no font tokens still renders in something sensible instead
+     of collapsing to the platform font. */
+  font-family: var(--font-sans);
   line-height: 1.5;
   font-weight: 400;
   font-synthesis: none;
@@ -10,6 +14,18 @@
 
 * {
   box-sizing: border-box;
+}
+
+/* Native controls do not inherit font-family: the UA stylesheet forces the
+   platform font (Arial on Windows), which is why the chrome and every form
+   control rendered in Arial. Inherit the token stack instead; a component
+   that wants mono/display still opts in with its own font-family. */
+button,
+input,
+select,
+textarea,
+optgroup {
+  font-family: inherit;
 }
 
 html,
@@ -24,4 +40,38 @@ body {
   min-width: 320px;
   background: var(--color-bg);
   color: var(--color-text);
+}
+
+/* Chrome press feedback (issue #284): every viewer control — not the
+   gallery's dsv-* components, whose motion belongs to the inspected system —
+   scales to ~0.97 on :active over a short ease-out transform transition.
+   One shared rule so the chrome reads as one surface. Disabled controls
+   (native :disabled, or the compare chip's data-disabled) never scale.
+   Motion resolves from the viewer-private --app-* tokens: the inspected
+   system overwrites the shared --duration-* / --motion-* names inline, which
+   would freeze this press at 0ms / restyle it to the system's scale. */
+.app-iconbtn:not(:disabled),
+.app-sysbtn:not(:disabled),
+.tok-btn:not(:disabled),
+.cmp-chip:not([data-disabled="true"]),
+.app-tabs button:not(:disabled) {
+  transition: transform var(--app-duration-fast) var(--app-ease-out);
+}
+
+.app-iconbtn:not(:disabled):active,
+.app-sysbtn:not(:disabled):active,
+.tok-btn:not(:disabled):active,
+.cmp-chip:not([data-disabled="true"]):active,
+.app-tabs button:not(:disabled):active {
+  transform: scale(var(--app-motion-scale-active));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-iconbtn:not(:disabled):active,
+  .app-sysbtn:not(:disabled):active,
+  .tok-btn:not(:disabled):active,
+  .cmp-chip:not([data-disabled="true"]):active,
+  .app-tabs button:not(:disabled):active {
+    transform: none;
+  }
 }

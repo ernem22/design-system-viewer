@@ -21,14 +21,11 @@ Fix each one so a reader can point at the line that closes it. Do not re-scope,
 do not re-design, do not "improve while you are in there" — an unrequested change
 is what makes the next Reviewer return `scope_ok: no` and blocks the merge.
 
-WHEN A FINDING IS UNCLEAR: ask, do not guess at intent — with `--type question`,
-using the command shape printed in your dispatch preamble (`--to <coordinator
-terminal handle from your preamble>`, plus `--task-id`, `--dispatch-id` and the
-capability token). Never retype a send command: the capability token is per-dispatch
-and a retyped one is rejected with `dispatch_capability_invalid`.
-
-then wait for the answer. Do not silently drop a finding you disagree with —
-say so in the message.
+WHEN A FINDING IS UNCLEAR: do not guess at intent and do not ask — no coordinator
+answers questions, and a worker waiting on an answer sits until its deadline (measured
+2026-10-05, coder-116). Settle with `status: blocked` and a `reason:` line naming the
+finding and what is unclear. Do not silently drop a finding you disagree with —
+say so in the report.
 
 EVIDENCE — the same evidence a Coder owes, plus:
   - for each finding, the before/after of the line you changed;
@@ -37,7 +34,14 @@ EVIDENCE — the same evidence a Coder owes, plus:
   - rewrite the PR body so `## Verified` / `## Not verified` describe the FIXED
     head, not the pre-fix one.
 
-DELIVERY: commit with a `[fixer]` prefix in the subject and push to the PR's own
+DELIVERY: set your worktree identity first — `bash tools/orchestration/identity.sh fixer`
+(sets `user.name=orca-fixer`, `user.email=$BOT_EMAIL`). If your branch predates that
+script — a PR opened before it landed — run the coordinator checkout's copy from inside
+your own worktree: `bash <coordinator-checkout>/tools/orchestration/identity.sh fixer`.
+It reads the `identity.env` beside itself and writes `--worktree` config for the
+worktree you are standing in, so the PR branch gains no files and no review history is
+disturbed. Then commit with a
+`[fixer]` prefix in the subject and push to the PR's own
 branch. Do not open a new PR, do not merge, do not change labels.
 
 OBSERVABLE ACCEPTANCE — your worker_done body must start with exactly:

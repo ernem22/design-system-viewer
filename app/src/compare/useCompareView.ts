@@ -29,7 +29,9 @@ const KNOWN_COMPONENT_IDS = new Set(
 
 /** Compare tab view model — mirrors useTokensView's shape (state + derived
    data, lifted to App.tsx, no Context/Redux). `systems` comes from
-   useSystems() in App.tsx, same source the rest of the app reads. */
+   useSystems() in App.tsx, same source the rest of the app reads. Every
+   panel shows the base (light) values; a stored `themes.dark` block is
+   never read. */
 export function useCompareView(systems: DesignSystem[]) {
   // Deep-link init (legacy's compare.jsx read cmp/v/c the same way): unknown
   // values fall back to today's defaults, and the repair effect below drops
@@ -84,7 +86,12 @@ export function useCompareView(systems: DesignSystem[]) {
   const allOptions = useMemo(() => optionGroups.flatMap((g) => g.items), [optionGroups]);
   const active = allOptions.find((o) => o.id === componentId) ?? allOptions[0] ?? null;
 
-  const cols = useMemo(() => systems.filter((s) => picked.includes(s.slug)), [systems, picked]);
+  // Picked systems in selection order — CompareColumn's `styleFor` scope and
+  // the diff table's group reads both derive from these.
+  const cols = useMemo(
+    () => systems.filter((s) => picked.includes(s.slug)),
+    [systems, picked],
+  );
 
   const toggle = (slug: string) => {
     userPickedRef.current = true;
@@ -96,7 +103,8 @@ export function useCompareView(systems: DesignSystem[]) {
   // instead of the page's :root (which only ever holds one active system).
   const styleFor = useMemo(() => {
     const map = new Map<string, Record<string, string>>();
-    for (const s of systems) map.set(s.slug, Object.fromEntries(resolveSystemTokens(s).map((t) => [t.name, t.value])));
+    for (const s of systems)
+      map.set(s.slug, Object.fromEntries(resolveSystemTokens(s).map((t) => [t.name, t.value])));
     return map;
   }, [systems]);
 

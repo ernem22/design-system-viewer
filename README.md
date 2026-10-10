@@ -43,12 +43,15 @@ shareable link.
 - `preview/` — the React/Radix app (Preview + Compare)
 - `app/` — the React/TS migration app (`refactor/full-react-migration` branch);
   see `app/CLAUDE.md` for its code style
-- `ORCHESTRATION.md` — source of truth for the Hermes/Orca autonomous worker
-  pipeline (Coder/Reviewer/Tester/PR) that develops `app/`; read this before
-  spawning or resuming any orchestration run
+- `ORCHESTRATION.md` — the manager's (Hermes) manual for the unattended pipeline that
+  develops `app/`: cold start, duties per wake, rules. The dispatcher and the events are in
+  `docs/orchestration/reference/`
 
 ## Limits
 
-Only a `dark` theme variant is parsed (light is the default; the Preview
-tab shows a dark toggle when a system ships one). Schema isn't editable
-from the UI. Nothing about a system is required.
+**Dark mode is retired** (user decision, 2026-09-23): it is not a feature of this
+product and will be removed, not extended — no worker adds, fixes or restores dark
+handling, and a dark-mode finding is not a defect. The `dark` variant is still parsed
+today (`themes.dark`, the Preview dark toggle) and the cleanup is deferred; the
+inventory of sites it will touch is in `docs/design/add-system-import.md`. Schema
+isn't editable from the UI. Nothing about a system is required.

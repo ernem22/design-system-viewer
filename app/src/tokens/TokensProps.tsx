@@ -19,7 +19,7 @@ export function TokensProps({ view }: { view: TokensViewModel }) {
       <div className="tok-props-block">
         <h3>Coverage</h3>
         <div className="tok-cov">
-          <span className={`tok-cov-ring tok-cov-${tone}`} role="img" aria-label={`${pct}% of schema tokens present`}>
+          <span className={`tok-cov-ring tok-cov-${tone}${pct >= 100 ? " tok-cov-3dig" : ""}`} role="img" aria-label={`${pct}% of schema tokens present`}>
             <svg viewBox="0 0 36 36" aria-hidden="true">
               <circle className="tok-rr-track" cx="18" cy="18" r="15.5" pathLength={100} />
               <circle

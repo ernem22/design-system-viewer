@@ -13,11 +13,76 @@
 #
 #   close.sh            # act: merge what the gate passed
 #   close.sh --dry-run  # report only
+#   close.sh --hygiene  # branch hygiene only, then stop (run this BEFORE a wave)
+#
+# BRANCH HYGIENE runs first, always: a PR branch created earlier goes stale as the base moves, and a
+# wave run against a stale base wastes a whole build (measured twice - a test written against a newer
+# `useTokensView` signature landed on a branch that still had the old one, TS2554; and a cherry-pick
+# onto an older base produced a tree that does not compile). Measured 2026-10-02: three of the five
+# open PRs were 10-27 commits behind, two of them carrying verdicts against their head.
+#
+# The hygiene pass decides per PR whether a rebase is safe (lib/hygiene-logic.cjs, probed) and NEVER
+# pushes: a rebase rewrites the head, and a rewritten head with a force-push is a Fixer's action
+# under --force-with-lease, not the closing layer's. What it prints is the decision and the exact
+# command, so the coordinator stops holding this in their head.
 set -uo pipefail
 
 REPO="ernem22/design-system-viewer"
 BASE="refactor/full-react-migration"
-DRY="${1:-}"
+DRY=""
+HYGIENE_ONLY=""
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY="--dry-run";;
+    --hygiene) HYGIENE_ONLY=1;;
+    *) echo "close.sh: unknown flag $arg" >&2; exit 2;;
+  esac
+done
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# Native tools cannot read an MSYS path on this host (MSYS path conversion is disabled), so node
+# requiring /c/... says "Cannot find module" - measured in settle.sh on 2026-09-28.
+HERE_NATIVE="$(cygpath -m "$HERE" 2>/dev/null || printf '%s' "$HERE")"
+HYGIENE_JS="$HERE_NATIVE/lib/hygiene-logic.cjs"
+
+git fetch -q origin 2>/dev/null || true
+
+# ---- branch hygiene -------------------------------------------------------------------------
+hygiene_refusals=0
+for pr in $(gh pr list --repo "$REPO" --state open --json number --jq '.[].number'); do
+  head=$(gh pr view "$pr" --repo "$REPO" --json headRefOid --jq .headRefOid)
+  behind=$(git rev-list --count "$head".."origin/$BASE" 2>/dev/null || echo '?')
+  # An unreadable gate must reach decide() as unreadable, not as "none": that distinction is the
+  # whole fail-closed rule.
+  gate_raw=$(gh api "repos/$REPO/commits/$head/status" \
+               --jq '[.statuses[]|select(.context=="pipeline/verdict")]|.[0]|(.state // "none")' 2>/dev/null)
+  decision=$(node -e '
+const { decide } = require(process.argv[1]);
+const d = decide(process.argv[2], process.argv[3]);
+process.stdout.write(d.action + "\t" + d.why);
+' "$HYGIENE_JS" "$behind" "$gate_raw" 2>&1)
+  action=$(printf '%s' "$decision" | cut -f1)
+  why=$(printf '%s' "$decision" | cut -f2-)
+  case "$action" in
+    rebase)
+      echo "hygiene #$pr: REBASE (behind $behind, gate ${gate_raw:-unreadable}) - $why"
+      echo "     next: bash tools/orchestration/rebase.sh $pr --push    # a Fixer's action; --force-with-lease only"
+      ;;
+    refuse)
+      hygiene_refusals=$((hygiene_refusals+1))
+      echo "hygiene #$pr: REFUSED (behind $behind, gate ${gate_raw:-unreadable}) - $why"
+      echo "     a human decides: re-verify on the new base, or accept the merge as it stands"
+      ;;
+    *)
+      echo "hygiene #$pr: ok - $why"
+      ;;
+  esac
+done
+echo "close.sh: hygiene: $hygiene_refusals PR(s) where a rebase would void evidence"
+
+if [ -n "$HYGIENE_ONLY" ]; then
+  echo "close.sh: --hygiene given, stopping after the hygiene pass"
+  exit 0
+fi
 
 merged=0
 for pr in $(gh pr list --repo "$REPO" --state open --json number --jq '.[].number'); do
@@ -26,35 +91,58 @@ for pr in $(gh pr list --repo "$REPO" --state open --json number --jq '.[].numbe
   gate=$(gh api "repos/$REPO/commits/$head/status" \
            --jq '[.statuses[]|select(.context=="pipeline/verdict")]|.[0]|"\(.state // "none"): \(.description // "")"' 2>/dev/null)
 
+  # A wave run against a stale base wastes a whole build: the PR's own commits may not
+  # compile against the API main has since moved to (this happened twice — a test written
+  # against a newer `useTokensView` signature landed on a branch that still had the old
+  # one). Report it here, before anyone dispatches a Tester.
+  behind=$(git rev-list --count "$head".."origin/$BASE" 2>/dev/null || echo 0)
+  note=""
+  [ "${behind:-0}" -gt 0 ] && note=" [BEHIND $BASE by $behind commits — rebase before the next wave]"
+
   case "$gate" in
+    *"gate not applicable"*)
+      # A PR that changes nothing under app/src passes the gate with no Reviewer and no Tester. Measured
+      # 2026-10-05: #212, #218, #219, #228 and #229 (all tooling) were merged here within minutes,
+      # before anyone ran them on the host. Such a PR is merged by hand after it is verified there.
+      echo "#$pr: NOT MERGED - no app/src change (tooling/docs); merged by hand after host verification"
+      ;;
     success*)
       if [ "$DRY" = "--dry-run" ]; then
         echo "#$pr: READY — gate success, ci: $ci"
       else
-        if gh pr merge "$pr" --repo "$REPO" --squash --delete-branch >/dev/null 2>&1; then
+        # Pinned to the head whose status was just read (hunter H-012): a push between that read
+        # and this merge makes GitHub refuse, instead of merging a head the gate never saw.
+        if merge_err="$(gh pr merge "$pr" --repo "$REPO" --squash --delete-branch --match-head-commit "$head" 2>&1 >/dev/null)"; then
           sha=$(gh pr view "$pr" --repo "$REPO" --json mergeCommit --jq '.mergeCommit.oid[0:7]')
           echo "#$pr: MERGED $sha  (ci: $ci)"
           merged=$((merged+1))
-          # Close the issues the body claims, because `Closes #n` only fires on the
-          # repo's DEFAULT branch and this pipeline merges into $BASE.
-          for n in $(gh pr view "$pr" --repo "$REPO" --json body --jq .body | grep -oE 'Closes #[0-9]+' | grep -oE '[0-9]+'); do
+          # Close the issues the PR claims. `Closes #n` only fires on the repo's DEFAULT
+          # branch and this pipeline merges into $BASE, so it is done here — and the
+          # claim is read from BOTH the body (`Closes #n`, `Fixes #n`) and the title,
+          # because these PRs carry the issue in the title as `(#n)` and a body-only
+          # match silently leaves the issue open.
+          claimed=$( { gh pr view "$pr" --repo "$REPO" --json body,title --jq '.body + "\n" + .title' \
+                       | grep -oE '(Closes|Fixes|Resolves) #[0-9]+' | grep -oE '[0-9]+'
+                     gh pr view "$pr" --repo "$REPO" --json title --jq .title \
+                       | grep -oE '\(#[0-9]+\)' | grep -oE '[0-9]+'; } | sort -u )
+          for n in $claimed; do
             gh issue close "$n" --repo "$REPO" \
               --comment "Closed by the merge of #$pr ($sha): the gate passed reviewer+tester on the same head." >/dev/null 2>&1 \
               && echo "     issue #$n closed"
           done
         else
-          echo "#$pr: gate says success but the merge was refused — run it by hand and read why"
+          echo "#$pr: gate says success but the merge was refused: $(printf '%s' "$merge_err" | tr '\n' ' ' | cut -c1-240)"
         fi
       fi
       ;;
     none*)
-      echo "#$pr: waiting — no verdict block yet (ci: $ci). Who owes: reviewer + tester."
+      echo "#$pr: waiting — no verdict block yet (ci: $ci). Who owes: reviewer + tester.$note"
       ;;
     pending*)
-      echo "#$pr: waiting — ${gate#*: } (ci: $ci)"
+      echo "#$pr: waiting — ${gate#*: } (ci: $ci)$note"
       ;;
     failure*)
-      echo "#$pr: BLOCKED by the gate — ${gate#*: }"
+      echo "#$pr: BLOCKED by the gate — ${gate#*: }$note"
       ;;
     *)
       echo "#$pr: unknown gate state '${gate:-none}' (ci: $ci)"
@@ -63,3 +151,25 @@ for pr in $(gh pr list --repo "$REPO" --state open --json number --jq '.[].numbe
 done
 
 [ "$DRY" = "--dry-run" ] || echo "close.sh: merged $merged PR(s)"
+
+# ---- release `held` issues whose dependency is closed -------------------------------------------
+# A slice that must wait for another card carries `held` and says so in its body: "`held` until
+# ... (#N) merges" / "held until #N merges". Nobody removed the label by hand when #N landed, so the
+# slice sat forever (measured 2026-10-05, #214-#216 waiting on #213). The body names the dependency;
+# when #N is closed (a merged PR, or an issue this script closed after its PR merged), the label goes.
+# The manager (Hermes) never edits a card's body, so it states a dependency in a comment: the body and
+# then the comments are read in order, and the LAST such statement wins (a later comment updates it).
+for n in $(gh issue list --repo "$REPO" --label held --state open --json number --jq '.[].number' 2>/dev/null); do
+  dep="$(gh issue view "$n" --repo "$REPO" --json body,comments --jq '.body + "\n" + ([.comments[].body] | join("\n"))' 2>/dev/null \
+    | grep -oiE 'held`?\*{0,2} until [^#]{0,60}#[0-9]+\)? merges' | grep -oE '#[0-9]+' | tail -1 | tr -d '#')"
+  [ -n "$dep" ] || continue
+  st="$(gh issue view "$dep" --repo "$REPO" --json state --jq .state 2>/dev/null)"
+  [ "$st" = "CLOSED" ] || continue
+  if [ "$DRY" = "--dry-run" ]; then echo "#$n: would release held (#$dep is closed)"; continue; fi
+  if gh issue edit "$n" --repo "$REPO" --remove-label held >/dev/null 2>&1; then
+    gh issue comment "$n" --repo "$REPO" --body "Released: \`held\` removed because #$dep is closed. The pipeline picks this card up on its next pass." >/dev/null 2>&1
+    echo "#$n: released held (#$dep is closed)"
+  else
+    echo "#$n: could not remove held (#$dep is closed)"
+  fi
+done

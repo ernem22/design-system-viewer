@@ -16,10 +16,23 @@ export default function LoginBody() {
         </p>
         <div className="dsv-stack">
           <Field label="Email" id="l-email">
-            <input id="l-email" className="dsv-input" type="email" placeholder="ada@example.com" />
+            <input
+              id="l-email"
+              className="dsv-input"
+              type="email"
+              placeholder="ada@example.com"
+              autoComplete="email"
+              spellCheck={false}
+            />
           </Field>
           <Field label="Password" id="l-pass">
-            <input id="l-pass" className="dsv-input" type="password" placeholder="••••••••" />
+            <input
+              id="l-pass"
+              className="dsv-input"
+              type="password"
+              placeholder="••••••••"
+              autoComplete="current-password"
+            />
           </Field>
           <label className="dsv-control-label">
             <Checkbox.Root className="dsv-check" defaultChecked>

@@ -12,11 +12,17 @@ export default function VizBody() {
         <span className="dsv-chart-tip">Q2 · all channels</span>
       </div>
       <div className="dsv-card">
-        <div className="dsv-inline" style={{ alignItems: "flex-end", gap: "var(--space-2)", height: 150 }}>
+        <div
+          className="dsv-inline"
+          style={{ alignItems: "flex-end", gap: "var(--space-2)", height: 150 }}
+          role="img"
+          aria-label={`Channel mix: ${CHANNELS.map((c, i) => `${c} ${BARS[i]}%`).join(", ")}`}
+        >
           {BARS.map((h, i) => (
             <div
               key={i}
               title={`${h}%`}
+              aria-hidden="true"
               style={{
                 flex: 1,
                 height: `${h}%`,

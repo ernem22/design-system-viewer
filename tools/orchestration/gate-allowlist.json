@@ -1,0 +1,4 @@
+{
+  "_comment": "Verdict authors the gate accepts. Read by .github/workflows/pipeline-gate.yml from the TRUSTED BASE ref, never from the PR head, so a PR cannot add itself to the list. A verdict counts only when BOTH hold: the commenter's login (case-insensitive) is in `allowed`, AND their author_association is OWNER, MEMBER or COLLABORATOR. Bot accounts ending in [bot] are only accepted when named explicitly here.",
+  "allowed": ["ernem22"]
+}
