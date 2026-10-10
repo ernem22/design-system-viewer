@@ -14,10 +14,10 @@ import App from "../App.tsx";
 import { PreviewSystems } from "./PreviewSystems.tsx";
 import type { DesignSystem } from "../systems/store.ts";
 
-// Issue #16: the Preview tab's left rail only ever showed the
-// component/section outline — the design-system list lived only in the topbar
-// SystemSwitcher. PreviewSystems renders that list into the Preview rail slot
-// alongside <Rail>, sharing activeSlug with the switcher so they never drift.
+// Issue #317: the Preview tab's rail rendered the 38-row "Systems" list above
+// the section navigation, pushing every section below the fold. The rail now
+// shows only the section navigation; the topbar SystemSwitcher is the one
+// place to pick the active system.
 
 const sysA = {
   slug: "aurora",
@@ -99,8 +99,8 @@ describe("PreviewSystems unit", () => {
   });
 });
 
-describe("Preview tab rail systems list (issue #16)", () => {
-  it("shows the outline and the system list together on the Preview tab", async () => {
+describe("Preview tab rail section nav only (issue #317)", () => {
+  it("shows the outline with no systems list on the Preview tab", async () => {
     const el = await mountApp();
     const trigger = switchToTab(el, "Preview");
     await act(async () => {
@@ -110,40 +110,25 @@ describe("Preview tab rail systems list (issue #16)", () => {
     const panels = railPanels(el);
     expect(panels).toHaveLength(3);
     const preview = panels[1];
-    // RED on the parent: the Preview rail holds no system list, so neither
-    // button exists there.
-    expect(railButtonFor(preview, "Aurora")).toBeTruthy();
-    expect(railButtonFor(preview, "ChatGPT")).toBeTruthy();
-    // The component/section outline is still present alongside it.
+    // RED on the parent: the Preview rail holds the systems list above the
+    // outline, so both buttons exist there.
+    expect(railButtonFor(preview, "Aurora")).toBeUndefined();
+    expect(railButtonFor(preview, "ChatGPT")).toBeUndefined();
+    expect(preview.textContent).not.toMatch(/systems/i);
+    // The component/section outline is still present on its own.
     expect(preview.querySelector("a.app-rail-link")).not.toBeNull();
   });
 
-  it("picking a rail system changes the topbar switcher too", async () => {
+  it("keeps system switching in the topbar switcher", async () => {
     const el = await mountApp();
     const trigger = switchToTab(el, "Preview");
     await act(async () => {
       trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
+    // The topbar switcher remains the one place to pick the active system.
     const switcher = () => el.querySelector<HTMLElement>(".app-sysbtn");
     expect(switcher()?.getAttribute("aria-label")).toContain("Aurora");
-
-    const preview = railPanels(el)[1];
-    const chatgpt = railButtonFor(preview, "ChatGPT");
-    expect(chatgpt).toBeTruthy();
-    await act(async () => {
-      chatgpt!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    // Both controls share activeSlug: the rail pick moves the topbar, and the
-    // rail marks the new active via aria-current.
-    expect(switcher()?.getAttribute("aria-label")).toContain("ChatGPT");
-    expect(railButtonFor(railPanels(el)[1], "ChatGPT")?.getAttribute("aria-current")).toBe(
-      "true",
-    );
-    expect(
-      railButtonFor(railPanels(el)[1], "Aurora")?.getAttribute("aria-current"),
-    ).toBeNull();
   });
 
   it("leaves the Tokens and Compare rails unaffected", async () => {
