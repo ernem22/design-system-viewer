@@ -365,22 +365,30 @@ const TypeTokenRow = memo(function TypeTokenRow({
   onEdit: (token: Token | null) => void;
 }) {
   const specimenRef = useRef<HTMLDivElement>(null);
+  // Hidden sizer that always holds the full sentence at the token's size, so
+  // the overflow decision never reads the visible (possibly already short)
+  // text back — measuring the short "Ag" is what flipped the fallback back
+  // and looped renders on large sizes.
+  const fullRef = useRef<HTMLDivElement>(null);
   // Short glyph pair while the sentence overflows; null resolved size while
   // getComputedStyle reports nothing (never in a real browser).
   const [short, setShort] = useState(false);
   const [resolved, setResolved] = useState<string | null>(null);
 
-  // Pick the specimen by measuring, not by the token's name: the sentence
-  // stays while it fits, "Ag" takes over once scrollWidth exceeds the column.
+  // Pick the specimen by measuring the full sentence, not the current text:
+  // the sentence stays while it fits, "Ag" takes over once the full width
+  // exceeds the column. The fallback is one way stable — "Ag" fitting can
+  // never flip it back, only a genuinely fitting sentence (or a new token).
   // The resolved px size reads getComputedStyle(specimen).fontSize so
   // clamp()/vw values show the number a designer needs. Both recompute on
   // window resize, throttled with rAF.
   useEffect(() => {
     const specimen = specimenRef.current;
-    if (!specimen) return;
+    const full = fullRef.current;
+    if (!specimen || !full) return;
     let raf = 0;
     const measure = () => {
-      setShort(specimen.scrollWidth > specimen.clientWidth);
+      setShort(full.scrollWidth > specimen.clientWidth);
       const px = Number.parseFloat(getComputedStyle(specimen).fontSize);
       setResolved(Number.isFinite(px) ? `≈ ${Math.round(px)}px` : null);
     };
@@ -394,7 +402,7 @@ const TypeTokenRow = memo(function TypeTokenRow({
       window.removeEventListener("resize", onResize);
       cancelAnimationFrame(raf);
     };
-  }, [short]);
+  }, [token.name, token.value]);
 
   return (
     <div
@@ -426,6 +434,20 @@ const TypeTokenRow = memo(function TypeTokenRow({
           style={{ fontSize: varOf(token.name) }}
         >
           {short ? SHORT_SPECIMEN : FULL_SPECIMEN}
+        </div>
+        <div
+          ref={fullRef}
+          aria-hidden="true"
+          className="tok-typespec-fit"
+          style={{
+            fontSize: varOf(token.name),
+            position: "absolute",
+            visibility: "hidden",
+            pointerEvents: "none",
+            maxWidth: "none",
+          }}
+        >
+          {FULL_SPECIMEN}
         </div>
       </div>
     </div>
