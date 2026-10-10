@@ -145,3 +145,55 @@
   font-size: var(--font-size-xs);
   color: var(--color-warning);
 }
+
+/* Health summary: compact rows answering the system-level questions
+   (accessible? which fonts? how big?) until a token is picked. Once the
+   inspector shows, Health folds into a collapsed details under it so the
+   inspector keeps the top of the panel. */
+.tok-health {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.tok-health-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+}
+
+.tok-health-label {
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.tok-health-value {
+  color: var(--color-text-secondary);
+  text-align: right;
+}
+
+.tok-health-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--color-accent-text);
+  cursor: pointer;
+  text-align: right;
+}
+
+.tok-health-link:hover {
+  text-decoration: underline;
+}
+
+.tok-health-fold {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.tok-health-fold summary {
+  cursor: pointer;
+  color: var(--color-text-muted);
+}
