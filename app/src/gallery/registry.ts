@@ -18,10 +18,14 @@ const searchKey = (s: string) => s.trim().toLocaleLowerCase("tr");
 
 /** Folds entries + their discovered Demo children into the `[parentLabel,
    children][]` shape Rail expects — one entry per parent, its Demo blocks
-   as children. Empty `query` keeps everything; otherwise a parent whose
-   label matches keeps all its children, and a parent that doesn't match
-   keeps only the children that do (dropped entirely if none do) — Rail's
-   `searching` flag then force-opens whatever survives. */
+   as children, except screen-* entries (issue #317), which hold no <Demo>
+   blocks and would each render as a one-item group pushing every section
+   below the fold: they fold into a single "Screens" parent with one child
+   link per screen ({ id: entry.id, label: entry.label }) in registry order.
+   Empty `query` keeps everything; otherwise a parent whose label matches
+   keeps all its children, and a parent that doesn't match keeps only the
+   children that do (dropped entirely if none do) — Rail's `searching` flag
+   then force-opens whatever survives. */
 export function buildRailGroups(
   entries: GalleryEntry[],
   outline: EntryOutline,
@@ -34,14 +38,32 @@ export function buildRailGroups(
     return demos.length ? demos : [{ id: e.id, label: e.label }];
   };
   const q = searchKey(query);
-  if (!q) return entries.map((e) => [e.label, childrenOf(e)]);
+  const screens = entries.filter((e) => e.id.startsWith("screen-"));
+  const screenChildren: RailLink[] = screens.map((e) => ({ id: e.id, label: e.label }));
+  const visibleScreens = (parentMatches: boolean): RailLink[] =>
+    parentMatches
+      ? screenChildren
+      : screenChildren.filter((c) => searchKey(c.label).includes(q));
+  if (!q) {
+    const groups: RailGroups = entries
+      .filter((e) => !e.id.startsWith("screen-"))
+      .map((e) => [e.label, childrenOf(e)] as [string, RailLink[]]);
+    if (screens.length) groups.push(["Screens", screenChildren]);
+    return groups;
+  }
 
   const groups: RailGroups = [];
   for (const e of entries) {
+    if (e.id.startsWith("screen-")) continue;
     const children = childrenOf(e);
     const parentMatches = searchKey(e.label).includes(q);
     const visible = parentMatches ? children : children.filter((c) => searchKey(c.label).includes(q));
     if (parentMatches || visible.length > 0) groups.push([e.label, visible]);
+  }
+  if (screens.length) {
+    const parentMatches = searchKey("Screens").includes(q);
+    const visible = visibleScreens(parentMatches);
+    if (parentMatches || visible.length > 0) groups.push(["Screens", visible]);
   }
   return groups;
 }

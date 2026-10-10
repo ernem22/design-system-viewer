@@ -32,7 +32,6 @@ import { CompareRail } from "./compare/CompareRail.tsx";
 import { CompareProps } from "./compare/CompareProps.tsx";
 import { useCompareView, DEFAULT_COMPONENT_ID } from "./compare/useCompareView.ts";
 import { PreviewProps, PreviewScopeDialog } from "./preview/PreviewProps.tsx";
-import { PreviewSystems } from "./preview/PreviewSystems.tsx";
 import { PreviewNotes } from "./preview/PreviewNotes.tsx";
 import { initialSectionHash, readViewUrl, scrollToSection, writeViewUrl } from "./lib/urlState.ts";
 import "./gallery/gallery.css";
@@ -120,10 +119,17 @@ function App() {
     [outline, query],
   );
   // Search narrows the Preview content too, not just its rail (legacy).
+  // Screen sections live under the single "Screens" rail parent (issue
+  // #317), so a matching screen is visible via its child link id, not via
+  // a parent label — non-screen parents still match by label, and demo
+  // child ids can never equal an entry id (`${sectionId}-${slug}`).
   const shownEntries = useMemo(() => {
     if (!searching) return null;
     const labels = new Set(railGroups.map(([label]) => label));
-    return new Set(COMPONENT_ENTRIES.filter((e) => labels.has(e.label)).map((e) => e.id));
+    const childIds = new Set(railGroups.flatMap(([, links]) => links.map((l) => l.id)));
+    return new Set(
+      COMPONENT_ENTRIES.filter((e) => labels.has(e.label) || childIds.has(e.id)).map((e) => e.id),
+    );
   }, [searching, railGroups]);
 
   // A new query reshapes the page — start the results from the top instead
@@ -369,16 +375,16 @@ function App() {
           onRetry={retry}
         />
       ),
+      // Preview rail shows only the section navigation (issue #317): the
+      // system list lived above it and pushed every section below the fold,
+      // duplicating the always-visible topbar SystemSwitcher.
       rail: (
-        <>
-          <PreviewSystems systems={systems} activeSlug={activeSlug} onSelect={setActiveSlug} />
-          <Rail
-            groups={railGroups}
-            searching={searching}
-            syncSection={sectionSyncArmed && tab === "preview"}
-            active={tab === "preview"}
-          />
-        </>
+        <Rail
+          groups={railGroups}
+          searching={searching}
+          syncSection={sectionSyncArmed && tab === "preview"}
+          active={tab === "preview"}
+        />
       ),
       propsPanel: <PreviewProps system={active} active={tab === "preview" && propsOpen} />,
     },
