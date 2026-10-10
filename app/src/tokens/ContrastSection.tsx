@@ -1,11 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { contrastRatio, rating, CONTRAST_PAIRS } from "../../../src/core/contrast.js";
+import { useEffect, useMemo, useRef } from "react";
+import { CONTRAST_SECTION_ID, useContrastRows } from "./useContrastRows.ts";
 import "./ContrastSection.css";
-
-type ContrastPair = [fg: string, bg: string, label: string];
-
-/** Root src/core/* is imported untyped on purpose (allowJs, checkJs off). */
-const PAIRS = CONTRAST_PAIRS as ContrastPair[];
 
 // Locale-shaped two-decimal ratio text via Intl (a bare toFixed hardcodes
 // the en-US shape inline and bypasses the internationalisation API). The
@@ -16,24 +11,13 @@ const ratioFormat = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
-interface ContrastRow {
-  fg: string;
-  bg: string;
-  label: string;
-  ratio: number | null;
-  badge: string;
-  tone: "yes" | "mid" | "no";
-}
-
 /**
  * WCAG contrast check ported from the legacy viewer's appendContrast
- * (src/viewer/app.js). Ratios are resolved through a hidden probe +
- * getComputedStyle — never by re-parsing raw token strings — so
- * var()-referencing tokens, color-mix(), oklch, etc. resolve exactly as
- * the browser renders them. The section carries every token as an inline
- * custom property (like the legacy gallery wrap did), so measurement does
- * not depend on whatever tokens App.tsx has applied to :root, nor on
- * effect ordering when switching systems.
+ * (src/viewer/app.js). Ratios come from `useContrastRows` (hidden probe +
+ * getComputedStyle, never raw string parsing). The section carries every
+ * token as an inline custom property (like the legacy gallery wrap did), so
+ * the chips resolve exactly this system even before App.tsx applies it to
+ * :root, nor on effect ordering when switching systems.
  *
  * `values` is the same resolved per-token map the token panels display —
  * `tokenValueMap`'s css -> groups order — so the audit measures the
@@ -42,56 +26,29 @@ interface ContrastRow {
 export function ContrastSection({ values }: { values: Map<string, string> }) {
   const sectionRef = useRef<HTMLElement>(null);
   const appliedRef = useRef<string[]>([]);
-  const [rows, setRows] = useState<ContrastRow[]>([]);
+  const { rows, pairs } = useContrastRows(values);
 
   const names = useMemo(() => new Set(values.keys()), [values]);
-  // Only pairs whose tokens the system actually defines — legacy skipped
-  // the whole section when no pair was fully present, this returns null.
-  const pairs = useMemo(
-    () => PAIRS.filter(([fg, bg]) => names.has(fg) && names.has(bg)),
-    [names],
-  );
 
   useEffect(() => {
     const sec = sectionRef.current;
-    if (!sec || pairs.length === 0) {
-      setRows([]);
-      return;
-    }
+    if (!sec) return;
     // Drop custom props for tokens removed since the last run, then carry
-    // the current system (stale props would silently skew ratios).
+    // the current system (stale props would silently skew the chips).
     for (const n of appliedRef.current) if (!names.has(n)) sec.style.removeProperty(n);
     for (const [name, value] of values) sec.style.setProperty(name, value);
     appliedRef.current = [...values.keys()];
-
-    const probe = document.createElement("span");
-    probe.setAttribute("aria-hidden", "true");
-    probe.style.cssText =
-      "position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden";
-    sec.appendChild(probe);
-    const cs = getComputedStyle(probe);
-    const next: ContrastRow[] = pairs.map(([fg, bg, label]) => {
-      probe.style.color = `var(${fg})`;
-      probe.style.backgroundColor = `var(${bg})`;
-      const ratio = contrastRatio(cs.color, cs.backgroundColor) as number | null;
-      const rt = rating(ratio) as { label: string; pass: boolean | "large" | null };
-      return {
-        fg,
-        bg,
-        label,
-        ratio,
-        badge: rt.label,
-        tone: rt.pass === true ? "yes" : rt.pass === "large" ? "mid" : "no",
-      };
-    });
-    probe.remove();
-    setRows(next);
-  }, [values, names, pairs]);
+  }, [values, names]);
 
   if (pairs.length === 0) return null;
 
   return (
-    <section ref={sectionRef} className="tok-group tok-contrast" aria-label="Accessibility contrast">
+    <section
+      ref={sectionRef}
+      id={CONTRAST_SECTION_ID}
+      className="tok-group tok-contrast"
+      aria-label="Accessibility contrast"
+    >
       <h2>
         Accessibility / Contrast<span>WCAG AA · 4.5</span>
       </h2>
