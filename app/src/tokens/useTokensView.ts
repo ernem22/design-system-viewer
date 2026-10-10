@@ -11,7 +11,7 @@ import { readViewUrl } from "../lib/urlState.ts";
 export const groupAnchor = (id: string) => `tok-group-${id}`;
 export const schemaAnchor = (id: string) => `tok-schema-${id}`;
 
-/** Rail parent labels per token kind, in first-appearance order. */
+/** Rail parent labels per token kind, in the fixed KIND_ORDER below. */
 export const KIND_LABELS: Record<TokenGroupKind, string> = {
   color: "Color",
   type: "Typography",
@@ -20,6 +20,30 @@ export const KIND_LABELS: Record<TokenGroupKind, string> = {
   motion: "Motion",
   number: "Number",
   raw: "Other",
+};
+
+/** Gallery + rail group order: the palette first, component/raw groups last.
+   Stored systems (e.g. perp-ultra-v2) keep component groups first, so the
+   view sorts by kind once in the `groups` memo instead of following stored
+   order. */
+const KIND_ORDER: readonly TokenGroupKind[] = [
+  "color",
+  "type",
+  "length",
+  "shadow",
+  "motion",
+  "number",
+  "raw",
+];
+
+const KIND_RANK: Record<TokenGroupKind, number> = {
+  color: 0,
+  type: 1,
+  length: 2,
+  shadow: 3,
+  motion: 4,
+  number: 5,
+  raw: 6,
 };
 
 export interface CoverageGroup {
@@ -122,8 +146,19 @@ export function useTokensView(system: DesignSystem | null, pushToast: PushToast)
   );
   const warnings = useMemo(() => (tokens.length ? (lintTokens(tokens) as LintWarning[]) : []), [tokens]);
 
+  // Ordered by kind in the fixed KIND_ORDER (palette first, raw last):
+  // the gallery (visibleGroups) and the rail (railGroups) both read from
+  // this memo, so they stay in the same order. The sort is stable, so
+  // groups of one kind keep their stored (or `categorize`) order.
   const groups = useMemo<TokenGroup[]>(
-    () => (system?.groups?.length ? system.groups : (categorize(tokens) as TokenGroup[])),
+    () => {
+      const base: TokenGroup[] = system?.groups?.length
+        ? system.groups
+        : (categorize(tokens) as TokenGroup[]);
+      return [...base].sort(
+        (a, b) => (KIND_RANK[a.kind] ?? KIND_ORDER.length) - (KIND_RANK[b.kind] ?? KIND_ORDER.length),
+      );
+    },
     [system, tokens],
   );
 
@@ -180,6 +215,7 @@ export function useTokensView(system: DesignSystem | null, pushToast: PushToast)
       }
       return links.length ? [["Schema", links]] : [];
     }
+    // visibleGroups already follows KIND_ORDER, so first-appearance here is that fixed order.
     const byKind = new Map<string, RailLink[]>();
     for (const { group, tokens: toks } of visibleGroups) {
       const label = KIND_LABELS[group.kind] ?? "Other";
