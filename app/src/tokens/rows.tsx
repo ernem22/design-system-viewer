@@ -1,7 +1,5 @@
 import { memo, type CSSProperties } from "react";
 import type { Token } from "../systems/store.ts";
-import { TokenEditControl } from "./InlineEditor.tsx";
-import "./InlineEditor.css";
 import { isRef } from "./tokenUtils.ts";
 import "./rows.css";
 
@@ -17,8 +15,8 @@ export function RefBadge({ value }: { value: string }) {
 export interface RowCallbacks {
   selectedName: string | null;
   onPick: (token: Token) => void;
-  /** Name of the token whose inline editor is open (single-open, lifted so
-     double-click and the Update button drive the same Popover). */
+  /** Name of the token the inspector should focus (double-click sets it via
+     onEdit; TokensProps reads it — the gallery itself edits nothing). */
   editingName: string | null;
   onEdit: (token: Token | null) => void;
   onSave: (name: string, value: string) => void;
@@ -44,21 +42,22 @@ function pickKeyDown(e: React.KeyboardEvent, onPick: () => void): void {
 }
 
 /**
- * The one token row. Name, value and the Update affordance sit in fixed grid
- * columns so they line up between every group; the optional `demo` is the only
- * thing that varies by kind — flat groups (no visual preview) pass nothing and
- * keep the same columns, instead of a second table renderer. Click = copy +
- * inspect; Update button or double-click = inline edit (no copy).
+ * The one token row. Name, value and demo sit in fixed grid columns so they
+ * line up between every group; the optional `demo` is the only thing that
+ * varies by kind — flat groups (no visual preview) pass nothing and keep
+ * the same columns, instead of a second table renderer. Click = copy +
+ * inspect; double-click = select + focus the inspector's edit form.
  */
 export const TokenRow = memo(function TokenRow({
   token,
   demo,
   selectedName,
   onPick,
-  editingName,
   onEdit,
-  onSave,
-}: { token: Token; demo?: React.ReactNode } & RowCallbacks) {
+}: { token: Token; demo?: React.ReactNode } & Pick<
+  RowCallbacks,
+  "selectedName" | "onPick" | "onEdit"
+>) {
   return (
     <div
       className="tok-row"
@@ -66,9 +65,12 @@ export const TokenRow = memo(function TokenRow({
       role="option"
       aria-selected={token.name === selectedName}
       tabIndex={0}
-      title="click to copy — double-click or Update to edit"
+      title="click to copy — double-click to edit"
       onClick={() => onPick(token)}
-      onDoubleClick={() => onEdit(token)}
+      onDoubleClick={() => {
+        onPick(token);
+        onEdit(token);
+      }}
       onKeyDown={(e) => pickKeyDown(e, () => onPick(token))}
     >
       <b className="tok-row-name">{token.name}</b>
@@ -77,28 +79,13 @@ export const TokenRow = memo(function TokenRow({
         <RefBadge value={token.value} />
       </span>
       <div className="tok-row-demo">{demo}</div>
-      <div className="tok-row-action">
-        <TokenEditControl
-          token={token}
-          open={editingName === token.name}
-          onOpenChange={(next) => onEdit(next ? token : null)}
-          onSave={onSave}
-        />
-      </div>
     </div>
   );
 });
 
 /** Row list for the one row component; `render` supplies the kind's demo. */
-const TokenRows = memo(function TokenRows({
-  tokens,
-  render,
-  selectedName,
-  onPick,
-  editingName,
-  onEdit,
-  onSave,
-}: RendererProps & { render?: (t: Token) => React.ReactNode }) {
+const TokenRows = memo(function TokenRows(props: RendererProps & { render?: (t: Token) => React.ReactNode }) {
+  const { tokens, render, selectedName, onPick, onEdit } = props;
   return (
     <div className="tok-rows" role="listbox" aria-label="Tokens">
       {tokens.map((t) => (
@@ -108,18 +95,17 @@ const TokenRows = memo(function TokenRows({
           demo={render?.(t)}
           selectedName={selectedName}
           onPick={onPick}
-          editingName={editingName}
           onEdit={onEdit}
-          onSave={onSave}
         />
       ))}
     </div>
   );
 });
 
-/** Swatch grid for color kinds (old colorGrid). */
+/** Swatch grid for color kinds (old colorGrid). Click = copy + inspect;
+    double-click = select + focus the inspector's edit form. */
 export const ColorGrid = memo(function ColorGrid(props: RendererProps) {
-  const { tokens, selectedName, onPick, editingName, onEdit, onSave } = props;
+  const { tokens, selectedName, onPick, onEdit } = props;
   return (
     <div className="tok-swatches" role="listbox" aria-label="Tokens">
       {tokens.map((t) => (
@@ -130,9 +116,12 @@ export const ColorGrid = memo(function ColorGrid(props: RendererProps) {
           role="option"
           aria-selected={t.name === selectedName}
           tabIndex={0}
-          title="click to copy — double-click or Update to edit"
+          title="click to copy — double-click to edit"
           onClick={() => onPick(t)}
-          onDoubleClick={() => onEdit(t)}
+          onDoubleClick={() => {
+            onPick(t);
+            onEdit(t);
+          }}
           onKeyDown={(e) => pickKeyDown(e, () => onPick(t))}
         >
           <div className="tok-chip" style={{ "--val": varOf(t.name) } as CSSProperties} />
@@ -141,12 +130,6 @@ export const ColorGrid = memo(function ColorGrid(props: RendererProps) {
             <RefBadge value={t.value} />
           </div>
           <div className="tok-swatch-value">{t.value}</div>
-          <TokenEditControl
-            token={t}
-            open={editingName === t.name}
-            onOpenChange={(next) => onEdit(next ? t : null)}
-            onSave={onSave}
-          />
         </div>
       ))}
     </div>

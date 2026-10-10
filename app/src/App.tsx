@@ -345,7 +345,7 @@ function App() {
           active={tab === "tokens"}
         />
       ),
-      propsPanel: active && <TokensProps view={tokensView} />,
+      propsPanel: active && <TokensProps view={tokensView} onPatch={handlePatch} />,
     },
     {
       id: "preview",
