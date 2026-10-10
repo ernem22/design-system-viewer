@@ -43,7 +43,10 @@ process.stdin.on('data', (d) => (s += d)).on('end', () => {
       // passrole: testertask: task_58208da47e12commit: 4059587tests: n-abuild: ...observed: ...before:
       // ...`, the line breaks lost; the whole line became the status). Recognised only when the status
       // word runs straight into the next field name; the line is then split before every field name.
-      if (/^\s*status:\s*(?:pass|fail)(?=(?:role|task|commit|tests|build|lint|observed|before|reason|fix_required|scope_ok|source|pr|head)\s*:)/i.test(line)) {
+      // ...or joined with plain spaces (measured 2026-10-10, reviewer #332, task_4f36f587a5f1: `status: pass
+      // role: reviewer task: ... commit: d4b9e57 scope_ok: yes Correctness: ...`): the same split, before
+      // every field name that follows whitespace.
+      if (/^\s*status:\s*(?:pass|fail)\s*(?=(?:role|task|commit|tests|build|lint|observed|before|reason|fix_required|scope_ok|source|pr|head)\s*:)/i.test(line)) {
         for (const f of line.split(/(?=(?:status|role|task|commit|tests|build|lint|observed|before|reason|fix_required|scope_ok|source|pr|head)\s*(?:\([^)]*\))?\s*:)/i))
           if (f.trim()) lines.push(f.trim());
       } else if (/^\s*status:\s*[a-z]+\s*[;.]\s/i.test(line)) {
@@ -79,5 +82,11 @@ process.stdin.on('data', (d) => (s += d)).on('end', () => {
   // becomes `observed: (how it was measured) x`. Nothing is added; the text is only moved behind the name.
   const EV = /^(observed|before|build|reason|fix_required|scope_ok)\s*(\([^)]*\))?\s*:\s*/i;
   const norm = lines.map((l) => { const m = EV.exec(l); return m ? `${m[1].toLowerCase()}: ${m[2] ? m[2] + ' ' : ''}${l.slice(m[0].length)}` : l; });
+  // One-word fields keep one word: `scope_ok: yes Correctness: ...` (reviewer #332, a joined report) was
+  // read as scope_ok "yes Correctness: ..." and refused. The rest of the line is kept as its own line.
+  const ONE = /^(status|role|scope_ok):\s*(\S+)\s+(\S.*)$/i;
+  const out2 = [];
+  for (const l of norm) { const m = ONE.exec(l); if (m) out2.push(`${m[1]}: ${m[2]}`, m[3]); else out2.push(l); }
+  norm.length = 0; norm.push(...out2);
   process.stdout.write(norm.join('\n') + '\n');
 });
