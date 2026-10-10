@@ -250,6 +250,45 @@
   white-space: nowrap;
 }
 
+/* TypeRow specimen (issue #309): never ellipsizes — the row falls back to the
+   short "Ag" pair (picked by measuring scrollWidth against clientWidth) before
+   a large size could cut to "Aa B…" or "A…", so overflow only ever clips
+   cleanly on the first paint before the measure runs. */
+.tok-typespec-fit {
+  min-width: 0;
+  max-width: 100%;
+  color: var(--color-text);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* TypeRow value stack (issue #309): the raw value keeps the single-line muted
+   ellipsis treatment on its own line (the full value stays on `title`), and
+   the resolved px size sits below it. Every size and ink resolves from the
+   token layer — no literals. */
+.tok-typevalue {
+  white-space: normal;
+  text-overflow: clip;
+}
+
+.tok-typevalue-raw {
+  display: block;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tok-typeresolved {
+  display: block;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .tok-lineheight {
   white-space: normal;
   background: var(--color-surface-raised);
