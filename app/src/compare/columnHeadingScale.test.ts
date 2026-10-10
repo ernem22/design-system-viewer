@@ -114,8 +114,8 @@ const cssScopedRole = role
 const rootRoleValue = role ? declaration(tokensCss, ":root", role) : "";
 
 // Shipped systems whose type scale moves the head. ds-new2 lg = 1.1875rem
-// (19px); gs5/genspark/gs3 lg = 16px — the reviewer's cases.
-const SYSTEMS = ["ds-new2", "gs5", "genspark", "gs3", "ds-new3", "perp2"];
+// (19px); gs5/genspark/gs4 lg = 16px — the reviewer's cases.
+const SYSTEMS = ["ds-new2", "gs5", "genspark", "gs4", "ds-new3", "perp2"];
 const EXPECTED_HEAD: Record<string, number> = { "ds-new2": 19, gs5: 16 };
 
 let root: Root | null = null;
