@@ -341,16 +341,111 @@ export const OpacityRow = memo(function OpacityRow(props: RendererProps) {
   );
 });
 
-export const TypeRow = memo(function TypeRow(props: RendererProps) {
+/** Full specimen sentence; large sizes fall back to SHORT_SPECIMEN (issue #309). */
+const FULL_SPECIMEN = "Aa Bb Cc — sample text 0123";
+const SHORT_SPECIMEN = "Ag";
+
+/**
+ * One font-size row (issue #309): the value cell stacks the raw value (kept
+ * whole as `title`, since the column truncates clamp()/vw values) over the
+ * resolved px size, and the demo cell holds the measured specimen. Click =
+ * copy + inspect; double-click = select + focus the inspector's edit form —
+ * the same contract as TokenRow, which cannot carry this row because only its
+ * demo slot varies and here the value cell varies too.
+ */
+const TypeTokenRow = memo(function TypeTokenRow({
+  token,
+  selectedName,
+  onPick,
+  onEdit,
+}: {
+  token: Token;
+  selectedName: string | null;
+  onPick: (token: Token) => void;
+  onEdit: (token: Token | null) => void;
+}) {
+  const specimenRef = useRef<HTMLDivElement>(null);
+  // Short glyph pair while the sentence overflows; null resolved size while
+  // getComputedStyle reports nothing (never in a real browser).
+  const [short, setShort] = useState(false);
+  const [resolved, setResolved] = useState<string | null>(null);
+
+  // Pick the specimen by measuring, not by the token's name: the sentence
+  // stays while it fits, "Ag" takes over once scrollWidth exceeds the column.
+  // The resolved px size reads getComputedStyle(specimen).fontSize so
+  // clamp()/vw values show the number a designer needs. Both recompute on
+  // window resize, throttled with rAF.
+  useEffect(() => {
+    const specimen = specimenRef.current;
+    if (!specimen) return;
+    let raf = 0;
+    const measure = () => {
+      setShort(specimen.scrollWidth > specimen.clientWidth);
+      const px = Number.parseFloat(getComputedStyle(specimen).fontSize);
+      setResolved(Number.isFinite(px) ? `≈ ${Math.round(px)}px` : null);
+    };
+    const onResize = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(measure);
+    };
+    measure();
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      cancelAnimationFrame(raf);
+    };
+  }, [short]);
+
   return (
-    <TokenRows
-      {...props}
-      render={(t) => (
-        <div className="tok-typespec" style={{ fontSize: varOf(t.name) }}>
-          Aa Bb Cc — sample text 0123
+    <div
+      className="tok-row"
+      data-token={token.name}
+      role="option"
+      aria-selected={token.name === selectedName}
+      tabIndex={0}
+      title="click to copy — double-click to edit"
+      onClick={() => onPick(token)}
+      onDoubleClick={() => {
+        onPick(token);
+        onEdit(token);
+      }}
+      onKeyDown={(e) => pickKeyDown(e, () => onPick(token))}
+    >
+      <b className="tok-row-name">{token.name}</b>
+      <span className="tok-row-value tok-typevalue" title={token.value}>
+        <span className="tok-typevalue-raw">
+          {token.value}
+          <RefBadge value={token.value} />
+        </span>
+        {resolved != null && <span className="tok-typeresolved">{resolved}</span>}
+      </span>
+      <div className="tok-row-demo">
+        <div
+          ref={specimenRef}
+          className="tok-typespec-fit"
+          style={{ fontSize: varOf(token.name) }}
+        >
+          {short ? SHORT_SPECIMEN : FULL_SPECIMEN}
         </div>
-      )}
-    />
+      </div>
+    </div>
+  );
+});
+
+export const TypeRow = memo(function TypeRow(props: RendererProps) {
+  const { tokens, selectedName, onPick, onEdit } = props;
+  return (
+    <div className="tok-rows" role="listbox" aria-label="Tokens">
+      {tokens.map((t) => (
+        <TypeTokenRow
+          key={t.name}
+          token={t}
+          selectedName={selectedName}
+          onPick={onPick}
+          onEdit={onEdit}
+        />
+      ))}
+    </div>
   );
 });
 
