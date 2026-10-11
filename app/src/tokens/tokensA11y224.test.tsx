@@ -71,9 +71,6 @@ function ToolbarProbe() {
       view={view}
       system={system}
       onMerge={noop}
-      onExportCss={noop}
-      onExportJson={noop}
-      onDelete={noop}
     />
   );
 }
@@ -81,7 +78,7 @@ function ToolbarProbe() {
 function WarnProbe() {
   const view = useTokensView(warnSystem, noop);
   return (
-    <TokensView system={warnSystem} view={view} onDelete={noop} onMerge={noop} onPatch={noop} />
+    <TokensView system={warnSystem} view={view} onMerge={noop} onPatch={noop} />
   );
 }
 
@@ -137,24 +134,21 @@ describe("issue #224 companion findings", () => {
     const el = await mount(<ToolbarProbe />);
     const toolbar = el.querySelector('[role="toolbar"]')!;
     // Arrow keys rove between buttons; the filter textbox keeps its caret
-    // keys, so the round-trip starts from the first action button instead.
-    const add = [...toolbar.querySelectorAll<HTMLButtonElement>("button")].find(
-      (b) => b.textContent?.trim() === "Add tokens",
-    )!;
-    const buttons = [...toolbar.querySelectorAll<HTMLButtonElement>("button")].filter(
-      (b) => !b.disabled,
-    );
-    const next = buttons[buttons.indexOf(add) + 1];
-    expect(next, "a button follows Add tokens").toBeTruthy();
-    add.focus();
+    // keys. Gallery/Schema agree with the toolbar roving in both directions
+    // (the Schema→Add-tokens boundary belongs to the segmented control's own
+    // radio-group wrap, as on the parent).
+    const buttons = [...toolbar.querySelectorAll<HTMLButtonElement>("button")];
+    const gallery = buttons.find((b) => b.textContent?.trim() === "Gallery")!;
+    const schema = buttons.find((b) => b.textContent?.trim() === "Schema")!;
+    gallery.focus();
     await act(async () => {
-      add.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      gallery.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     });
-    expect(document.activeElement, "ArrowRight moves focus").toBe(next);
+    expect(document.activeElement, "ArrowRight moves Gallery -> Schema").toBe(schema);
     await act(async () => {
-      next.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      schema.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
     });
-    expect(document.activeElement, "ArrowLeft moves focus back").toBe(add);
+    expect(document.activeElement, "ArrowLeft moves Schema -> Gallery").toBe(gallery);
   });
 
   it("contains overscroll in the dialog overlay + scrolling dialog", () => {

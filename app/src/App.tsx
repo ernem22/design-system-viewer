@@ -17,6 +17,7 @@ import { clearAll, countOverrides, useInspector } from "./lib/tokenOverrides.ts"
 import { useSystems, resolveSystemTokens } from "./systems/store.ts";
 import { usePanels } from "./lib/panelStorage.ts";
 import SystemSwitcher from "./systems/SystemSwitcher.tsx";
+import { SystemMenu } from "./systems/SystemMenu.tsx";
 import { AddSystemDialog } from "./systems/AddSystemDialog.tsx";
 import "./systems/AddSystemDialog.css";
 import Rail from "./shell/Rail.tsx";
@@ -25,6 +26,7 @@ import { buildRailGroups } from "./gallery/registry.ts";
 import { GallerySection } from "./gallery/ui.tsx";
 import { TokensProps } from "./tokens/TokensProps.tsx";
 import { TokensView } from "./tokens/TokensView.tsx";
+import { download, systemToCss } from "./tokens/export.ts";
 import { useTokensView } from "./tokens/useTokensView.ts";
 import { useGalleryOutline } from "./lib/galleryOutline.ts";
 import { CompareView } from "./compare/CompareView.tsx";
@@ -53,6 +55,8 @@ function App() {
     addSystem,
     mergeCss,
     replaceSystem,
+    renameSystem,
+    duplicateSystem,
     patchToken,
     removeSystem,
   } = useSystems();
@@ -168,6 +172,29 @@ function App() {
     },
     [removeSystem, pushToast],
   );
+  // System-menu actions (issue #313): whole-system operations that used to
+  // live in the Tokens toolbar, now reachable from every tab through the
+  // menu beside the switcher. Export reuses the Tokens tab's download calls.
+  const handleRename = useCallback(
+    (slug: string, name: string) => {
+      renameSystem(slug, name);
+    },
+    [renameSystem],
+  );
+  const handleDuplicate = useCallback(
+    (slug: string) => {
+      duplicateSystem(slug);
+      pushToast("Duplicated", "ok");
+    },
+    [duplicateSystem, pushToast],
+  );
+  const handleExportCss = useCallback(() => {
+    if (active) download(`${active.slug}.css`, systemToCss(active), "text/css");
+  }, [active]);
+  const handleExportJson = useCallback(() => {
+    if (active)
+      download(`${active.slug}.json`, JSON.stringify(active, null, 2), "application/json");
+  }, [active]);
 
   // A dropped/picked file merges into the active system, or seeds the
   // Add dialog when there is none yet (legacy drop behavior). CSS arrives as
@@ -336,7 +363,6 @@ function App() {
         <TokensView
           system={active}
           view={tokensView}
-          onDelete={handleDelete}
           onMerge={handleMerge}
           onPatch={handlePatch}
         />
@@ -414,12 +440,25 @@ function App() {
             </>
           }
           systemSwitcher={
-            <SystemSwitcher
-              systems={systems}
-              active={active}
-              activeSlug={activeSlug}
-              onSelect={setActiveSlug}
-            />
+            <>
+              <SystemSwitcher
+                systems={systems}
+                active={active}
+                activeSlug={activeSlug}
+                onSelect={setActiveSlug}
+              />
+              {/* System actions stay beside the switcher (not in the phone's
+                  "More actions" popover): they act on the active system, which
+                  the switcher names, on every tab. */}
+              <SystemMenu
+                system={active}
+                onRename={handleRename}
+                onDuplicate={handleDuplicate}
+                onExportCss={handleExportCss}
+                onExportJson={handleExportJson}
+                onDelete={handleDelete}
+              />
+            </>
           }
           actions={
             <>

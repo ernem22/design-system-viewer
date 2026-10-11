@@ -1,0 +1,147 @@
+/* System actions menu (issue #313): the trigger reuses the topbar
+   `.app-iconbtn`; the menu and dialogs below resolve every size and color
+   from the viewer's tokens — no literals. */
+
+.sys-menu {
+  min-width: var(--space-56);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-overlay);
+  padding: var(--space-1);
+  box-shadow: var(--shadow-md);
+  z-index: var(--z-modal);
+}
+
+.sys-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.sys-menu-item code {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.sys-menu-item[data-highlighted] {
+  background: var(--color-accent-subtle);
+}
+
+.sys-menu-separator {
+  height: var(--space-px);
+  background: var(--color-border);
+  margin: var(--space-1) var(--space-2);
+}
+
+.sys-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--color-hover-overlay);
+  z-index: var(--z-overlay);
+  /* Wheel/touch chains must stop at the modal, not scroll the page behind. */
+  overscroll-behavior: contain;
+}
+
+.sys-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  /* The width itself is a token; the viewport clamp only keeps the fixed
+     dialog on-screen on narrow viewports. */
+  width: var(--space-96);
+  max-width: calc(100vw - var(--space-8));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-overlay);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-md);
+  z-index: var(--z-modal);
+  max-height: 90vh;
+  overflow-y: auto;
+  /* The dialog is itself the scroll container: keep its own scroll chained. */
+  overscroll-behavior: contain;
+}
+
+.sys-dialog-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+.sys-dialog-desc {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.sys-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.sys-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.sys-input {
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-md);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font-size: var(--font-size-sm);
+  padding: var(--space-2) var(--space-3);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sys-btn {
+  height: var(--space-8);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  white-space: nowrap;
+  touch-action: manipulation;
+}
+
+.sys-btn:hover {
+  border-color: var(--color-border-strong);
+}
+
+.sys-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sys-btn-primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+/* The danger treatment lives only here, inside the delete confirm — the
+   menu's Delete… row itself carries no red. Same pairing as the toolbar's
+   retired danger button: danger text on its designed -subtle surface. */
+.sys-btn-danger {
+  color: var(--color-danger-text);
+  background: var(--color-danger-subtle);
+}

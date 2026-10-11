@@ -16,7 +16,7 @@ const noop = () => {};
 function TokensHarness({ system }: { system: DesignSystem }) {
   const view = useTokensView(system, noop);
   return (
-    <TokensView system={system} view={view} onDelete={noop} onMerge={noop} onPatch={noop} />
+    <TokensView system={system} view={view} onMerge={noop} onPatch={noop} />
   );
 }
 
