@@ -348,3 +348,41 @@
   background: var(--color-accent-subtle);
   color: var(--color-text);
 }
+
+/* Narrow viewport (issue #311): the toolbar wraps onto as many lines as
+   needed instead of running past the viewport. The filter row takes the full
+   width on its own line and the action cluster wraps below it with no
+   leading offset, so every control stays inside the viewport. The actions
+   wrap internally too, so long button sets fold rather than overflow. Every
+   size and gap resolves from the token layer — no literals. */
+@media (max-width: 600px) {
+  .tok-toolbar {
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+  }
+
+  .tok-search {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    min-width: 0;
+    row-gap: var(--space-2);
+  }
+
+  .tok-filter-wrap {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .tok-filter {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .tok-actions {
+    margin-left: 0;
+    flex-wrap: wrap;
+    min-width: 0;
+    row-gap: var(--space-2);
+  }
+}
