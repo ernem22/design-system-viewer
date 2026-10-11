@@ -7,6 +7,38 @@
   gap: var(--space-8);
 }
 
+/* Shared schema column template (issue #312): every group table used
+   auto layout, so each table sized its columns from its own longest name
+   and the value column started at a different x per group. Fixed layout
+   sizes all three tracks from the one colgroup below, identical in every
+   table, so the value column's left edge lines up across groups. The name
+   track fits the longest schema name; longer content wraps onto its own
+   lines — it is never ellipsized. Every width resolves from the token
+   layer — no literals. */
+.tok-schema .tok-raw {
+  table-layout: fixed;
+}
+
+.tok-schema-col-name {
+  width: var(--space-80);
+}
+
+.tok-schema-col-value {
+  width: auto;
+}
+
+.tok-schema-col-actions {
+  width: var(--space-24);
+}
+
+/* Fixed layout clips rather than grows: let the name cell wrap (the
+   gallery's shared .tok-raw keeps nowrap for its first cell) and break
+   inside a long token name instead of pushing the value column. */
+.tok-schema .tok-raw td:first-child {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .tok-yes {
   color: var(--color-success);
 }

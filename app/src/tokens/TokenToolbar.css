@@ -121,6 +121,52 @@
   border-color: var(--color-accent-border);
 }
 
+/* Segmented Gallery/Schema view switch (issue #312): a bordered container
+   holding both labels, so the control reads as a state picker rather than
+   one more action button. It leads .tok-actions with a trailing gap that
+   keeps it visually separate from Add tokens / Export / Delete. The active
+   item carries the same accent-subtle selected treatment as pressed
+   toolbar buttons. Every size resolves from the token layer — no literals. */
+.tok-view-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  margin-inline-end: var(--space-2);
+}
+
+.tok-view-item {
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+  white-space: nowrap;
+  /* No double-tap zoom delay on touch: the item fires on the first tap. */
+  touch-action: manipulation;
+}
+
+.tok-view-item:hover {
+  color: var(--color-text);
+}
+
+.tok-view-item[data-state="on"] {
+  background: var(--color-accent-subtle);
+  color: var(--color-text);
+}
+
+.tok-view-item:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
 /* --color-danger is a fill token: on --color-surface-raised it fell below AA
    (perp-ultra-v2 2.84:1). The danger text token on its designed -subtle
    surface is the same pairing #88 used for the gallery's error text. */
