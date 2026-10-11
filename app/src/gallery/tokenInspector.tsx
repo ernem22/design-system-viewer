@@ -406,6 +406,18 @@ function useDockedEscapeToClose(
   }, [inDialog, selected, active]);
 }
 
+/** The Preview section currently in view, offered in the empty panel so the
+    user need not hunt for a section's token-count badge first. Resolved by
+    the owner (PreviewProps) from scrollspy over COMPONENT_ENTRIES ids plus
+    tokensForEntry — the same id/title/tokens the section's own
+    SectionScopeTrigger was built with, so opening it is identical to
+    clicking that badge. */
+export interface InViewSection {
+  id: string;
+  title: string;
+  tokens: string[];
+}
+
 /** Docked right-panel content and mobile dialog body: the selected scope's
     tokens, or the empty state when nothing is selected. Both edits are
     EPHEMERAL here (value overrides + scoped swaps) — nothing reaches the
@@ -414,6 +426,7 @@ export function ScopePanel({
   valueOf,
   inDialog = false,
   active = true,
+  inView,
 }: {
   valueOf: (token: string) => string;
   inDialog?: boolean;
@@ -421,6 +434,10 @@ export function ScopePanel({
       props panel expanded). App supplies the live state; the panel defaults to
       on so a directly-mounted test behaves like the open Preview panel. */
   active?: boolean;
+  /** Section currently in view (Preview only). Renders the "In view" offer
+      in the empty state; absent (Compare, hidden tab, no matching element)
+      keeps the legacy hint-only empty state. */
+  inView?: InViewSection | null;
 }) {
   const { selected, swaps, valueEdits } = useInspector();
   useDockedEscapeToClose(inDialog, selected, active);
@@ -436,7 +453,30 @@ export function ScopePanel({
           </div>
         </div>
         <div className="dsv-drawer-body">
-          <div className="dsv-props-empty">
+          {inView && (
+            <div className="dsv-inview">
+              <div className="dsv-drawer-group-label">In view</div>
+              <div className="dsv-inview-title">{inView.title}</div>
+              <p className="dsv-inview-count dsv-muted">
+                {inView.tokens.length} token{inView.tokens.length === 1 ? "" : "s"} used here
+              </p>
+              {inView.tokens.length > 0 && (
+                <button
+                  type="button"
+                  className="dsv-btn dsv-btn--soft dsv-btn--sm"
+                  onClick={(event) =>
+                    openScope(
+                      { id: inView.id, title: inView.title, tokens: inView.tokens },
+                      event.currentTarget,
+                    )
+                  }
+                >
+                  Inspect tokens
+                </button>
+              )}
+            </div>
+          )}
+          <div className={`dsv-props-empty${inView ? " dsv-props-empty--hint" : ""}`}>
             <Icon name="sliders" size={20} />
             <p>
               Click a component&apos;s <b>token count badge</b> to inspect its tokens here.
