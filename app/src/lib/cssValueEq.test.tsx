@@ -110,12 +110,10 @@ describe("DiffTable formatting-only differences (issue #281)", () => {
       sys("a", [group("S", { "--a": "0.5rem", "--b": "#ffffff", "--c": "0px" })]),
       sys("b", [group("S", { "--a": ".5rem", "--b": "#FFFFFF", "--c": "0" })]),
     ]);
-    // "Different" hides the now-same rows; switch the segmented control to
-    // "All" to check the cells still carry the authored spellings (#323
-    // replaced the "only differences" checkbox with Different/Missing/All).
+    // "only differences" hides the now-same rows; show everything to check
+    // the cells still carry the authored spellings, not the normalised form.
     await act(async () => {
-      const all = [...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === "All");
-      all!.click();
+      (el.querySelector('[role="checkbox"]') as HTMLElement).click();
     });
     const codes = [...el.querySelectorAll("code")].map((c) => c.textContent);
     expect(codes).toEqual(expect.arrayContaining(["0.5rem", ".5rem", "#ffffff", "#FFFFFF", "0px", "0"]));

@@ -123,6 +123,26 @@ describe("DiffTable classification (issue #323)", () => {
   });
 });
 
+// Issue #281, relocated from cssValueEq.test.tsx (#351 review: the #323 diff
+// may only touch DiffTable.tsx, compare.css and this file): formatting-only
+// differences count as same, and cells still render each authored spelling.
+describe("DiffTable formatting-only differences (issue #281)", () => {
+  it("still displays each system's value exactly as authored", async () => {
+    const el = await render([
+      sys("a", [group("S", { "--a": "0.5rem", "--b": "#ffffff", "--c": "0px" })]),
+      sys("b", [group("S", { "--a": ".5rem", "--b": "#FFFFFF", "--c": "0" })]),
+    ]);
+    // Same rows hide under the default Different filter; switch to All to
+    // check the cells carry the authored spellings, not the normalised form.
+    await act(async () => {
+      const all = [...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === "All");
+      all!.click();
+    });
+    const codes = [...el.querySelectorAll("code")].map((c) => c.textContent);
+    expect(codes).toEqual(expect.arrayContaining(["0.5rem", ".5rem", "#ffffff", "#FFFFFF", "0px", "0"]));
+  });
+});
+
 describe("DiffTable category union", () => {
   it("shows every label a token lives under, grouped by the first", async () => {
     const el = await render([
