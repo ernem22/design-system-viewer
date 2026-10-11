@@ -252,3 +252,126 @@ describe("useSystems retry", () => {
     expect(current!.systems).toHaveLength(1);
   });
 });
+
+// Issue #313: Export/Delete moved to the system menu beside the switcher,
+// and rename/duplicate became possible. renameSystem changes the name only
+// (the slug is unchanged, so links keep working); duplicateSystem copies
+// through the addSystem path ("<name> copy", a free slug, made active).
+// Both persist through the same localStorage path as the other mutations.
+describe("useSystems rename + duplicate", () => {
+  let root: Root | null = null;
+  let host: HTMLDivElement | null = null;
+  let current: ReturnType<typeof useSystems> | null = null;
+
+  const SEED: DesignSystem[] = [
+    {
+      slug: "perp-ultra-v2",
+      name: "Perp Ultra v2",
+      css: ":root { --color-bg: #000; }",
+      groups: [],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+    {
+      slug: "aurora",
+      name: "Aurora",
+      css: ":root { --color-bg: #fff; }",
+      groups: [],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+  ];
+
+  function Harness() {
+    current = useSystems();
+    return null;
+  }
+
+  async function mountSeeded(): Promise<void> {
+    localStorage.setItem("dsv.app.systems", JSON.stringify(SEED));
+    const { createRoot } = await import("react-dom/client");
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root!.render(createElement(Harness));
+    });
+    await act(async () => {});
+  }
+
+  function stored(): DesignSystem[] {
+    return JSON.parse(localStorage.getItem("dsv.app.systems") as string) as DesignSystem[];
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  });
+
+  afterEach(() => {
+    act(() => root?.unmount());
+    root = null;
+    host?.remove();
+    host = null;
+    current = null;
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  it("renames in place: the name changes, the slug is unchanged, the list persists", async () => {
+    await mountSeeded();
+    let renamed: DesignSystem | null = null;
+    await act(async () => {
+      renamed = current!.renameSystem("perp-ultra-v2", "Perp X");
+    });
+    await act(async () => {});
+
+    expect(renamed!.slug, "slug unchanged so links keep working").toBe("perp-ultra-v2");
+    expect(renamed!.name).toBe("Perp X");
+    expect(current!.systems.find((s) => s.slug === "perp-ultra-v2")!.name).toBe("Perp X");
+    expect(current!.systems.find((s) => s.slug === "aurora")!.name).toBe("Aurora");
+    expect(stored().find((s) => s.slug === "perp-ultra-v2")!.name).toBe("Perp X");
+  });
+
+  it("ignores a blank rename", async () => {
+    await mountSeeded();
+    await act(async () => {
+      current!.renameSystem("perp-ultra-v2", "   ");
+    });
+    await act(async () => {});
+
+    expect(current!.systems.find((s) => s.slug === "perp-ultra-v2")!.name).toBe("Perp Ultra v2");
+    expect(stored().find((s) => s.slug === "perp-ultra-v2")!.name).toBe("Perp Ultra v2");
+  });
+
+  it("duplicates as '<name> copy' with the same CSS, a free slug, made active", async () => {
+    await mountSeeded();
+    let dup: DesignSystem | null = null;
+    await act(async () => {
+      dup = current!.duplicateSystem("perp-ultra-v2");
+    });
+    await act(async () => {});
+
+    expect(dup!.name).toBe("Perp Ultra v2 copy");
+    expect(dup!.slug).toBe("perp-ultra-v2-copy");
+    expect(dup!.css).toBe(":root { --color-bg: #000; }");
+    expect(current!.activeSlug, "the copy becomes active").toBe(dup!.slug);
+    expect(stored().map((s) => s.slug)).toContain("perp-ultra-v2-copy");
+
+    // A second duplicate of the same source picks the next free slug.
+    let dup2: DesignSystem | null = null;
+    await act(async () => {
+      dup2 = current!.duplicateSystem("perp-ultra-v2");
+    });
+    await act(async () => {});
+    expect(dup2!.slug).toBe("perp-ultra-v2-copy-2");
+    expect(current!.activeSlug).toBe("perp-ultra-v2-copy-2");
+  });
+
+  it("throws for unknown slugs", async () => {
+    await mountSeeded();
+    expect(() => current!.renameSystem("missing", "X")).toThrow("system to rename not found");
+    expect(() => current!.duplicateSystem("missing")).toThrow("system to duplicate not found");
+  });
+});

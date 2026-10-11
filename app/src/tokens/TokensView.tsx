@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import type { DesignSystem } from "../systems/store.ts";
-import { download, systemToCss } from "./export.ts";
 import { ContrastSection } from "./ContrastSection.tsx";
 import { SchemaView } from "./SchemaView.tsx";
 import { TokenGroup } from "./TokenGroup.tsx";
@@ -17,13 +16,11 @@ import "./TokensView.css";
 export function TokensView({
   system,
   view,
-  onDelete,
   onMerge,
   onPatch,
 }: {
   system: DesignSystem;
   view: TokensViewModel;
-  onDelete: (slug: string) => void;
   onMerge: (css: string) => void;
   onPatch: (name: string, value: string) => void;
 }) {
@@ -76,13 +73,6 @@ export function TokensView({
         view={view}
         system={system}
         onMerge={onMerge}
-        onExportCss={() => download(`${system.slug}.css`, systemToCss(system), "text/css")}
-        onExportJson={() =>
-          download(`${system.slug}.json`, JSON.stringify(system, null, 2), "application/json")
-        }
-        onDelete={() => {
-          onDelete(system.slug);
-        }}
       />
       {schemaMode ? (
         <SchemaView

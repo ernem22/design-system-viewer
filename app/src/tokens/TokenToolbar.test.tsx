@@ -6,9 +6,9 @@ import { TokenToolbar } from "./TokenToolbar.tsx";
 import { useTokensView } from "./useTokensView.ts";
 import type { DesignSystem, Token, TokenGroup } from "../systems/store.ts";
 
-// Issue #90: the Delete confirmation is a Radix AlertDialog. Radix sets
-// role="alertdialog" + aria-labelledby/-describedby, but this app never
-// declared aria-modal, so the dialog was not exposed as modal.
+// Issue #313: whole-system actions left the Tokens toolbar for the system
+// menu beside the topbar switcher — the toolbar keeps the filter, Show
+// missing, the view switch and Add tokens only.
 
 const token: Token = { name: "--color-bg", value: "#fff" };
 const group: TokenGroup = { id: "color-bg", label: "Background", kind: "color", tokens: [token] };
@@ -34,9 +34,6 @@ function Probe() {
       view={view}
       system={system}
       onMerge={() => {}}
-      onExportCss={() => {}}
-      onExportJson={() => {}}
-      onDelete={() => {}}
     />
   );
 }
@@ -125,16 +122,13 @@ describe("TokenToolbar view switch segmented control", () => {
   });
 });
 
-describe("TokenToolbar delete dialog modal semantics", () => {
-  it("marks the alert dialog aria-modal on its alertdialog role", async () => {
+describe("TokenToolbar system actions moved to the system menu", () => {
+  it("renders no Delete or Export button", async () => {
     await renderToolbar();
-    const trigger = [...document.querySelectorAll<HTMLButtonElement>(".tok-toolbar button")].find(
-      (b) => b.textContent?.trim() === "Delete",
-    )!;
-    await act(async () => trigger.click());
-    const content = document.querySelector('[role="alertdialog"]');
-    expect(content).not.toBeNull();
-    expect(content!.getAttribute("aria-modal")).toBe("true");
-    expect(content!.getAttribute("aria-labelledby")).toBeTruthy();
+    const labels = [...document.querySelectorAll(".tok-toolbar button")].map((b) =>
+      b.textContent?.trim(),
+    );
+    expect(labels, "no Delete button").not.toContain("Delete");
+    expect(labels, "no Export button").not.toContain("Export");
   });
 });

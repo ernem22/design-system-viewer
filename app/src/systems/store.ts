@@ -343,6 +343,40 @@ export function useSystems() {
     [systems, persist, setActiveSlug],
   );
 
+  /** Rename a system in place — the name changes, the slug is unchanged so
+      deep links keep working. An empty name cannot be saved: a blank rename
+      is a no-op returning the untouched system. */
+  const renameSystem = useCallback(
+    (slug: string, name: string): DesignSystem => {
+      const existing = systems.find((s) => s.slug === slug);
+      if (!existing) throw new Error("system to rename not found");
+      const trimmed = name.trim();
+      if (!trimmed || trimmed === existing.name) return existing;
+      const system: DesignSystem = {
+        ...existing,
+        name: trimmed,
+        updatedAt: new Date().toISOString(),
+      };
+      const next = systems.map((s) => (s.slug === slug ? system : s));
+      setSystems(next);
+      persist(next);
+      return system;
+    },
+    [systems, persist],
+  );
+
+  /** Duplicate a system through the addSystem path: "<name> copy" with the
+      same CSS (and provenance), a free slug picked by nextFreeSlug, made
+      active. */
+  const duplicateSystem = useCallback(
+    (slug: string): DesignSystem => {
+      const existing = systems.find((s) => s.slug === slug);
+      if (!existing) throw new Error("system to duplicate not found");
+      return addSystem(`${existing.name} copy`, existing.css, existing.source);
+    },
+    [systems, addSystem],
+  );
+
   /** Single-token write — the inline editor's path. One bare line,
      last-write-wins, same merge pipeline as a pasted block. */
   const patchToken = useCallback(
@@ -372,6 +406,8 @@ export function useSystems() {
     addSystem,
     mergeCss,
     replaceSystem,
+    renameSystem,
+    duplicateSystem,
     patchToken,
     removeSystem,
   };
