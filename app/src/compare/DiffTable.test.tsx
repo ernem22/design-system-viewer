@@ -87,6 +87,42 @@ describe("DiffTable color chips", () => {
   });
 });
 
+// Issue #323: a missing token was counted as a difference, differing cells
+// looked the same as equal ones, var() references got no chip, and the
+// token-name column scrolled away on a phone.
+describe("DiffTable classification (issue #323)", () => {
+  const A = sys("a", [group("S", { "--a": "1px", "--b": "red", "--c": "var(--b)" })]);
+  const B = sys("b", [group("S", { "--a": "2px", "--b": "red" })]);
+
+  /** td[0] is the token name; td[1] is A, td[2] is B. */
+  function valueCells(el: Element, name: string): HTMLTableCellElement[] {
+    return [...rowFor(el, name).querySelectorAll("td")] as HTMLTableCellElement[];
+  }
+
+  it("classifies rows, marks changed/missing cells and resolves var() chips", async () => {
+    const el = await render([A, B]);
+    const summary = el.querySelector(".cmp-diff-bar")?.textContent ?? "";
+    expect(summary).toContain("3 tokens");
+    expect(summary).toContain("1 different");
+    expect(summary).toContain("1 missing");
+    expect(summary).toContain("1 same");
+
+    // Default filter is Different, so only --a renders: B's value is changed.
+    expect(valueCells(el, "--a")[2].classList.contains("is-changed")).toBe(true);
+
+    // Switch to All to inspect the missing/chip rows.
+    await act(async () => {
+      const all = [...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === "All");
+      all!.click();
+    });
+
+    // B lacks --c: its cell is marked missing. A's --c is var(--b), which
+    // resolves against A's own value map to `red`, so it shows a chip.
+    expect(valueCells(el, "--c")[2].classList.contains("is-missing")).toBe(true);
+    expect(valueCells(el, "--c")[1].querySelector(".cmp-diff-chip")).not.toBeNull();
+  });
+});
+
 describe("DiffTable category union", () => {
   it("shows every label a token lives under, grouped by the first", async () => {
     const el = await render([
