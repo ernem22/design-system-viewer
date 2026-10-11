@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Icon } from "../../../lib/icons.tsx";
+import { REFERENCE_TOKEN_COUNT } from "../../../../../src/core/schema.js";
 import "./screens.css";
 
 const RESULTS: [string, string, string][] = [
-  ["Token reference", "Schema of 192 tokens with coverage…", "#patterns"],
+  ["Token reference", `Schema of ${REFERENCE_TOKEN_COUNT} tokens with coverage…`, "#patterns"],
   ["Preview app", "Radix primitives styled by tokens…", "#screen-dashboard"],
   ["Compare mode", "Diff two systems side by side…", "#screen-table"],
 ];

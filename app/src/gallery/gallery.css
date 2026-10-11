@@ -292,6 +292,36 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
 .dsv-empty h4 { margin: 0 0 var(--space-1); color: var(--color-text); font-size: var(--heading-subsection); }
 .dsv-empty p { margin: 0 0 var(--space-4); font-size: var(--font-size-sm); }
 
+/* ── self-contained demo illustration (issue #320) ──
+ * Replaces the remote Unsplash photos in the Layout Aspect Ratio demo and
+ * the Marketing hero. Layered backgrounds: the system gradient on top, a
+ * token-composed linear layer underneath where --gradient-brand is absent.
+ * Inner shapes use only surface/radius/shadow tokens, so the block follows
+ * the active system with no external request. */
+.dsv-illus {
+  position: relative; width: 100%; height: 100%;
+  display: flex; flex-direction: column; gap: var(--space-3);
+  padding: var(--space-4); overflow: hidden;
+  background-color: var(--color-surface-raised);
+  background-image: var(--gradient-brand), linear-gradient(135deg, var(--color-accent), var(--color-surface-raised));
+  background-size: cover; background-repeat: no-repeat;
+}
+.dsv-illus-bar {
+  display: flex; align-items: center; gap: var(--space-2);
+  background: var(--color-surface); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm); padding: var(--space-2) var(--space-3);
+}
+.dsv-illus-dot { width: var(--space-2); height: var(--space-2); border-radius: var(--radius-full); background: var(--color-border-strong); flex: none; }
+.dsv-illus-dot:first-child { background: var(--color-accent); }
+.dsv-illus-cards { display: flex; gap: var(--space-3); flex: 1; min-height: 0; }
+.dsv-illus-card {
+  flex: 1; min-width: 0; background: var(--color-surface-raised);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-md);
+  padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2);
+}
+.dsv-illus-line { height: var(--space-2); border-radius: var(--radius-sm); background: var(--color-surface-overlay); }
+.dsv-illus-line--short { width: 55%; background: var(--color-border-strong); }
+
 @keyframes dsv-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes dsv-pop { from { opacity: 0; transform: scale(var(--motion-scale-enter)); filter: blur(var(--motion-blur-enter)); } to { opacity: 1; transform: scale(1); filter: blur(0); } }
 @keyframes dsv-scale { from { opacity: 0; transform: scale(var(--motion-scale-enter)); } to { opacity: 1; transform: scale(1); } }
