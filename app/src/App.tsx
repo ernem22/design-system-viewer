@@ -87,7 +87,11 @@ function App() {
     };
     const onPointer = (e: PointerEvent) => {
       const target = e.target as Element | null;
-      if (target?.closest?.(".app-rail, .app-props, .app-topbar, .app-toasts")) return;
+      // A token row/swatch is a selecting tap, not an outside tap: it reveals
+      // the props drawer (issue #315), so dismissing on its pointerdown would
+      // close the drawer before the click could re-open it — leaving a re-tap
+      // of the same token looking like a toggle. Its click owns the reveal.
+      if (target?.closest?.(".app-rail, .app-props, .app-topbar, .app-toasts, [data-token]")) return;
       closePanels();
     };
     document.addEventListener("keydown", onKey);
@@ -276,6 +280,18 @@ function App() {
     if (inspectedId) revealProps();
   }, [inspectedId, revealProps]);
   const overrideCount = countOverrides(inspector);
+
+  // Selecting a token in the Tokens tab must reach its inspector (issue #315):
+  // on a phone the props panel is a closed overlay drawer, so the tap copied
+  // the token and toasted but showed nothing — a dead click. Mirror the
+  // Preview reveal above, but only in drawer mode: desktop revealProps() would
+  // open the panel and persist `dsv.app.props`, which selecting a token must
+  // not do. Selecting the *same* token again leaves `selected.name` unchanged
+  // and so never re-runs this effect — it cannot toggle the drawer shut.
+  const selectedTokenName = tokensView.selected?.name;
+  useEffect(() => {
+    if (narrowPanels && selectedTokenName) revealProps();
+  }, [narrowPanels, selectedTokenName, revealProps]);
 
   // Dynamic Google Fonts, scoped per consumer (issue #40): the active system's
   // families serve Tokens/Preview, Compare owns its picked columns'. Each scope
