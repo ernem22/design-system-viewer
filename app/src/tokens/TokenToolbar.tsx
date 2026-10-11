@@ -1,7 +1,7 @@
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import * as Checkbox from "@radix-ui/react-checkbox";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import * as Toggle from "@radix-ui/react-toggle";
+import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import type { KeyboardEvent } from "react";
 import { Icon } from "../lib/icons.tsx";
 import type { DesignSystem } from "../systems/store.ts";
@@ -12,10 +12,10 @@ import "./TokenToolbar.css";
 
 /**
  * Tokens toolbar (old .toolbar, minus the coverage ring — that lives in the
- * right rail now): filter + clear/Esc, Show missing (gallery only),
- * Schema/Gallery toggle, Add tokens (Radix dialog with live coverage
- * preview), Export (Radix menu instead of the old fixed-position div) and
- * Delete (Radix AlertDialog instead of confirm()).
+ * right rail now): filter + clear/Esc, Show missing (gallery only), the
+ * Gallery/Schema segmented view switch, Add tokens (Radix dialog with live
+ * coverage preview), Export (Radix menu instead of the old fixed-position
+ * div) and Delete (Radix AlertDialog instead of confirm()).
  */
 export function TokenToolbar({
   view,
@@ -132,15 +132,32 @@ export function TokenToolbar({
         )}
       </div>
       <div className="tok-actions">
-        <TokenDialog system={system} onMerge={onMerge} onToast={view.pushToast} />
-        <Toggle.Root
-          className="tok-btn"
-          title="Toggle schema view"
-          pressed={schemaMode}
-          onPressedChange={setSchemaMode}
+        {/* Segmented view switch (issue #312): both views are always named,
+            the active one reads selected — the old single Toggle renamed
+            itself ("Schema" here, "Gallery" there) and read as an action
+            button. Drives the same schemaMode/setSchemaMode, so ?tv=schema
+            keeps working. Its items are plain buttons, so the toolbar's
+            roving arrow-key navigation crosses them untouched. */}
+        <ToggleGroup.Root
+          type="single"
+          aria-label="View"
+          value={schemaMode ? "schema" : "gallery"}
+          onValueChange={(v) => {
+            // Single-select deselects to "" when the active item is
+            // re-clicked — ignore it so one view is always selected.
+            if (v === "schema") setSchemaMode(true);
+            else if (v === "gallery") setSchemaMode(false);
+          }}
+          className="tok-view-switch"
         >
-          {schemaMode ? "Gallery" : "Schema"}
-        </Toggle.Root>
+          <ToggleGroup.Item value="gallery" aria-label="Gallery" className="tok-view-item">
+            Gallery
+          </ToggleGroup.Item>
+          <ToggleGroup.Item value="schema" aria-label="Schema" className="tok-view-item">
+            Schema
+          </ToggleGroup.Item>
+        </ToggleGroup.Root>
+        <TokenDialog system={system} onMerge={onMerge} onToast={view.pushToast} />
         <DropdownMenu.Root>
           <DropdownMenu.Trigger className="tok-btn" title="Download active system">
             Export

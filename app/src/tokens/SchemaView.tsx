@@ -58,7 +58,17 @@ export function SchemaView({
           <span>{count}</span>
         </h2>
         <div className="tok-tablewrap">
+          {/* Shared column template (issue #312): table-layout: fixed sizes
+              columns from this colgroup instead of each table's own content,
+              so the value column starts at the same x in every group. The
+              name track fits the longest schema name and wraps rather than
+              ellipsizing; the value track takes the remainder. */}
           <table className="tok-raw" role="grid" aria-label={g.label}>
+            <colgroup>
+              <col className="tok-schema-col-name" />
+              <col className="tok-schema-col-value" />
+              <col className="tok-schema-col-actions" />
+            </colgroup>
             <tbody>
               {names.map((name) => {
                 const value = valueMap.get(name);

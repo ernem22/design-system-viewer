@@ -58,6 +58,73 @@ afterEach(() => {
   host = null;
 });
 
+// Issue #312: the view switch was a single Toggle that renamed itself
+// ("Schema" in gallery mode, "Gallery" in schema mode), reading as an
+// action button next to Add tokens / Export. It is a segmented control now:
+// a group named "View" with both labels always shown, the active one
+// pressed. Gallery mode is the URL default (?tv=schema selects schema).
+describe("TokenToolbar view switch segmented control", () => {
+  // Radix ToggleGroup type="single" renders role="radiogroup" (a group
+  // subclass, the correct single-select semantics) with role="radio" items.
+  function viewGroup(): HTMLElement | null {
+    return document.querySelector<HTMLElement>('[aria-label="View"]');
+  }
+
+  function viewItems(): { gallery: HTMLButtonElement; schema: HTMLButtonElement } {
+    const group = viewGroup()!;
+    const buttons = [...group.querySelectorAll<HTMLButtonElement>("button")];
+    const gallery = buttons.find((b) => b.textContent?.trim() === "Gallery")!;
+    const schema = buttons.find((b) => b.textContent?.trim() === "Schema")!;
+    expect(gallery, "Gallery item renders").toBeDefined();
+    expect(schema, "Schema item renders").toBeDefined();
+    return { gallery, schema };
+  }
+
+  it("shows Gallery and Schema as two items of a group named View", async () => {
+    await renderToolbar();
+    const group = viewGroup();
+    expect(group, 'a group named "View" exists').not.toBeNull();
+    expect(group!.getAttribute("role"), "group role").toMatch(/^(group|radiogroup)$/);
+    const labels = [...group!.querySelectorAll("button")].map((b) => b.textContent?.trim());
+    expect(labels).toEqual(["Gallery", "Schema"]);
+  });
+
+  it("marks Gallery pressed in gallery mode and flips on click", async () => {
+    await renderToolbar();
+    const { gallery, schema } = viewItems();
+    expect(gallery.getAttribute("data-state"), "Gallery pressed in gallery mode").toBe("on");
+    expect(gallery.getAttribute("aria-checked"), "Gallery selected in gallery mode").toBe("true");
+    expect(schema.getAttribute("data-state")).toBe("off");
+
+    await act(async () => {
+      schema.click();
+    });
+    expect(schema.getAttribute("data-state"), "Schema pressed after click").toBe("on");
+    // Gallery-only controls leave with gallery mode through the same
+    // schemaMode/setSchemaMode (?tv=schema keeps working).
+    expect(document.querySelector(".tok-inline"), "Show missing hides in schema mode").toBeNull();
+
+    await act(async () => {
+      gallery.click();
+    });
+    expect(gallery.getAttribute("data-state"), "Gallery pressed again").toBe("on");
+    expect(
+      document.querySelector(".tok-inline"),
+      "Show missing returns in gallery mode",
+    ).not.toBeNull();
+  });
+
+  it("keeps the toolbar arrow-key navigation across the new control", async () => {
+    await renderToolbar();
+    const { gallery, schema } = viewItems();
+    gallery.focus();
+    act(() => {
+      gallery.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    });
+    expect(document.activeElement, "ArrowRight moves Gallery -> Schema").toBe(schema);
+  });
+});
+
 describe("TokenToolbar delete dialog modal semantics", () => {
   it("marks the alert dialog aria-modal on its alertdialog role", async () => {
     await renderToolbar();
