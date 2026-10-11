@@ -7,7 +7,11 @@
 // inline editor remains the persistent write-through path.
 import { useMemo } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { COMPONENT_ENTRIES } from "../gallery/components/index.ts";
 import { ScopePanel } from "../gallery/tokenInspector.tsx";
+import type { InViewSection } from "../gallery/tokenInspector.tsx";
+import { useScrollSpy } from "../lib/scrollspy.ts";
+import { tokensForEntry } from "../lib/tokenUsage.ts";
 import { resolvedValue, setMobileOpen, useInspector } from "../lib/tokenOverrides.ts";
 import { tokenValueMap } from "../tokens/useTokensView.ts";
 import type { DesignSystem } from "../systems/store.ts";
@@ -30,6 +34,26 @@ function useValueOf(system: DesignSystem | null): (token: string) => string {
   );
 }
 
+// Stable across renders — the same entry ids the Preview content renders as
+// sections (see App.tsx's ENTRY_IDS). Scrollspy reads live geometry on its
+// own rAF-throttled cadence, so the panel needs no scroll listener of its own.
+const ENTRY_IDS = COMPONENT_ENTRIES.map((e) => e.id);
+
+/** The Preview section currently in view, for the empty panel's "In view"
+    offer (issue #318): the entry's label plus tokensForEntry(id) — the same
+    id/title/tokens its GallerySection badge was built with, so inspecting it
+    is identical to clicking that badge. Null while the panel isn't the open
+    surface, or when no listed section exists in the DOM. */
+function useInViewSection(enabled: boolean): InViewSection | null {
+  const [activeId] = useScrollSpy(ENTRY_IDS, enabled);
+  return useMemo(() => {
+    if (!activeId) return null;
+    const entry = COMPONENT_ENTRIES.find((e) => e.id === activeId);
+    if (!entry) return null;
+    return { id: entry.id, title: entry.label, tokens: tokensForEntry(entry.id) };
+  }, [activeId]);
+}
+
 /** Docked props-panel content — replaces the "Select a component" placeholder. */
 export function PreviewProps({
   system,
@@ -48,7 +72,8 @@ export function PreviewProps({
   onPatch?: (name: string, value: string) => void;
 }) {
   const valueOf = useValueOf(system);
-  return <ScopePanel valueOf={valueOf} active={active} />;
+  const inView = useInViewSection(active);
+  return <ScopePanel valueOf={valueOf} active={active} inView={inView} />;
 }
 
 /** Small-screen overlay for the same scope — desktop docks into the panel
