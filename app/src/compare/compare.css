@@ -8,7 +8,9 @@
  * horizontally-scrolling strip).
  */
 
-.cmp-wrap { display: flex; flex-direction: column; min-height: 100%; }
+/* `container-type` here (not a shell ancestor, which this tab must not restyle)
+   lets the column grid below query its own row width for the even 2+2 split. */
+.cmp-wrap { display: flex; flex-direction: column; min-height: 100%; container-type: inline-size; }
 
 .cmp-toolbar {
   position: sticky; top: 0; z-index: 5;
@@ -35,15 +37,26 @@
 .cmp-seg button:hover:not([data-state="on"]) { color: var(--color-text); }
 .cmp-seg button[data-state="on"] { background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-sm); }
 
+/* Issue #322: fixed `repeat(var(--cmp-n), ...)` tracks needed 4x240px plus
+   gaps in an 882px content column, cutting the fourth column behind a
+   scrollbar-less `overflow-x: auto`. Tracks wrap instead (`auto-fit`), so
+   the grid never scrolls horizontally; `min(100%, 240px)` keeps one column
+   per row from overflowing when fewer than two 240px columns fit. */
 .cmp-cols {
-  --cmp-n: 2;
   flex: 1; display: grid; gap: var(--space-4);
-  grid-template-columns: repeat(var(--cmp-n), minmax(240px, 1fr));
-  padding: var(--space-5); align-items: start; overflow-x: auto;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  padding: var(--space-5); align-items: start;
 }
-.cmp-cols[data-count="2"] { --cmp-n: 2; }
-.cmp-cols[data-count="3"] { --cmp-n: 3; }
-.cmp-cols[data-count="4"] { --cmp-n: 4; }
+
+/* 4 systems where only 3 fit would auto-fit as 3+1; re-track to an even 2+2
+   instead. Bounds are counts of the 240px column minimum plus the gap and
+   padding tokens — no new literals. Below the 2-fit bound the base rule (and
+   the narrow-screen rule below) already drop to one column per row. */
+@container (max-width: calc(4 * 240px + 3 * var(--space-4) + 2 * var(--space-5))) and (min-width: calc(2 * 240px + var(--space-4) + 2 * var(--space-5))) {
+  .cmp-cols[data-count="4"] {
+    grid-template-columns: repeat(2, minmax(min(100%, 240px), 1fr));
+  }
+}
 
 .cmp-col {
   min-width: 0;
