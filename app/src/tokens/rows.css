@@ -212,6 +212,37 @@
   .tok-ramp-cell {
     min-width: var(--space-16);
   }
+
+  /* Narrow viewport (issue #311): a row is two lines — the name spans the
+     full width on line 1 and wraps at hyphen boundaries or anywhere
+     (never ellipsized), while line 2 holds the value on the left and the
+     demo on the right. Swatch and ramp layouts keep their own rules above.
+     Every size and gap resolves from the token layer — no literals. */
+  .tok-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "name name"
+      "value demo";
+    row-gap: var(--space-1);
+    align-items: start;
+  }
+
+  .tok-row-name {
+    grid-area: name;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
+
+  .tok-row-value {
+    grid-area: value;
+  }
+
+  .tok-row-demo {
+    grid-area: demo;
+    justify-content: flex-end;
+  }
 }
 
 .tok-bar {
