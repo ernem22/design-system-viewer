@@ -61,6 +61,11 @@ held_files() {
     | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const o=new Set();for(const p of JSON.parse(s))for(const f of (p.files||[]))o.add(f.path+" (#"+p.number+")");console.log([...o].join(", ")||"none")})'
 }
 
+READ_RULES='TOKEN COST - every command output stays in your context and is re-read on every later step, so
+keep outputs small. Read a file with an offset/limit (only the lines you need) or grep it first; never cat or
+read a large file whole. Never list node_modules, dist or the opencode temp directory. Batch independent
+reads and commands into one turn. Stop as soon as the evidence is in; do not re-run what already passed.'
+
 WORKER_DONE_RULES='Send worker_done once, from this terminal. **Do not retype the command: your dispatch
 preamble prints it verbatim, including the `--dispatch-capability dcap_...` token.** Check it
 carries `--task-id`, `--dispatch-id` and `--outcome=succeeded` (equals sign; the space form is
@@ -114,7 +119,11 @@ THE BEHAVIOUR TO VERIFY:
   4. No regression: the adjacent behaviour that must be unchanged.
 Report each as \`observed: <what you did> -> <value>\` paired with \`before: <value>\`.
 
-OUTPUT - worker_done body:
+OUTPUT - worker_done body. The dispatcher reads each field as a line that STARTS with field:, so
+put every field on its own line, in this order, and start the body with status: - no prose first. Never
+write observed: or before: in the middle of another line (a build: line that ends with observed: ...
+is not read). Measured: tester #351 opened with pass: ... and tester #352 ran observed: onto the end
+of its build: line; both verdicts were refused and the whole session was wasted.
 
 status: pass | fail
 role: tester
@@ -141,6 +150,8 @@ pr: $pr
 head: $head
 deadline: 2400" "You are read-only. Do not edit, create, delete or commit any file; do not run npm, vitest,
 tsc, eslint or vite - CI already did. Your entire output is one report.
+
+$READ_RULES
 
 INPUT - read exactly these:
   1. the issue:      gh issue view ${n:-<n>} --json number,title,body
@@ -312,6 +323,8 @@ open PRs: $HELD.
 
 Read the issue in full first: \`gh issue view $n --json number,title,body\`. Honour its stated outcome
 and its \`Verify:\` line exactly; do not widen it.
+
+$READ_RULES
 
 STEP 0 - reproduce the claim on the parent commit before changing anything, and record the exact
 steps and the observed value. If you cannot reproduce it, STOP and report \`status: unreproducible\`.
