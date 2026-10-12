@@ -8,6 +8,9 @@ import { SectionSearch } from "./shell/SectionSearch.tsx";
 import { Toasts } from "./shell/Toasts.tsx";
 import { DropOverlay, Welcome } from "./shell/Welcome.tsx";
 import { copyLinkToView } from "./lib/copyLink.ts";
+import { decodeSystem, type DecodedSharedSystem } from "./lib/shareLink.ts";
+import { SharedSystemBanner } from "./shell/SharedSystemBanner.tsx";
+import { buildSystem, parseTokens } from "../../src/core/parse.js";
 import { isJsonFile, readCssFile, useCssFileDrop } from "./lib/cssImport.ts";
 import { readSystemJson } from "./lib/systemImport.ts";
 import { useGoogleFonts } from "./lib/googleFonts.ts";
@@ -15,6 +18,7 @@ import { Icon } from "./lib/icons.tsx";
 import { useToasts } from "./lib/toasts.ts";
 import { clearAll, countOverrides, useInspector } from "./lib/tokenOverrides.ts";
 import { useSystems, resolveSystemTokens } from "./systems/store.ts";
+import type { DesignSystem } from "./systems/store.ts";
 import { usePanels } from "./lib/panelStorage.ts";
 import SystemSwitcher from "./systems/SystemSwitcher.tsx";
 import { SystemMenu } from "./systems/SystemMenu.tsx";
@@ -35,7 +39,7 @@ import { CompareProps } from "./compare/CompareProps.tsx";
 import { useCompareView, DEFAULT_COMPONENT_ID } from "./compare/useCompareView.ts";
 import { PreviewProps, PreviewScopeDialog } from "./preview/PreviewProps.tsx";
 import { PreviewNotes } from "./preview/PreviewNotes.tsx";
-import { initialSectionHash, readViewUrl, scrollToSection, writeViewUrl } from "./lib/urlState.ts";
+import { clearSharedParam, initialSectionHash, readSharedParam, readViewUrl, scrollToSection, writeViewUrl } from "./lib/urlState.ts";
 import "./gallery/gallery.css";
 
 // Stable across renders — buildRailGroups reads this by entry id, and
@@ -48,8 +52,8 @@ function App() {
     systems,
     loading,
     error: loadError,
-    active,
-    activeSlug,
+    active: storedActive,
+    activeSlug: storedActiveSlug,
     retry,
     setActiveSlug,
     addSystem,
@@ -61,6 +65,82 @@ function App() {
     removeSystem,
   } = useSystems();
   const [toasts, pushToast] = useToasts();
+  // Shared-system offer from a `?s=` link (issue #337): the decoded payload
+  // waits here until the recipient clicks — nothing is saved without a click.
+  // `sessionSystem` is the Open choice: the shared system applied as the
+  // active one for this session only, held in App state, never localStorage.
+  const [sharedOffer, setSharedOffer] = useState<DecodedSharedSystem | null>(null);
+  const [sessionSystem, setSessionSystem] = useState<DesignSystem | null>(null);
+  const active = sessionSystem ?? storedActive;
+  const activeSlug = sessionSystem?.slug ?? storedActiveSlug;
+
+  // One-shot `?s=` decode on load (issue #337). The param is cleared before
+  // the async decode even finishes, in every case — damaged included — so a
+  // refresh never re-triggers the banner and later copies carry no stale `s`.
+  // A rejection toasts "This shared link is damaged" and the app continues
+  // normally, with no banner and nothing saved.
+  useEffect(() => {
+    const s = readSharedParam();
+    if (!s) return;
+    clearSharedParam();
+    let alive = true;
+    decodeSystem(s).then(
+      (decoded) => {
+        if (alive) setSharedOffer(decoded);
+      },
+      () => {
+        pushToast("This shared link is damaged", "warn");
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [pushToast]);
+
+  // Picking a stored system ends the shared session: the switcher names a
+  // saved system, and the session one was never saved.
+  const handleSelectSystem = useCallback(
+    (slug: string) => {
+      setSessionSystem(null);
+      setActiveSlug(slug);
+    },
+    [setActiveSlug],
+  );
+
+  // Open applies the shared system for this session without saving; Add
+  // saves through the existing addSystem path (which resolves name/slug
+  // collisions), selecting the stored twin when its tokens already match
+  // instead of adding a duplicate. Both consume the one-shot offer.
+  const handleSharedOpen = useCallback(() => {
+    if (!sharedOffer) return;
+    setSessionSystem(
+      buildSystem({ name: sharedOffer.name, css: sharedOffer.css }) as DesignSystem,
+    );
+    setSharedOffer(null);
+  }, [sharedOffer]);
+  const handleSharedAdd = useCallback(() => {
+    if (!sharedOffer) return;
+    const wanted = new Map(sharedOffer.tokens.map((t) => [t.name, t.value]));
+    const twin = systems.find((s) => {
+      let theirs: { name: string; value: string }[];
+      try {
+        theirs = parseTokens(s.css) as { name: string; value: string }[];
+      } catch {
+        return false;
+      }
+      return (
+        theirs.length === sharedOffer.tokens.length &&
+        theirs.every((t) => wanted.get(t.name) === t.value)
+      );
+    });
+    if (twin) setActiveSlug(twin.slug);
+    else addSystem(sharedOffer.name, sharedOffer.css);
+    setSessionSystem(null);
+    setSharedOffer(null);
+  }, [sharedOffer, systems, addSystem, setActiveSlug]);
+  const handleSharedDismiss = useCallback(() => {
+    setSharedOffer(null);
+  }, []);
   // Panel collapse lives here so the toggles can sit in the topbar —
   // no floating edge handle next to the main scrollbar. Same storage
   // keys as before, so persisted choices survive the move. On narrow
@@ -356,11 +436,21 @@ function App() {
   }, [loading]);
 
   const copyLink = useCallback(() => {
-    copyLinkToView().then(
-      () => pushToast("Link copied", "ok"),
+    // The copied URL embeds the active system (`s`), so a recipient without
+    // the sender's localStorage still gets the tokens. Past the embed limit
+    // the plain link is copied and the toast says where to share instead.
+    copyLinkToView(active ? { name: active.name, css: active.css } : null).then(
+      (result) => {
+        if (result.tooLarge)
+          pushToast(
+            "This system is too large to embed in a link — use Export JSON to share it.",
+            "warn",
+          );
+        else pushToast("Link copied", "ok");
+      },
       () => pushToast("Copy failed", "err"),
     );
-  }, [pushToast]);
+  }, [active, pushToast]);
 
   const emptyState = loading ? (
     <p className="app-placeholder app-loading">Loading systems…</p>
@@ -371,19 +461,38 @@ function App() {
   // Each tab supplies its rail content (groups) and props content; Shell
   // renders the one rail frame and the one props frame around whichever
   // tab's content is active.
+  // The shared-system banner rides above the active tab's content, inside
+  // the one `.app-main` scroller (content, never a new scroll container or
+  // chrome) — Shell has no banner slot and gains none: this is tab content
+  // it renders. Exactly one node: only the active tab mounts it.
+  const sharedBanner = sharedOffer ? (
+    <SharedSystemBanner
+      name={sharedOffer.name}
+      tokenCount={sharedOffer.tokens.length}
+      dropped={sharedOffer.dropped}
+      onOpen={handleSharedOpen}
+      onAdd={handleSharedAdd}
+      onDismiss={handleSharedDismiss}
+    />
+  ) : null;
   const tabs: ShellTab[] = [
     {
       id: "tokens",
       label: "Tokens",
-      content: active ? (
-        <TokensView
-          system={active}
-          view={tokensView}
-          onMerge={handleMerge}
-          onPatch={handlePatch}
-        />
-      ) : (
-        emptyState
+      content: (
+        <>
+          {tab === "tokens" && sharedBanner}
+          {active ? (
+            <TokensView
+              system={active}
+              view={tokensView}
+              onMerge={handleMerge}
+              onPatch={handlePatch}
+            />
+          ) : (
+            emptyState
+          )}
+        </>
       ),
       rail: (
         <Rail
@@ -398,24 +507,29 @@ function App() {
     {
       id: "preview",
       label: "Preview",
-      content: active ? (
+      content: (
         <>
-          <PreviewNotes system={active} error={loadError} onRetry={retry} />
-          {shownEntries?.size === 0 && <div className="dsv-err">No sections match “{query.trim()}”.</div>}
-          {COMPONENT_ENTRIES.map((entry) => (
-            <GallerySection key={entry.id} {...entry} hidden={shownEntries ? !shownEntries.has(entry.id) : false} />
-          ))}
-          <PreviewScopeDialog system={active} />
+          {tab === "preview" && sharedBanner}
+          {active ? (
+            <>
+              <PreviewNotes system={active} error={loadError} onRetry={retry} />
+              {shownEntries?.size === 0 && <div className="dsv-err">No sections match “{query.trim()}”.</div>}
+              {COMPONENT_ENTRIES.map((entry) => (
+                <GallerySection key={entry.id} {...entry} hidden={shownEntries ? !shownEntries.has(entry.id) : false} />
+              ))}
+              <PreviewScopeDialog system={active} />
+            </>
+          ) : (
+            <PreviewNotes
+              system={null}
+              loading={loading}
+              error={loadError}
+              onPaste={() => openAdd()}
+              onUpload={() => fileInputRef.current?.click()}
+              onRetry={retry}
+            />
+          )}
         </>
-      ) : (
-        <PreviewNotes
-          system={null}
-          loading={loading}
-          error={loadError}
-          onPaste={() => openAdd()}
-          onUpload={() => fileInputRef.current?.click()}
-          onRetry={retry}
-        />
       ),
       // Preview rail shows only the section navigation (issue #317): the
       // system list lived above it and pushed every section below the fold,
@@ -433,7 +547,12 @@ function App() {
     {
       id: "compare",
       label: "Compare",
-      content: <CompareView view={compareView} />,
+      content: (
+        <>
+          {tab === "compare" && sharedBanner}
+          <CompareView view={compareView} />
+        </>
+      ),
       rail: <CompareRail systems={systems} view={compareView} />,
       propsPanel: <CompareProps view={compareView} />,
     },
@@ -461,7 +580,7 @@ function App() {
                 systems={systems}
                 active={active}
                 activeSlug={activeSlug}
-                onSelect={setActiveSlug}
+                onSelect={handleSelectSystem}
               />
               {/* System actions stay beside the switcher (not in the phone's
                   "More actions" popover): they act on the active system, which
