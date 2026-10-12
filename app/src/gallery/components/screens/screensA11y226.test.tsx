@@ -178,9 +178,13 @@ describe("issue #226: labels, autocomplete, grouping, confirm, chart name", () =
 
   it("sizes the marketing hero img and labels the logo group", async () => {
     const el = await mount(<MarketingBody />);
-    const img = el.querySelector(".dsv-hero-img img");
-    expect(img?.getAttribute("width"), "hero img width").toBeTruthy();
-    expect(img?.getAttribute("height"), "hero img height").toBeTruthy();
+    // Issue #320 replaced the remote <img> hero photo with a token-driven
+    // illustration, so assert the illustration instead of img dimensions.
+    const hero = el.querySelector('.dsv-hero-img [role="img"]');
+    expect(hero, "hero illustration renders with role=img").not.toBeNull();
+    expect(hero?.getAttribute("aria-label"), "hero illustration has a label").toBe(
+      "Product preview",
+    );
     const group = el.querySelector('[aria-label="Trusted by"]');
     expect(group?.getAttribute("role"), "trusted-by has a landmark role").toBeTruthy();
     expect(group?.querySelectorAll('[role="listitem"]').length, "four logos").toBe(4);
