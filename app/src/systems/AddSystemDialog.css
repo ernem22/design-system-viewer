@@ -464,3 +464,98 @@
     border-top: 1px solid var(--color-border-subtle);
   }
 }
+
+/* Narrow viewport (issue #326): at phone widths the four source triggers no
+   longer fit beside the title, and the base `flex: none; flex-wrap: nowrap`
+   keeps them on one overflowing row (measured: content 539px in a 374px
+   dialog, "More sources" fully off-screen, close pushed onto its own line).
+   So below 600px the header re-stacks: title + close share the first row,
+   and the byline, status and tools each take a full-width row of their own.
+   The tools wrap internally, so the buttons fold onto two rows instead of
+   running past the dialog edge. Every size and gap resolves from the token
+   layer — no literals. */
+@media (max-width: 600px) {
+  /* First row stays title + close: the byline drops to its own row so the
+     close button is never the item that wraps. */
+  .app-import-bar > .app-import-sub {
+    flex: 1 1 100%;
+    order: 2;
+    min-width: 0;
+  }
+
+  .app-import-close {
+    order: 1;
+    margin-left: auto;
+  }
+
+  /* The status line (kind · detail · bytes) re-wraps instead of ellipsizing:
+     a fetched URL stays readable and never forces the row wider. */
+  .app-import-status {
+    flex: 1 1 100%;
+    order: 3;
+    margin: 0;
+    max-width: none;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .app-import-tools {
+    flex: 1 1 100%;
+    order: 4;
+    margin-left: 0;
+    min-width: 0;
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+  }
+
+  /* Stepper: three short steps usually still fit, but when they don't each
+     step wraps whole — a label is never cut mid-word. */
+  .app-import-steps {
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+  }
+
+  .app-import-step {
+    white-space: nowrap;
+  }
+
+  /* Long unbroken text (a stylesheet URL in the Review/Save bylines, an
+     error) breaks instead of pushing its step wider than the dialog. */
+  .app-import-sub,
+  .app-import-reviewcount,
+  .app-import-error {
+    overflow-wrap: anywhere;
+  }
+
+  /* The step bodies are grid items of the dialog: without a zero minimum
+     they cannot shrink below long content and would widen the dialog. */
+  .app-import-stepbody,
+  .app-import-reviewpane,
+  .app-import-savepane {
+    min-width: 0;
+  }
+
+  /* Pane heads, prefix chips and footer clusters fold instead of squeezing
+     their controls past the dialog edge. */
+  .app-import-panehead,
+  .app-import-chips,
+  .app-import-mode,
+  .app-import-review,
+  .app-import-write {
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+  }
+
+  /* The name field takes its own row so it never squeezes the step
+     navigation off the footer's edge. */
+  .app-import-name {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .app-import-target {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
