@@ -229,7 +229,7 @@ $FIND
 
 STEP 0 - reproduce each finding on $head before fixing it, and record the observed value. A finding
 you cannot reproduce is reported as unreproducible, never silently \"fixed\". Keep every existing test
-green; if you believe a test is wrong, report `status: blocked` with the reason instead of changing what it asserts.
+green; if you believe a test is wrong, report \`status: blocked\` with the reason instead of changing what it asserts.
 
 Do not re-scope, re-design or \"improve while you are in there\".
 
@@ -249,6 +249,53 @@ commit: <sha you pushed>
 tests: pass | fail
 pr: $pr
 fixed: <one line per finding>
+
+$WORKER_DONE_RULES"
+}
+
+gen_ci_fixer() {   # pr head branch - both verdicts passed but the PR's app CI check failed
+  local pr="$1" head="${2:0:7}" br="$3" ISSUE
+  ISSUE="$(gh pr view "$pr" --repo "$REPO" --json body --jq '.body' 2>/dev/null | grep -oiE '(close[sd]?|fix(e[sd])?|resolve[sd]?):? #[0-9]+' | grep -oE '[0-9]+' | head -1)"
+  write_spec "100-fixer-$pr-$head.spec" "name: fixer-$pr-$head
+base: origin/$br
+role: fixer
+title: CI fixer PR #$pr @ $head
+pr: $pr
+head: $head
+deadline: 3600" "PR #$pr passed its Reviewer and Tester, but its required \`app\` CI check (\`npm --prefix app test\`,
+\`lint\`, \`build\`) FAILED on head $head, so it cannot merge. Make that check pass, nothing else.
+
+TARGET: PR #$pr, branch \`$br\`, head $head, implementing issue #${ISSUE:-?} (\`gh issue view ${ISSUE:-<n>}\`).
+This worktree starts at that head on its own local branch; push with the explicit refspec below.
+Write only under \`app/\`.
+
+STEP 0 - run \`npm --prefix app test\`, \`npm --prefix app run lint\` and \`npm --prefix app run build\` on $head
+and list every failure verbatim (test file:line and the assertion message).
+
+For each failing test decide ONE of:
+  (a) the PR broke behaviour the test rightly protects -> fix the app code, not the test;
+  (b) the test asserts something the ISSUE explicitly removed or replaced (e.g. it clicks a control the
+      issue replaced, or queries an element the issue deleted) -> update ONLY that assertion to the
+      issue's new behaviour, and quote the issue's Scope line that makes the old assertion obsolete;
+  (c) anything else (flaky, unrelated, unclear) -> change nothing and report \`status: blocked\` with
+      the failing test and why.
+Never delete a test, never add .skip/.only, never loosen an assertion beyond what (b) requires.
+
+EVIDENCE in your report: the STEP 0 failure list; for each, (a)/(b)/(c) and the change; the
+\`npm --prefix app test\` counts, \`lint\` clean and \`build\` success on your commit.
+
+DELIVERY: \`bash tools/orchestration/identity.sh fixer\` first. Commit with a \`[fixer]\` prefix, then
+\`git push origin HEAD:$br\` (fast-forward only, never --force). No new PR, no merge, no labels.
+
+OUTPUT - worker_done body:
+
+status: succeeded | failed | blocked
+role: fixer
+task: <task id from your preamble>
+commit: <sha you pushed>
+tests: pass | fail
+pr: $pr
+fixed: <one line per failing test: (a)/(b) and what changed>
 
 $WORKER_DONE_RULES"
 }
@@ -296,12 +343,15 @@ $WORKER_DONE_RULES"
 
 NEEDS="$(bash "$HERE/needs.sh" --json)" || { say "needs.sh failed; nothing written"; exit 4; }
 [ -n "$NEEDS" ] || { say "nothing is owed"; exit 0; }
-printf '%s\n' "$NEEDS" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{for(const l of s.split("\n").filter(Boolean)){const j=JSON.parse(l);console.log([j.role,j.ref.replace("#",""),j.head,j.branch].join("\t"))}})' \
-| while IFS=$'\t' read -r role ref head branch; do
+printf '%s\n' "$NEEDS" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{for(const l of s.split("\n").filter(Boolean)){const j=JSON.parse(l);console.log([j.role,j.ref.replace("#",""),j.head,j.branch,j.why||""].join("\t"))}})' \
+| while IFS=$'\t' read -r role ref head branch why; do
   case "$role" in
     tester)   gen_tester "$ref" "$head" "$branch" ;;
     reviewer) gen_reviewer "$ref" "$head" "$branch" ;;
-    fixer)    gen_fixer "$ref" "$head" "$branch" ;;
+    fixer)
+      # needs.sh says which kind: a red `app` CI check after both verdicts passed, or a fail verdict /
+      # conflict. Both are role fixer, so the dispatcher's owed() check matches either.
+      case "$why" in "app CI check failed"*) gen_ci_fixer "$ref" "$head" "$branch" ;; *) gen_fixer "$ref" "$head" "$branch" ;; esac ;;
     coder)    gen_coder "$ref" ;;
   esac
 done

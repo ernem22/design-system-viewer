@@ -682,7 +682,7 @@ read_workers() {
 # ends without succeeding; a provider-looking error becomes a `provider-error` event for the manager,
 # who decides whether it is the model (switch it) or one worker. The screen is kept as
 # $S/tail-<task>.txt either way.
-PROVIDER_RE='rate.?limit|too many requests|quota|insufficient (credit|balance|funds)|exceeded your|usage limit|limit reached|freetiererror|free tier|payment required|billing|http 4(01|02|03|29)|status(code)?[ :=]*4(01|02|03|29)|overloaded|unauthorized|invalid api key'
+PROVIDER_RE='rate.?limit|too many requests|quota|insufficient (credit|balance|funds)|exceeded your|usage limit|limit reached|freetiererror|free tier|payment required|billing|http 4(01|02|03|29)|status(code)?[ :=]*4(01|02|03|29)|overloaded|unauthorized|invalid api key|invalid credential|upstream request failed'
 screen_of() {   # dispatch -> its terminal's last lines, ANSI stripped (empty when unreadable)
   local H; H="$(grep -m1 "^$1 " "$S/workers.now" 2>/dev/null | cut -d' ' -f4)"
   [ -n "$H" ] && [ "$H" != "-" ] || return 0
