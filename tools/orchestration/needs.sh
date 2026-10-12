@@ -136,7 +136,13 @@ printf '%s' "$PRS_JSON" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on(
     || { echo "needs.sh: gate lookup failed for #$pr; skipped this pass" >&2; continue; }
   state="${gate%%|*}"; desc="${gate#*|}"
   case "$state" in
-    success) continue ;;   # close.sh merges it
+    success)
+      # close.sh merges it - unless the required `app` CI check failed on this head: then nothing would
+      # ever move it (measured 2026-10-11: #351 and #346 had both verdicts but a red `app` check, and
+      # close.sh refused the merge every pass for a day). A fixer owns that.
+      app="$(gh api "repos/$REPO/commits/$head/check-runs" --jq '[.check_runs[]|select(.name=="app")]|.[0].conclusion // ""' 2>/dev/null)"
+      [ "$app" = "failure" ] || continue
+      known fixer pr "$pr" "$head" || emit fixer "#$pr" "$head" "app CI check failed after both verdicts passed" "$ref" ;;
     failure)
       known fixer pr "$pr" "$head" || emit fixer "#$pr" "$head" "gate failure: $desc" "$ref" ;;
     *)
