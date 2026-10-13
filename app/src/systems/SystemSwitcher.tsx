@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { Icon } from "../lib/icons.tsx";
 import "./AddSystemDialog.css";
 import { systemCoveragePercent, type DesignSystem } from "./store.ts";
+import { REFERENCE_TOKEN_COUNT } from "../../../src/core/schema.js";
 
 interface SystemSwitcherProps {
   systems: DesignSystem[];
@@ -54,8 +55,8 @@ export default function SystemSwitcher({
           <Icon name="chevronDown" size={13} />
         </Select.Icon>
       </Select.Trigger>
-      {activePct != null && (
-        <span className="app-topbar-cov" title="Schema token coverage">
+      {activePct != null && activePct < 100 && (
+        <span className="app-topbar-cov" title={`${activePct}% of the ${REFERENCE_TOKEN_COUNT} schema tokens`}>
           {activePct}%
         </span>
       )}
@@ -70,7 +71,14 @@ export default function SystemSwitcher({
                     <Icon name="check" size={14} />
                   </Select.ItemIndicator>
                   <Select.ItemText>{s.name}</Select.ItemText>
-                  {pct != null && <span className="app-sysmenu-pct">{pct}%</span>}
+                  {pct != null && pct < 100 && (
+                    <span
+                      className="app-sysmenu-pct"
+                      title={`${pct}% of the ${REFERENCE_TOKEN_COUNT} schema tokens`}
+                    >
+                      {pct}%
+                    </span>
+                  )}
                 </Select.Item>
               );
             })}

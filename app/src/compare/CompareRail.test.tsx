@@ -243,3 +243,47 @@ describe("CompareRail systems filter", () => {
     expect(chipNames(el)).toHaveLength(38);
   });
 });
+
+// Issue #325: the rail showed a "100%" pill on every complete system (38
+// identical pills in the bundle). Only an incomplete system keeps a badge —
+// a warning titled with the schema size.
+describe("CompareRail coverage badge below 100% only (#325)", () => {
+  /** Real-css systems so `systemCoveragePercent` is exact: full vs 32%. */
+  async function renderCoverageRail(): Promise<HTMLDivElement> {
+    const { REFERENCE } = await import("../../../src/core/schema.js");
+    const names: string[] = (REFERENCE as { tokens: string[] }[]).flatMap((g) => g.tokens);
+    const cssFor = (count: number) =>
+      `:root {\n${names.slice(0, count).map((n) => `${n}: #000;`).join("\n")}\n}`;
+    const coverageSystems = [
+      { slug: "perp-ultra-v2", name: "Perp Ultra v2", css: cssFor(names.length) },
+      { slug: "figma", name: "Figma", css: cssFor(138) },
+    ] as unknown as DesignSystem[];
+    const { createRoot } = await import("react-dom/client");
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    const view = { ...makeView("diff"), picked: ["perp-ultra-v2", "figma"] };
+    await act(async () => {
+      root!.render(<CompareRail systems={coverageSystems} view={view} />);
+    });
+    return host;
+  }
+
+  it("shows a titled 32% pill only on the incomplete system", async () => {
+    const el = await renderCoverageRail();
+    expect(el.textContent).not.toContain("100%");
+    const pills = [...el.querySelectorAll(".cmp-pct")];
+    expect(pills).toHaveLength(1);
+    expect(pills[0].textContent).toBe("32%");
+    expect(pills[0].getAttribute("title")).toContain("432");
+    // The pill sits on the figma row, not on the complete row.
+    const figmaRow = [...el.querySelectorAll(".cmp-chip")].find((c) =>
+      c.textContent?.includes("Figma"),
+    )!;
+    expect(figmaRow.querySelector(".cmp-pct")?.textContent).toBe("32%");
+    const fullRow = [...el.querySelectorAll(".cmp-chip")].find((c) =>
+      c.textContent?.includes("Perp Ultra v2"),
+    )!;
+    expect(fullRow.querySelector(".cmp-pct")).toBeNull();
+  });
+});

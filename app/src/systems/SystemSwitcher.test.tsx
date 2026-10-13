@@ -164,3 +164,27 @@ describe("SystemSwitcher coverage memo", () => {
     expect(counters.calls).toBe(1); // only the active header re-evaluated
   });
 });
+
+// Issue #325: a system at 100% carries no signal (nearly every bundled
+// system is complete), so the badge renders only below 100% — as a warning
+// titled with the schema size. Two systems, one full and one partial.
+describe("SystemSwitcher coverage badge below 100% only (#325)", () => {
+  it("renders no 100% badge and titles the partial badge with the schema size", async () => {
+    const full = system("perp-ultra-v2", REFERENCE_NAMES.length);
+    expect(real(full)).toBe(100);
+    const figma = { ...system("figma", 138), name: "Figma" };
+    expect(real(figma)).toBe(32);
+
+    // Active is complete: no pill anywhere in the trigger.
+    await render([full, figma], full);
+    expect(host!.textContent).not.toContain("100%");
+    expect(host!.querySelector(".app-topbar-cov")).toBeNull();
+
+    // Active is partial: the 32% pill explains itself via the schema count.
+    await rerender([full, figma], figma);
+    expect(host!.textContent).not.toContain("100%");
+    const badge = host!.querySelector(".app-topbar-cov")!;
+    expect(badge.textContent).toBe("32%");
+    expect(badge.getAttribute("title")).toContain("432");
+  });
+});

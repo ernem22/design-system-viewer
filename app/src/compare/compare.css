@@ -76,7 +76,7 @@
   border-bottom: var(--border-width-thin) solid var(--color-divider);
 }
 .cmp-swatch { width: var(--size-icon-sm); height: var(--size-icon-sm); border-radius: var(--radius-sm); border: var(--border-width-thin) solid var(--color-border-strong); flex: none; }
-.cmp-cov { margin-left: auto; font-size: var(--font-size-xs); font-weight: var(--font-weight-regular); color: var(--color-text-muted); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.cmp-cov { margin-left: auto; font-size: var(--font-size-xs); font-weight: var(--font-weight-regular); color: var(--color-warning-text); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .cmp-col-body { padding: var(--space-4); }
 .cmp-stack { display: flex; flex-direction: column; gap: var(--space-3); }
 
@@ -179,11 +179,11 @@ tr.is-diff td { background: color-mix(in srgb, var(--color-warning) 8%, transpar
 .cmp-chip:has(.dsv-check:focus-visible) { outline: var(--focus-ring-width) solid var(--color-focus-ring); outline-offset: var(--focus-ring-offset); }
 .cmp-dot { width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--color-border-strong); flex: none; }
 .cmp-chip.on .cmp-dot { background: var(--color-accent); }
-.cmp-pct { margin-left: auto; flex: none; white-space: nowrap; font-family: var(--font-mono); font-size: var(--font-size-xs); font-variant-numeric: tabular-nums; color: var(--color-text-muted); background: var(--color-surface-sunken); border-radius: var(--radius-full); padding: 1px var(--space-2); }
+.cmp-pct { margin-left: auto; flex: none; white-space: nowrap; font-family: var(--font-mono); font-size: var(--font-size-xs); font-variant-numeric: tabular-nums; color: var(--color-warning-text); background: var(--color-warning-subtle); border: 1px solid var(--color-warning-border); border-radius: var(--radius-full); padding: 1px var(--space-2); }
 /* System names stay on one line (issue #286): the name truncates while the
    % badge keeps its own right-aligned column. No literal sizes here. */
 .cmp-chip-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cmp-chip.on .cmp-pct { color: var(--color-accent-text); background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
+.cmp-chip.on .cmp-pct { color: var(--color-warning-text); background: var(--color-warning-subtle); border-color: var(--color-warning-border); }
 .cmp-chip[data-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 .cmp-chip[data-disabled="true"]:hover { border-color: var(--color-border-subtle); color: var(--color-text-secondary); }
 
@@ -202,7 +202,7 @@ button.app-rail-link[aria-current="true"] { background: var(--color-accent-subtl
 .cmp-props-list { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
 .cmp-props-list li { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm); }
 .cmp-props-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cmp-props-pct { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-muted); }
+.cmp-props-pct { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-warning-text); }
 .cmp-props-remove {
   appearance: none; flex: none; display: grid; place-items: center;
   width: var(--size-icon-lg); height: var(--size-icon-lg);
