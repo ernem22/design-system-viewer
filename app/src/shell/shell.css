@@ -889,17 +889,26 @@
     padding: 3px var(--space-2);
   }
 
-  /* The wordmark truncates instead of widening the row: as a flex item its
-     min-content width is the whole unbroken string, so without min-width: 0
-     it floors the row near 140px and the frame overflows. */
+  /* Phone (issue #327): the wordmark loses the row to the switcher — the
+     one control that says which system is active. Hide the wordmark text
+     (the mark stays) so the switcher keeps the remaining width. */
   .app-brand-name {
+    display: none;
+  }
+
+  /* The switcher takes the remaining row width (issue #327): it grows with
+     the row instead of capping at 120px, so the name ellipsises only when
+     it really does not fit. The full name stays on the trigger's title
+     for sighted users and in its aria-label for AT. */
+  .app-syswrap {
+    flex: 1 1 auto;
     min-width: 0;
   }
 
-  /* The switcher gives up width before the tabs do; the full name stays on
-     the trigger's title for sighted users and in its aria-label for AT. */
   .app-sysbtn {
-    max-width: 120px;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: none;
   }
 
   /* The floating drawers start below the doubled topbar track. */
