@@ -107,6 +107,13 @@ async function deflateRaw(data: Uint8Array): Promise<Uint8Array> {
     } catch {
       /* already closed — the write error below is the signal */
     }
+    // The drain above already rejected against the same stream error; settle
+    // it here so its rejection is consumed, not reported as unhandled.
+    try {
+      await reading;
+    } catch {
+      /* the write error below is the signal */
+    }
     throw e;
   }
   await reading;
@@ -150,6 +157,13 @@ async function inflateRaw(data: Uint8Array): Promise<string> {
       await reader.cancel();
     } catch {
       /* already closed — the write error below is the signal */
+    }
+    // The drain above already rejected against the same stream error; settle
+    // it here so its rejection is consumed, not reported as unhandled.
+    try {
+      await reading;
+    } catch {
+      /* the write error below is the signal */
     }
     throw e;
   }
