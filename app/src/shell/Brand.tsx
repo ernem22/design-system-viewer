@@ -20,7 +20,10 @@ function BrandMark() {
 export default function Brand() {
   return (
     <>
-      <span className="app-brand" title="Design System Viewer">
+      {/* Issue #327: at ≤480px the wordmark hides (shell.css) and only the
+         mark stays, so the lockup carries the name itself — role="img" lets
+         the generic span expose the aria-label as its accessible name. */}
+      <span className="app-brand" title="Design System Viewer" role="img" aria-label="Design System Viewer">
         <BrandMark />
         <span className="app-brand-name">Design System Viewer</span>
       </span>
