@@ -62,6 +62,14 @@ export default function SystemSwitcher({
       )}
       <Select.Portal>
         <Select.Content className="app-select-content app-sysmenu" position="popper" sideOffset={6} align="start">
+          {/* Scroll buttons (issue #334): with ~29+ systems the menu ran past
+              the viewport bottom and nothing scrolled. Radix only mounts these
+              while the viewport can scroll that way, so mouse users see there
+              is more. lib/icons has no chevron-up glyph, so the up button
+              reuses chevron-down rotated (shell.css). */}
+          <Select.ScrollUpButton className="app-sysmenu-scroll app-sysmenu-scroll-up">
+            <Icon name="chevronDown" size={13} />
+          </Select.ScrollUpButton>
           <Select.Viewport>
             {systems.map((s) => {
               const pct = pctMap.get(s.slug) ?? null;
@@ -83,6 +91,9 @@ export default function SystemSwitcher({
               );
             })}
           </Select.Viewport>
+          <Select.ScrollDownButton className="app-sysmenu-scroll">
+            <Icon name="chevronDown" size={13} />
+          </Select.ScrollDownButton>
         </Select.Content>
       </Select.Portal>
     </Select.Root>

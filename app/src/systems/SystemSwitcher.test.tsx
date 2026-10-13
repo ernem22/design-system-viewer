@@ -2,6 +2,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import type { Root } from "react-dom/client";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import SystemSwitcher from "./SystemSwitcher.tsx";
 import { systemCoveragePercent, type DesignSystem, type TokenGroup, type Token } from "./store.ts";
 import { REFERENCE } from "../../../src/core/schema.js";
@@ -162,6 +164,74 @@ describe("SystemSwitcher coverage memo", () => {
     await rerender(systems, system("chatgpt", 22));
     expect(host!.querySelector(".app-topbar-cov")?.textContent).toBe("5%");
     expect(counters.calls).toBe(1); // only the active header re-evaluated
+  });
+});
+
+// Issue #334: with ~29+ systems the switcher menu grew to its full height
+// (measured top 43, bottom 927 at 1440x900) and nothing scrolled — the Radix
+// viewport reported scrollHeight === clientHeight. The menu must be capped to
+// the space Radix reports, with scroll buttons so mouse users see there is
+// more. happy-dom has no layout engine, so the cap is read from the
+// stylesheet text (like shellContract.test.ts) while the button is observed
+// in the opened menu.
+const shellCss = readFileSync(
+  resolve(process.cwd(), "src/shell/shell.css"),
+  "utf8",
+).replace(/\/\*[\s\S]*?\*\//g, "");
+
+function sysmenuDeclarations(): string {
+  const bodies: string[] = [];
+  const re = /([^{}]+)\{([^{}]*)\}/g;
+  for (let m = re.exec(shellCss); m !== null; m = re.exec(shellCss)) {
+    if (m[1].split(",").map((s) => s.trim()).includes(".app-sysmenu")) bodies.push(m[2]);
+  }
+  return bodies.join("\n");
+}
+
+/** happy-dom reports every measurement as 0, so Radix can never observe an
+    overflowing viewport and gates its ScrollDownButton off. Report the
+    40-item list as overflowing (the way a real browser would) so the button
+    takes the same branch it takes on screen. Restored afterwards. */
+function fakeOverflowingViewport(): () => void {
+  const proto = HTMLElement.prototype;
+  const origSH = Object.getOwnPropertyDescriptor(proto, "scrollHeight");
+  const origCH = Object.getOwnPropertyDescriptor(proto, "clientHeight");
+  Object.defineProperties(proto, {
+    scrollHeight: { configurable: true, get() { return 870; } },
+    clientHeight: { configurable: true, get() { return 300; } },
+  });
+  return () => {
+    if (origSH) Object.defineProperty(proto, "scrollHeight", origSH);
+    else delete (proto as unknown as Record<string, unknown>)["scrollHeight"];
+    if (origCH) Object.defineProperty(proto, "clientHeight", origCH);
+    else delete (proto as unknown as Record<string, unknown>)["clientHeight"];
+  };
+}
+
+describe("system switcher menu cap (issue #334)", () => {
+  it("caps the menu to the space Radix reports and offers a scroll-down affordance", async () => {
+    const restore = fakeOverflowingViewport();
+    try {
+      const systems = Array.from({ length: 40 }, (_, i) => system(`sys${i}`, 22));
+      await render(systems, systems[0]);
+      // happy-dom never fires a real pointerdown sequence (Radix bails on the
+      // synthetic PointerEvent), but a click opens the menu deterministically.
+      await act(async () => {
+        host!.querySelector<HTMLElement>(".app-sysbtn")!.click();
+      });
+      await act(async () => {});
+      const menu = document.querySelector<HTMLElement>(".app-sysmenu");
+      expect(menu, "menu opens with 40 systems").not.toBeNull();
+      expect(sysmenuDeclarations()).toMatch(
+        /max-height:\s*var\(--radix-select-content-available-height\)/,
+      );
+      expect(
+        menu!.querySelector(".app-sysmenu-scroll"),
+        "ScrollDownButton renders while the list overflows",
+      ).not.toBeNull();
+    } finally {
+      restore();
+    }
   });
 });
 
