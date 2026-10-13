@@ -22,6 +22,14 @@
 //   tv=schema                    Tokens schema mode — only while the Tokens tab
 //                                is active (the default gallery mode omits,
 //                                like cv's default)
+//   s=<base64url>                Shared-system payload (issue #337) — the active
+//                                system's tokens, deflate-raw + base64url (see
+//                                lib/shareLink.ts). Written only by the Copy
+//                                action, read once on load by App (which clears
+//                                it via clearSharedParam in every case, so a
+//                                refresh never re-triggers and later copies
+//                                never carry stale data). writeViewUrl never
+//                                touches it: it is read/cleared, never synced.
 // A legacy ?dark=1 is ignored on read and dropped on the next write: dark
 // mode is retired, every panel shows the base (light) values.
 // Section scroll position rides in location.hash (#<element-id>), like
@@ -154,6 +162,44 @@ export function writeViewUrl(next: WriteViewUrlParams): void {
       null,
       "",
       `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`,
+    );
+  } catch {
+    /* non-http contexts (file://) — the URL just won't sync */
+  }
+}
+
+/** Read the one-shot shared-system payload (`s`, issue #337). Returned raw —
+ *  the caller decodes it via lib/shareLink.ts. Null when absent or empty.
+ *  Kept beside readViewUrl (not inside ViewUrlState) so the synced-state
+ *  shape — and every exact-equality assertion on it — is untouched: `s` is
+ *  read and cleared, never synced like the params above. */
+export function readSharedParam(search?: string): string | null {
+  let params: URLSearchParams;
+  try {
+    params = new URLSearchParams(
+      search ?? (typeof window === "undefined" ? "" : window.location.search),
+    );
+  } catch {
+    return null;
+  }
+  const s = params.get("s");
+  return s ? s : null;
+}
+
+/** Remove `s` from the URL with history.replaceState (pathname, the rest of
+ *  the querystring and the section hash all survive). Called in every shared-
+ *  link case — opened, added, dismissed, or damaged — so a refresh does not
+ *  re-trigger the banner and later copies don't carry stale data. */
+export function clearSharedParam(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("s")) return;
+    url.searchParams.delete("s");
+    window.history.replaceState(
+      null,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
     );
   } catch {
     /* non-http contexts (file://) — the URL just won't sync */

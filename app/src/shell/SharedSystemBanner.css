@@ -1,0 +1,36 @@
+/* Shared-system banner (issue #337): the one-shot notice above the content
+   when a `?s=` link lands. Every value resolves from the viewer's tokens —
+   no literal sizes or colours here, same contract as shell.css. */
+.app-shared-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-surface);
+  border-bottom: var(--border-width-thin) solid var(--color-divider);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+}
+
+.app-shared-banner-text {
+  font-weight: var(--font-weight-semibold);
+}
+
+.app-shared-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.app-shared-banner-btn {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  border: var(--border-width-thin) solid var(--color-border);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+}
