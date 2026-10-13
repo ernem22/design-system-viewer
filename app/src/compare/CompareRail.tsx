@@ -35,6 +35,28 @@ export function CompareRail({
   const [query, setQuery] = useState("");
   const searching = query.trim().length > 0;
   const visibleGroups = useMemo(() => filterOptionGroups(optionGroups, query), [optionGroups, query]);
+  // Systems filter (issue #324): catalogue-order list of 38 rows is
+  // unfindable, so the Systems group gets its own field. Kept separate
+  // from the component search above — that one narrows option groups only.
+  const [systemQuery, setSystemQuery] = useState("");
+  const systemSearching = systemQuery.trim().length > 0;
+  const visibleSystems = useMemo(() => {
+    const bySlug = new Map(systems.map((s) => [s.slug, s]));
+    const pickedFirst = picked.flatMap((slug) => {
+      const s = bySlug.get(slug);
+      return s ? [s] : [];
+    });
+    const rest = systems.filter((s) => !picked.includes(s.slug));
+    const ordered = [...pickedFirst, ...rest];
+    const q = systemQuery.trim().toLocaleLowerCase("tr");
+    if (!q) return ordered;
+    // Picked rows stay visible even when they don't match, so an active
+    // comparison is never filtered out from under the user.
+    return ordered.filter(
+      (s) => picked.includes(s.slug) || s.name.trim().toLocaleLowerCase("tr").includes(q),
+    );
+  }, [systems, picked, systemQuery]);
+  const atLimit = picked.length >= maxColumns;
   const allLabels = ["systems", ...optionGroups.map((g) => g.label)];
   // Controlled (like Rail) instead of `defaultValue`, so a search can force
   // every surviving group open without discarding the user's own collapses.
@@ -42,7 +64,11 @@ export function CompareRail({
   const [openGroups, setOpenGroups] = useState<string[]>(() =>
     allLabels.filter((label) => !DEFAULT_COLLAPSED_GROUPS.includes(label)),
   );
-  const effectiveOpen = searching ? ["systems", ...visibleGroups.map((g) => g.label)] : openGroups;
+  const effectiveOpen = searching
+    ? ["systems", ...visibleGroups.map((g) => g.label)]
+    : systemSearching
+      ? Array.from(new Set([...openGroups, "systems"]))
+      : openGroups;
 
   return (
     <>
@@ -54,7 +80,24 @@ export function CompareRail({
       <Accordion.Root type="multiple" value={effectiveOpen} onValueChange={setOpenGroups}>
         <RailGroup value="systems" label="Systems" count={`${picked.length}/${maxColumns}`}>
           <div className="cmp-rail-systems">
-            {systems.map((s) => {
+            <p className="cmp-rail-hint" aria-live="polite">
+              {atLimit
+                ? `${maxColumns} of ${maxColumns} picked — unpick one to add another`
+                : `Pick 2–${maxColumns} systems`}
+            </p>
+            <div className="cmp-rail-filter">
+              <label htmlFor="cmp-system-filter">Filter systems</label>
+              <input
+                id="cmp-system-filter"
+                type="search"
+                value={systemQuery}
+                onChange={(e) => setSystemQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setSystemQuery("");
+                }}
+              />
+            </div>
+            {visibleSystems.map((s) => {
               const isOn = picked.includes(s.slug);
               const locked = !isOn && picked.length >= maxColumns;
               const pct = systemCoveragePercent(s);
