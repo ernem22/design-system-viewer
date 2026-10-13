@@ -85,16 +85,31 @@ async function deflateRaw(data: Uint8Array): Promise<Uint8Array> {
   const stream = new CompressionStream("deflate-raw");
   const writer = stream.writable.getWriter();
   const reader = stream.readable.getReader();
-  await writer.write(data);
-  await writer.close();
+  // The readable side must drain concurrently with writing: Chromium applies
+  // backpressure to the writable side, so awaiting write()/close() before
+  // the first read() never resolves in a real browser.
   const chunks: Uint8Array[] = [];
   let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    total += value.length;
+  const reading = (async () => {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      total += value.length;
+    }
+  })();
+  try {
+    await writer.write(data);
+    await writer.close();
+  } catch (e) {
+    try {
+      await reader.cancel();
+    } catch {
+      /* already closed — the write error below is the signal */
+    }
+    throw e;
   }
+  await reading;
   const out = new Uint8Array(total);
   let at = 0;
   for (const c of chunks) {
@@ -108,24 +123,37 @@ async function inflateRaw(data: Uint8Array): Promise<string> {
   const stream = new DecompressionStream("deflate-raw");
   const writer = stream.writable.getWriter();
   const reader = stream.readable.getReader();
-  await writer.write(data);
-  await writer.close();
+  // Same backpressure deadlock as deflateRaw above: drain while writing.
   const chunks: Uint8Array[] = [];
   let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.length;
-    if (total > MAX_OUTPUT_BYTES) {
-      try {
-        await reader.cancel();
-      } catch {
-        /* already closed — the throw below is the signal */
+  const reading = (async () => {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length;
+      if (total > MAX_OUTPUT_BYTES) {
+        try {
+          await reader.cancel();
+        } catch {
+          /* already closed — the throw below is the signal */
+        }
+        throw new Error("shared link payload too large");
       }
-      throw new Error("shared link payload too large");
+      chunks.push(value);
     }
-    chunks.push(value);
+  })();
+  try {
+    await writer.write(data);
+    await writer.close();
+  } catch (e) {
+    try {
+      await reader.cancel();
+    } catch {
+      /* already closed — the write error below is the signal */
+    }
+    throw e;
   }
+  await reading;
   const out = new Uint8Array(total);
   let at = 0;
   for (const c of chunks) {
