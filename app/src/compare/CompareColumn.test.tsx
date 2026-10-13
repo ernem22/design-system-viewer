@@ -171,3 +171,28 @@ describe("CompareColumn portal container scope", () => {
     expect(column.contains(portalled)).toBe(true);
   });
 });
+
+// Issue #325: a complete column head carries no badge; an incomplete one
+// keeps a warning pill titled with the schema size.
+describe("CompareColumn coverage badge below 100% only (#325)", () => {
+  it("renders nothing at 100% and a titled 32% below", async () => {
+    const opt = option("button");
+    const { createRoot } = await import("react-dom/client");
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root!.render(
+        <>
+          <CompareColumn slug="full" name="Full" style={{}} pct={100} option={opt} />
+          <CompareColumn slug="figma" name="Figma" style={{}} pct={32} option={opt} />
+        </>,
+      );
+    });
+    expect(host.textContent).not.toContain("100%");
+    const badges = [...host.querySelectorAll(".cmp-cov")];
+    expect(badges).toHaveLength(1);
+    expect(badges[0].textContent).toBe("32%");
+    expect(badges[0].getAttribute("title")).toContain("432");
+  });
+});

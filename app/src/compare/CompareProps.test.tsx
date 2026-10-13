@@ -169,3 +169,44 @@ describe("CompareProps in-place removal (#120)", () => {
     expect(el.textContent).not.toContain("Framer");
   });
 });
+
+// Issue #325: the props list showed a "100%" pill per picked system. Only an
+// incomplete system keeps a badge — a warning titled with the schema size.
+describe("CompareProps coverage badge below 100% only (#325)", () => {
+  it("renders nothing at 100% and a titled 32% below", async () => {
+    const { REFERENCE } = await import("../../../src/core/schema.js");
+    const names: string[] = (REFERENCE as { tokens: string[] }[]).flatMap((g) => g.tokens);
+    const cssFor = (count: number) =>
+      `:root {\n${names.slice(0, count).map((n) => `${n}: #000;`).join("\n")}\n}`;
+    const full = {
+      ...system("full", "Full"),
+      css: cssFor(names.length),
+      groups: [
+        {
+          id: "g",
+          label: "G",
+          kind: "color",
+          tokens: names.map((name) => ({ name, value: "#000" })),
+        },
+      ],
+    } as unknown as DesignSystem;
+    const figma = {
+      ...system("figma", "Figma"),
+      css: cssFor(138),
+      groups: [
+        {
+          id: "g",
+          label: "G",
+          kind: "color",
+          tokens: names.slice(0, 138).map((name) => ({ name, value: "#000" })),
+        },
+      ],
+    } as unknown as DesignSystem;
+    const el = await mount([full, figma]);
+    expect(el.textContent).not.toContain("100%");
+    const pills = [...el.querySelectorAll(".cmp-props-pct")];
+    expect(pills).toHaveLength(1);
+    expect(pills[0].textContent).toBe("32%");
+    expect(pills[0].getAttribute("title")).toContain("432");
+  });
+});
