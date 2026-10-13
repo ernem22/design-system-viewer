@@ -1,5 +1,6 @@
 import { Icon } from "../lib/icons.tsx";
 import { systemCoveragePercent } from "../systems/store.ts";
+import { REFERENCE_TOKEN_COUNT } from "../../../src/core/schema.js";
 import type { CompareViewModel } from "./useCompareView.ts";
 
 /** Compare tab's right rail: coverage of each picked system, at a glance —
@@ -21,7 +22,14 @@ export function CompareProps({ view }: { view: CompareViewModel }) {
               return (
                 <li key={s.slug}>
                   <span className="cmp-props-name">{s.name}</span>
-                  <span className="cmp-props-pct">{pct != null ? `${pct}%` : "—"}</span>
+                  {pct != null && pct < 100 && (
+                    <span
+                      className="cmp-props-pct"
+                      title={`${pct}% of the ${REFERENCE_TOKEN_COUNT} schema tokens`}
+                    >
+                      {pct}%
+                    </span>
+                  )}
                   <button
                     type="button"
                     className="cmp-props-remove"

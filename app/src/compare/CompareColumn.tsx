@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
 import { CompareIdPrefixContext, InCompareContext, PortalContainerContext } from "../gallery/ui.tsx";
+import { REFERENCE_TOKEN_COUNT } from "../../../src/core/schema.js";
 import type { ComparableOption } from "./registry.tsx";
 
 /** One column = one CSS-variable scope. Radix `*.Portal` content (selects,
@@ -52,7 +53,11 @@ export function CompareColumn({
       <h3 className="cmp-col-head">
         <span className="cmp-swatch" aria-hidden="true" style={{ background: "var(--color-accent)" }} />
         {name}
-        <span className="cmp-cov">{pct != null ? `${pct}%` : ""}</span>
+        {pct != null && pct < 100 && (
+          <span className="cmp-cov" title={`${pct}% of the ${REFERENCE_TOKEN_COUNT} schema tokens`}>
+            {pct}%
+          </span>
+        )}
       </h3>
       <PortalContainerContext.Provider value={portalHost}>{body}</PortalContainerContext.Provider>
       {/* Zero-box host: the portalled content still lays out as a direct

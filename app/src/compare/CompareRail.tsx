@@ -5,6 +5,7 @@ import { Icon } from "../lib/icons.tsx";
 import { RailGroup } from "../shell/RailGroup.tsx";
 import { SectionSearch } from "../shell/SectionSearch.tsx";
 import { systemCoveragePercent } from "../systems/store.ts";
+import { REFERENCE_TOKEN_COUNT } from "../../../src/core/schema.js";
 import type { DesignSystem } from "../systems/store.ts";
 import type { CompareViewModel } from "./useCompareView.ts";
 import { filterOptionGroups } from "./railFilter.ts";
@@ -121,7 +122,14 @@ export function CompareRail({
                   </Checkbox.Root>
                   <span className="cmp-dot" aria-hidden="true" />
                   <span className="cmp-chip-name">{s.name}</span>
-                  {pct != null && <span className="cmp-pct">{pct}%</span>}
+                  {pct != null && pct < 100 && (
+                    <span
+                      className="cmp-pct"
+                      title={`${pct}% of the ${REFERENCE_TOKEN_COUNT} schema tokens`}
+                    >
+                      {pct}%
+                    </span>
+                  )}
                 </label>
                 );
               })}
