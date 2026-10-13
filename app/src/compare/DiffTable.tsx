@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
-import * as Checkbox from "@radix-ui/react-checkbox";
-import { Icon } from "../lib/icons.tsx";
+import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import { cssValueEq } from "../lib/cssValueEq.ts";
 import type { DesignSystem } from "../systems/store.ts";
 
@@ -36,10 +35,48 @@ function isColor(v: string): boolean {
   return colorProbe.style.color !== "";
 }
 
+/* A token value that is exactly a `var()` reference, with an optional
+   fallback: `var(--x)` or `var(--x, #fff)`. */
+const VAR_REF = /^var\(\s*(--[\w-]+)\s*(?:,\s*([\s\S]*))?\)$/;
+
+/** Resolve `var(--x)` / `var(--x, fallback)` against a single column's own
+   value map (issue #323): a swatch must use what the token means in *that*
+   system, not whatever `:root` happens to hold. Up to 8 hops; a repeated
+   name is a cycle and stops the walk. Returns the final string (possibly an
+   unresolved var reference) or null when the reference has no definition. */
+function resolveRef(value: string, map: Map<string, string>): string | null {
+  let current = value.trim();
+  const seen = new Set<string>();
+  for (let hops = 0; hops < 8; hops++) {
+    const m = current.match(VAR_REF);
+    if (!m) break;
+    const name = m[1];
+    if (seen.has(name)) break;
+    seen.add(name);
+    const next = map.get(name) ?? (m[2] != null ? m[2].trim() : undefined);
+    if (next == null) return null;
+    current = next;
+  }
+  return current;
+}
+
+/** The colour a chip should paint for `value` in this column, or null when
+   the cell shows no swatch. A plain colour resolves to itself; a `var()`
+   reference walks the column's own map first, falling back to the authored
+   text when it cannot be resolved (the old behaviour chipped an unresolved
+   `var()` because the CSS parser accepts it syntactically). */
+function chipColor(value: string, map: Map<string, string>): string | null {
+  const resolved = resolveRef(value, map) ?? value.trim();
+  return isColor(resolved) ? resolved : null;
+}
+
+type RowKind = "same" | "different" | "missing";
+type Filter = "different" | "missing" | "all";
+
 interface DiffRow {
   name: string;
   vals: (string | undefined)[];
-  same: boolean;
+  kind: RowKind;
   categories: string[];
 }
 
@@ -51,7 +88,7 @@ interface DiffSection {
 /** Full token-diff table across every category, for the systems picked as
    compare columns. Ported from preview/src/compare.jsx's DiffTable. */
 export function DiffTable({ cols }: { cols: DesignSystem[] }) {
-  const [onlyDiff, setOnlyDiff] = useState(true);
+  const [filter, setFilter] = useState<Filter>("different");
 
   /* A token can sit under a different `g.label` in each system. Union every
      label the token appears under (in first-seen order) instead of letting
@@ -83,7 +120,9 @@ export function DiffTable({ cols }: { cols: DesignSystem[] }) {
     return { catOrder, byCat, valueMaps, categories };
   }, [cols]);
 
-  let diffs = 0;
+  let different = 0;
+  let missing = 0;
+  let same = 0;
   let total = 0;
   const sections: DiffSection[] = catOrder
     .map((label) => {
@@ -92,15 +131,22 @@ export function DiffTable({ cols }: { cols: DesignSystem[] }) {
         .map((name) => {
           const vals = valueMaps.map((m) => m.get(name));
           const present = vals.filter((v) => v != null);
-          // Compare after notation normalisation (`cssValueEq`): values CSS
-          // treats as equal (`.5rem` vs `0.5rem`) are the same token value.
-          // Cells still render `v` exactly as authored.
-          const same = present.length === vals.length && present.every((v) => cssValueEq(v ?? "", present[0] ?? ""));
+          // Issue #323: three exclusive outcomes, not two. "missing" wins when
+          // any system lacks the token; only an all-present row can be
+          // same/different. Compare after notation normalisation
+          // (`cssValueEq`): values CSS treats as equal (`.5rem` vs `0.5rem`)
+          // are the same token value. Cells still render `v` as authored.
+          let kind: RowKind;
+          if (present.length < vals.length) kind = "missing";
+          else if (present.every((v) => cssValueEq(v ?? "", vals[0] ?? ""))) kind = "same";
+          else kind = "different";
           total++;
-          if (!same) diffs++;
-          return { name, vals, same, categories: categories.get(name) ?? [] };
+          if (kind === "different") different++;
+          else if (kind === "missing") missing++;
+          else same++;
+          return { name, vals, kind, categories: categories.get(name) ?? [] };
         })
-        .filter((r) => !onlyDiff || !r.same);
+        .filter((r) => filter === "all" || r.kind === filter);
       return rows.length ? { label, rows } : null;
     })
     .filter((s): s is DiffSection => s != null);
@@ -109,16 +155,25 @@ export function DiffTable({ cols }: { cols: DesignSystem[] }) {
     <div className="cmp-diff">
       <div className="cmp-diff-bar">
         <span className="dsv-muted">
-          <b>{total}</b> tokens · <b>{diffs}</b> different · <b>{total - diffs}</b> same
+          <b>{total}</b> tokens · <b>{different}</b> different · <b>{missing}</b> missing ·{" "}
+          <b>{same}</b> same
         </span>
-        <label className="dsv-control-label" style={{ fontSize: "var(--font-size-sm)" }}>
-          <Checkbox.Root className="dsv-check" checked={onlyDiff} onCheckedChange={(checked) => setOnlyDiff(checked === true)}>
-            <Checkbox.Indicator>
-              <Icon name="check" size={14} />
-            </Checkbox.Indicator>
-          </Checkbox.Root>
-          only differences
-        </label>
+        {/* Issue #323: the "only differences" checkbox could not express the
+            new missing/different split, so it is a three-way segmented
+            control named "Show", defaulting to Different. */}
+        <ToggleGroup.Root
+          type="single"
+          aria-label="Show"
+          value={filter}
+          onValueChange={(v) => {
+            if (v === "different" || v === "missing" || v === "all") setFilter(v);
+          }}
+          className="cmp-seg"
+        >
+          <ToggleGroup.Item value="different">Different</ToggleGroup.Item>
+          <ToggleGroup.Item value="missing">Missing</ToggleGroup.Item>
+          <ToggleGroup.Item value="all">All</ToggleGroup.Item>
+        </ToggleGroup.Root>
       </div>
       <table className="cmp-diff-table">
         <thead>
@@ -140,8 +195,8 @@ export function DiffTable({ cols }: { cols: DesignSystem[] }) {
                 {label}
               </th>
             </tr>
-            {rows.map(({ name, vals, same, categories: cats }) => (
-              <tr key={name} className={same ? "" : "is-diff"}>
+            {rows.map(({ name, vals, kind, categories: cats }) => (
+              <tr key={name} className={kind === "same" ? "" : "is-diff"}>
                 <td className="cmp-diff-name">
                   {name}
                   {cats.length > 1 && (
@@ -154,18 +209,27 @@ export function DiffTable({ cols }: { cols: DesignSystem[] }) {
                     </span>
                   )}
                 </td>
-                {vals.map((v, i) => (
-                  <td key={i} className="cmp-diff-val">
-                    {v == null ? (
-                      <span className="cmp-diff-missing">—</span>
-                    ) : (
-                      <span className="cmp-diff-cell">
-                        {isColor(v) && <span className="cmp-diff-chip" style={{ background: v }} />}
-                        <code spellCheck={false}>{v}</code>
-                      </span>
-                    )}
-                  </td>
-                ))}
+                {vals.map((v, i) => {
+                  // Issue #323: mark *which* system differs. The first column
+                  // is the reference and is never marked; a cell in a
+                  // different row that disagrees with it is `is-changed`; a
+                  // missing cell is `is-missing`.
+                  const changed = kind === "different" && i > 0 && v != null && !cssValueEq(v, vals[0] ?? "");
+                  const className = `cmp-diff-val${v == null ? " is-missing" : ""}${changed ? " is-changed" : ""}`;
+                  const chip = v == null ? null : chipColor(v, valueMaps[i]);
+                  return (
+                    <td key={i} className={className}>
+                      {v == null ? (
+                        <span className="cmp-diff-missing">—</span>
+                      ) : (
+                        <span className="cmp-diff-cell">
+                          {chip && <span className="cmp-diff-chip" style={{ background: chip }} />}
+                          <code spellCheck={false}>{v}</code>
+                        </span>
+                      )}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
@@ -173,7 +237,11 @@ export function DiffTable({ cols }: { cols: DesignSystem[] }) {
       </table>
       {!sections.length && (
         <p className="dsv-muted" style={{ padding: "var(--space-4)" }}>
-          No differences — selected systems match on these tokens.
+          {filter === "different"
+            ? "No differences — selected systems match on these tokens."
+            : filter === "missing"
+              ? "No missing tokens — every selected system defines every token."
+              : "No tokens in the selected systems."}
         </p>
       )}
     </div>

@@ -115,9 +115,24 @@
   font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: var(--letter-spacing-wide);
   font-weight: var(--font-weight-semibold); padding: var(--space-1-5) var(--space-3); text-align: left;
 }
+/* Issue #323: the token-name column stays pinned to the left edge while the
+   value columns scroll horizontally on a phone. Its opaque background keeps
+   the scrolled values from showing through; the header's first cell matches
+   it, and z-index lifts both above the scrolling values. */
+.cmp-diff-table .cmp-diff-name,
+.cmp-diff-table thead th:first-child {
+  position: sticky; left: 0; z-index: 2;
+  background: var(--color-surface);
+}
+.cmp-diff-table thead th:first-child { z-index: 3; }
 .cmp-diff-name { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-secondary); white-space: nowrap; }
 tr.is-diff .cmp-diff-name { color: var(--color-text); }
+/* Issue #323: mark the value that actually differs from the reference column
+   (first system). `is-diff` stays a faint row tint; `is-changed` is the
+   stronger per-cell warning that used to be absent. */
 tr.is-diff td { background: color-mix(in srgb, var(--color-warning) 8%, transparent); }
+.cmp-diff-val.is-changed { background: var(--color-warning-subtle); }
+.cmp-diff-val.is-missing { background: var(--color-surface-sunken); }
 .cmp-diff-cell { display: inline-flex; align-items: center; gap: var(--space-2); }
 .cmp-diff-cell code { font-size: var(--font-size-xs); }
 .cmp-diff-chip { width: var(--size-icon-sm); height: var(--size-icon-sm); border-radius: var(--radius-sm); border: var(--border-width-thin) solid var(--color-border-strong); flex: none; }
