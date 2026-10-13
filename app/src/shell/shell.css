@@ -175,6 +175,33 @@
 
 .app-sysmenu {
   min-width: 220px;
+  /* Issue #334: with ~29+ systems the menu grew to its full height (measured
+     top 43, bottom 927 at 1440x900) and nothing scrolled — the Radix viewport
+     reported scrollHeight === clientHeight. Cap the menu to the space Radix
+     reports for the popper; the Radix viewport (a flex column child with its
+     own vertical scroll) then scrolls inside the cap for wheel, touch and
+     keyboard, and the highlighted item scrolls into view. */
+  max-height: var(--radix-select-content-available-height);
+}
+
+/* Scroll affordances for the switcher menu (issue #334): Radix only mounts
+   these while the viewport can scroll in that direction, so mouse users see
+   that there is more. Token surface/type only — no literal sizes. */
+.app-sysmenu-scroll {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  padding-block: var(--space-1);
+  color: var(--color-text-muted);
+  background: transparent;
+  cursor: default;
+}
+
+/* lib/icons has no chevron-up glyph, so the up button reuses chevron-down
+   rotated rather than adding one (only the issue's files may change). */
+.app-sysmenu-scroll-up > svg {
+  transform: rotate(180deg);
 }
 
 .app-select-item {
