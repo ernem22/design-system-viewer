@@ -144,6 +144,25 @@ tr.is-diff td { background: color-mix(in srgb, var(--color-warning) 8%, transpar
 .cmp-rail-search { margin-bottom: var(--space-2); }
 .cmp-rail-search .app-topbar-search { width: 100%; }
 .cmp-rail-empty { margin: var(--space-2) var(--space-2) 0; font-size: var(--font-size-sm); color: var(--color-text-muted); }
+/* Issue #324: hint + filter live inside the Systems group, above the chip
+   list. Tokens only — no literal sizes. */
+.cmp-rail-hint { margin: 0; font-size: var(--font-size-sm); color: var(--color-text-muted); }
+.cmp-rail-filter { display: flex; flex-direction: column; gap: var(--space-1); }
+.cmp-rail-filter label { font-size: var(--font-size-sm); color: var(--color-text-muted); }
+.cmp-rail-filter input {
+  width: 100%; min-width: 0;
+  font-size: var(--font-size-sm); color: var(--color-text);
+  background: var(--color-surface-sunken);
+  border: var(--border-width-thin) solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-2);
+}
+.cmp-rail-filter input:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  background: var(--color-surface);
+  border-color: var(--color-accent-border);
+}
 
 .cmp-rail-systems { display: flex; flex-direction: column; gap: var(--space-1); }
 .cmp-chip {

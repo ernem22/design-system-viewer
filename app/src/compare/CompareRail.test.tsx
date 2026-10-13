@@ -55,7 +55,9 @@ async function renderRail(mode: "component" | "diff" = "component"): Promise<HTM
 }
 
 function searchInput(el: HTMLElement): HTMLInputElement {
-  const input = el.querySelector<HTMLInputElement>('input[type="search"]');
+  const input =
+    el.querySelector<HTMLInputElement>('input[aria-label="Search components"]') ??
+    el.querySelector<HTMLInputElement>('input[type="search"]');
   if (!input) throw new Error("no search input in the compare rail");
   return input;
 }
@@ -96,7 +98,7 @@ describe("CompareRail component search", () => {
     host?.remove();
 
     const diffEl = await renderRail("diff");
-    expect(diffEl.querySelector('input[type="search"]')).toBeNull();
+    expect(diffEl.querySelector('input[aria-label="Search components"]')).toBeNull();
   });
 
   it("filters the picker to matching options as the user types", async () => {
@@ -146,5 +148,98 @@ describe("CompareRail component search", () => {
     await type(el, "");
     expect(optionLabels(el)).toContain("Button");
     expect(optionLabels(el)).not.toContain("Login screen");
+  });
+});
+
+// Issue #324: the Systems group listed all 38 systems in catalogue order
+// with no finder, and the 4-system cap surfaced only as a tooltip. These
+// mount the rail with a catalogue-sized list and drive the new field.
+describe("CompareRail systems filter", () => {
+  const catalogue = [
+    { slug: "aurora", name: "Aurora", css: "" },
+    { slug: "chatgpt", name: "ChatGPT", css: "" },
+    { slug: "gemini-new-1", name: "Gemini New 1", css: "" },
+    { slug: "gemini-new-2", name: "Gemini New 2", css: "" },
+    ...Array.from({ length: 34 }, (_, i) => ({
+      slug: `sys-${String(i + 5).padStart(2, "0")}`,
+      name: `System ${String(i + 5).padStart(2, "0")}`,
+      css: "",
+    })),
+  ] as unknown as DesignSystem[];
+
+  async function renderSystemsRail(picked: string[]): Promise<HTMLDivElement> {
+    const { createRoot } = await import("react-dom/client");
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    const view = { ...makeView("component"), picked };
+    await act(async () => {
+      root!.render(<CompareRail systems={catalogue} view={view} />);
+    });
+    return host;
+  }
+
+  function filterInput(el: HTMLElement): HTMLInputElement {
+    const input = el.querySelector<HTMLInputElement>("#cmp-system-filter");
+    if (!input) throw new Error("no Filter systems field in the compare rail");
+    return input;
+  }
+
+  async function typeSystems(el: HTMLElement, value: string): Promise<void> {
+    const input = filterInput(el);
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    await act(async () => {
+      setter.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  const chipNames = (el: HTMLElement): string[] =>
+    [...el.querySelectorAll(".cmp-chip-name")].map((c) => c.textContent ?? "");
+
+  it("renders a Filter systems field inside the Systems group", async () => {
+    const el = await renderSystemsRail(["aurora", "chatgpt"]);
+    expect(filterInput(el)).toBeTruthy();
+    expect(el.querySelector('label[for="cmp-system-filter"]')?.textContent).toContain("Filter systems");
+  });
+
+  it("filters by name but keeps picked rows visible and first", async () => {
+    const el = await renderSystemsRail(["aurora", "chatgpt"]);
+    await typeSystems(el, "gemini");
+    const names = chipNames(el);
+    expect(names).toContain("Aurora");
+    expect(names).toContain("ChatGPT");
+    expect(names).toContain("Gemini New 1");
+    expect(names).toContain("Gemini New 2");
+    expect(names).toHaveLength(4);
+    expect(names.slice(0, 2)).toEqual(["Aurora", "ChatGPT"]);
+  });
+
+  it("lists picked systems first in pick order without a filter", async () => {
+    const el = await renderSystemsRail(["chatgpt", "aurora"]);
+    expect(chipNames(el).slice(0, 2)).toEqual(["ChatGPT", "Aurora"]);
+  });
+
+  it("names the limit once four are picked", async () => {
+    const two = await renderSystemsRail(["aurora", "chatgpt"]);
+    expect(two.querySelector(".cmp-rail-hint")?.textContent).toContain("Pick 2–4 systems");
+    expect(two.querySelector(".cmp-rail-hint")?.getAttribute("aria-live")).toBe("polite");
+
+    act(() => root?.unmount());
+    root = null;
+    host?.remove();
+
+    const four = await renderSystemsRail(["aurora", "chatgpt", "gemini-new-1", "gemini-new-2"]);
+    expect(four.querySelector(".cmp-rail-hint")?.textContent).toContain("unpick one");
+  });
+
+  it("clears the filter on Escape", async () => {
+    const el = await renderSystemsRail(["aurora", "chatgpt"]);
+    await typeSystems(el, "gemini");
+    expect(chipNames(el)).toHaveLength(4);
+    await act(async () => {
+      filterInput(el).dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(chipNames(el)).toHaveLength(38);
   });
 });
