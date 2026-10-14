@@ -87,11 +87,12 @@ refused_count() {   # role pr head -> number of verdict-refused results for it
   echo "$n"
 }
 
-# the newest finished Fixer for this PR and head ended blocked
+# a finished Fixer for this PR and head ended blocked or failed
 fixer_blocked() {   # pr head
-  local last
-  last="$(ls -t "$S"/done/100-fixer-"$1"-"${2:0:7}".spec* 2>/dev/null | head -1)"
-  case "$last" in *.blocked) return 0;; esac
+  local f
+  for f in "$S"/done/100-fixer-"$1"-"${2:0:7}".spec*; do
+    case "$f" in *.blocked|*.failed) return 0;; esac
+  done
   return 1
 }
 # a recheck Reviewer for this PR and head was queued, is running or has finished (once per head)
@@ -163,10 +164,11 @@ printf '%s' "$PRS_JSON" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on(
       [ "$app" = "failure" ] || continue
       known fixer pr "$pr" "$head" || emit fixer "#$pr" "$head" "app CI check failed after both verdicts passed" "$ref" ;;
     failure)
-      # A Fixer that answered the findings with `blocked` disputes them (measured 2026-10-13, #346: the
-      # Reviewer called a test update scope creep, the Fixer reverted it, `app` CI broke, the Fixer
-      # restored it and settled blocked - then sat out 240 min and blocked again, for good). Its reason
-      # goes to ONE fresh Reviewer on the same head; the gate keeps the latest verdict per role.
+      # A Fixer that could not apply the findings (blocked or failed) disputes them (measured 2026-10-13,
+      # #346: the Reviewer called a test update scope creep, the Fixer reverted it, `app` CI broke, the
+      # Fixer restored it and settled blocked - then failed, and was re-run every few hours for good).
+      # Its reason goes to ONE fresh Reviewer on the same head; the gate keeps the latest verdict per role.
+      # Any such result counts, not only the newest: on #346 a later `failed` hid the `blocked`.
       if fixer_blocked "$pr" "$head" && ! rechecked "$pr" "$head"; then
         emit reviewer "#$pr" "$head" "recheck: the fixer disputed the findings (blocked)" "$ref"; continue
       fi

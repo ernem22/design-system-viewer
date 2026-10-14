@@ -140,12 +140,16 @@ DO NOT POST TO THE PR: the dispatcher posts your verdict from this body.
 $WORKER_DONE_RULES"
 }
 
-# The reason the newest Fixer for this PR and head gave for settling blocked, from its kept report.
+# The reason the newest blocked/failed Fixer for this PR and head gave, from its kept report: the newest
+# such result whose report has a reason: line.
 fixer_dispute() {   # pr head
-  local last task
-  last="$(ls -t "$S"/done/100-fixer-"$1"-"${2:0:7}".spec* 2>/dev/null | head -1)"
-  task="$(sed -n 's/^TASK=//p' "$last" 2>/dev/null | head -1)"
-  grep -E '^[[:space:]]*(reason|fixed):' "$S/report-$task.txt" 2>/dev/null | head -6
+  local f task out
+  for f in $(ls -t "$S"/done/100-fixer-"$1"-"${2:0:7}".spec* 2>/dev/null); do
+    case "$f" in *.blocked|*.failed) ;; *) continue;; esac
+    task="$(sed -n 's/^TASK=//p' "$f" 2>/dev/null | head -1)"
+    out="$(grep -E '^[[:space:]]*(reason|fixed):' "$S/report-$task.txt" 2>/dev/null | head -6)"
+    grep -q 'reason:' <<<"$out" && { printf '%s\n' "$out"; return; }
+  done
 }
 
 gen_reviewer() {   # pr head branch [why]
@@ -154,7 +158,7 @@ gen_reviewer() {   # pr head branch [why]
     SUF="-recheck"
     WHY="$(fixer_dispute "$pr" "$2")"
     RECHECK="RECHECK - this head already has a failing verdict, and the Fixer sent to apply its findings
-settled \`blocked\`, disputing them. Its words, verbatim:
+could not (it settled \`blocked\` or \`failed\`). Its words, verbatim:
 
 ${WHY:-  (the Fixer's report holds no reason: line - read the PR's latest comments)}
 
