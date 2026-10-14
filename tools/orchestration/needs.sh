@@ -95,13 +95,16 @@ fixer_blocked() {   # pr head
   done
   return 1
 }
-# a recheck Reviewer for this PR and head was queued, is running or has finished (once per head)
+# a recheck Reviewer for this PR and head was queued, is running or has finished (once per head; one that
+# ended without a verdict - timeout, exited, failed ... - holds it for RETRY_TTL only, like any worker)
 rechecked() {   # pr head
   local f
   for f in "$S"/queue/* "$S"/active-* "$S"/done/*; do
     [ -f "$f" ] || continue
     [ -n "${NEEDS_IGNORE_QUEUE:-}" ] && case "$f" in "$S"/queue/*) continue;; esac
     case "$f" in *.rejected|*.start-failed|*.dropped|*.orphaned) continue;; esac
+    case "$f" in *.failed|*.timeout|*.exited|*.agent_wait|*.cancelled|*.unknown|*.verdict-refused)
+      young "$f" "${RETRY_TTL:-180}" || continue;; esac
     case "${f##*/}" in *reviewer-"$1"-"${2:0:7}"-recheck*) return 0;; esac
   done
   return 1
