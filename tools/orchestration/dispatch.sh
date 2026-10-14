@@ -148,6 +148,9 @@ finish_running() {
   fi
 
   [ "$OUTC" = "succeeded" ] || check_provider "$RUNNING"
+  # read now: the close below takes the screen with it
+  local SALVAGE=""
+  [ "$OUTC" = "succeeded" ] || SALVAGE="$(salvage_screen "$RUNNING")"
   local CLOSE_ARGS=("$DISP")
   case "$OUTC" in succeeded|failed|cancelled) ;; *) CLOSE_ARGS+=(--stop) ;; esac
   local CRC=0
@@ -193,7 +196,10 @@ finish_running() {
       [ "$OUTC" = "succeeded" ] && OUTC="$(report_status "$FILE" "$TASK")"
       record "$FILE" "$OUTC" ;;
     *)
-      if [ "${ATTEMPT:-1}" -lt "$MAX_ATTEMPTS" ]; then
+      if [ -n "$SALVAGE" ] && post_salvaged "$FILE" "$TASK" "$SALVAGE"; then
+        event "salvaged dispatch=$DISP spec=$BASE outcome=$OUTC"
+        record "$FILE" succeeded
+      elif [ "${ATTEMPT:-1}" -lt "$MAX_ATTEMPTS" ]; then
         say "$DISP ended '$OUTC' (attempt ${ATTEMPT:-1}/$MAX_ATTEMPTS): retrying the same Task"
         { printf 'retry_task: %s\nretry_of: %s\nattempt: %s\n' "$TASK" "$DISP" "$(( ${ATTEMPT:-1} + 1 ))"
           sed '/^retry_task:/d; /^retry_of:/d; /^attempt:/d' "$FILE"; } > "$Q/$BASE"
@@ -207,6 +213,29 @@ finish_running() {
   rm -f "$RUNNING"
   # a finished worker changes what is owed: look at GitHub and merge on the next pass, not in 5 min
   rm -f "$S/specgen.last" "$S/close.last"
+}
+
+# A Reviewer or Tester that wrote its verdict on its screen and never sent worker_done (measured
+# 2026-10-14, reviewer-346-9ce8b2b-recheck: the verdict printed, the turn ended, no worker_done, and the
+# worker ran to its deadline). The screen's LAST block that starts with an exact `status: pass` or
+# `status: fail` line is the verdict - the spec's own template line reads `status: pass | fail` and never
+# matches. verdict-post.sh checks it like any other (fields, scope_ok/evidence, head), so nothing thin
+# gets through; anything it refuses is retried as before.
+salvage_screen() {   # running-env file -> the verdict block on the worker's screen, or nothing
+  local F="$1"
+  case "$(hdr role "$(kv FILE "$F")")" in reviewer|tester) ;; *) return 0;; esac
+  screen_of "$(kv DISPATCH "$F")" 400 | sed -E 's/^[^A-Za-z0-9]+//' \
+    | awk '/^status:[[:space:]]*(pass|fail)[[:space:]]*$/ {buf=""; on=1} on {buf = buf $0 "\n"} END {printf "%s", buf}'
+}
+post_salvaged() {   # file task text
+  local FILE="$1" TASK="$2" REP="$S/report-$2.txt" OUTF="$S/verdict-$2.out" RC
+  printf '%s\n' "$3" > "$REP"
+  bash "$HERE/verdict-post.sh" --pr "$(hdr pr "$FILE")" --role "$(hdr role "$FILE")" --from-settlement "$REP" \
+    --source "dispatch $TASK (from its screen: no worker_done)" > "$OUTF" 2>&1
+  RC=$?
+  sed 's/^/dispatch: salvage: /' "$OUTF" | tee -a "$LOG" >&2; rm -f "$OUTF"
+  [ "$RC" -eq 0 ] && say "posted $(hdr role "$FILE") verdict for #$(hdr pr "$FILE") from $TASK's screen (no worker_done)"
+  return "$RC"
 }
 
 post_verdict() {
@@ -683,10 +712,10 @@ read_workers() {
 # who decides whether it is the model (switch it) or one worker. The screen is kept as
 # $S/tail-<task>.txt either way.
 PROVIDER_RE='rate.?limit|too many requests|quota|insufficient (credit|balance|funds)|exceeded your|usage limit|limit reached|freetiererror|free tier|payment required|billing|http 4(01|02|03|29)|status(code)?[ :=]*4(01|02|03|29)|overloaded|unauthorized|invalid api key|invalid credential|upstream request failed'
-screen_of() {   # dispatch -> its terminal's last lines, ANSI stripped (empty when unreadable)
+screen_of() {   # dispatch [lines] -> its terminal's last lines, ANSI stripped (empty when unreadable)
   local H; H="$(grep -m1 "^$1 " "$S/workers.now" 2>/dev/null | cut -d' ' -f4)"
   [ -n "$H" ] && [ "$H" != "-" ] || return 0
-  orca terminal read --terminal "$H" </dev/null 2>/dev/null | sed -E 's/\x1b\[[0-9;?]*[a-zA-Z]//g' | grep -v '^[[:space:]]*$' | tail -40
+  orca terminal read --terminal "$H" </dev/null 2>/dev/null | sed -E 's/\x1b\[[0-9;?]*[a-zA-Z]//g' | grep -v '^[[:space:]]*$' | tail -"${2:-40}"
 }
 check_provider() {   # running-env file -> reads the screen once, emits provider-error once per dispatch
   local F="$1" D T M SCR HIT
