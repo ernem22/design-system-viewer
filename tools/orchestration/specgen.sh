@@ -140,18 +140,39 @@ DO NOT POST TO THE PR: the dispatcher posts your verdict from this body.
 $WORKER_DONE_RULES"
 }
 
-gen_reviewer() {   # pr head branch
-  local pr="$1" head="${2:0:7}" br="$3" n; n="$(issue_of "$pr")"
-  write_spec "300-reviewer-$pr-$head.spec" "name: reviewer-$pr-$head
+# The reason the newest Fixer for this PR and head gave for settling blocked, from its kept report.
+fixer_dispute() {   # pr head
+  local last task
+  last="$(ls -t "$S"/done/100-fixer-"$1"-"${2:0:7}".spec* 2>/dev/null | head -1)"
+  task="$(sed -n 's/^TASK=//p' "$last" 2>/dev/null | head -1)"
+  grep -E '^[[:space:]]*(reason|fixed):' "$S/report-$task.txt" 2>/dev/null | head -6
+}
+
+gen_reviewer() {   # pr head branch [why]
+  local pr="$1" head="${2:0:7}" br="$3" n SUF="" RECHECK="" WHY; n="$(issue_of "$pr")"
+  case "${4:-}" in recheck*)
+    SUF="-recheck"
+    WHY="$(fixer_dispute "$pr" "$2")"
+    RECHECK="RECHECK - this head already has a failing verdict, and the Fixer sent to apply its findings
+settled \`blocked\`, disputing them. Its words, verbatim:
+
+${WHY:-  (the Fixer's report holds no reason: line - read the PR's latest comments)}
+
+Judge the PR again from scratch on the rules below, with that dispute in view. Do not repeat an earlier
+finding because it was made: keep it only if it still holds against the issue and the rules. The gate
+keeps the latest verdict, so yours replaces the earlier one.
+" ;;
+  esac
+  write_spec "300-reviewer-$pr-$head$SUF.spec" "name: reviewer-$pr-$head$SUF
 base: origin/$br
 role: reviewer
-title: Reviewer PR #$pr @ $head
+title: Reviewer PR #$pr @ $head${SUF:+ (recheck)}
 pr: $pr
 head: $head
 deadline: 2400" "You are read-only. Do not edit, create, delete or commit any file; do not run npm, vitest,
 tsc, eslint or vite - CI already did. Your entire output is one report.
 
-$READ_RULES
+$RECHECK$READ_RULES
 
 INPUT - read exactly these:
   1. the issue:      gh issue view ${n:-<n>} --json number,title,body
@@ -166,6 +187,11 @@ WHAT TO JUDGE:
   - The other direction: the default / no-override path must keep working.
   - Do the new tests fail on the parent commit? Name one that does.
   - scope_ok: did the PR change anything outside the issue's scope? \`no\` if it did.
+    An existing test whose assertion targets something the ISSUE removed or replaced (a control, an
+    element, a string) MUST change with it: updating that assertion to the issue's new behaviour is IN
+    scope, not scope creep - reverting it breaks the required \`app\` CI check. Judge instead that the
+    updated assertion checks the same intent and is not looser than needed (measured 2026-10-13, #346:
+    the hero \`<img>\` test updated for #320's illustration was called out of scope; the PR deadlocked).
 
 OUTPUT - worker_done body:
 
@@ -241,6 +267,10 @@ $FIND
 STEP 0 - reproduce each finding on $head before fixing it, and record the observed value. A finding
 you cannot reproduce is reported as unreproducible, never silently \"fixed\". Keep every existing test
 green; if you believe a test is wrong, report \`status: blocked\` with the reason instead of changing what it asserts.
+If a finding asks for something that would break a test or the required \`app\` CI check (for example,
+reverting a test update the issue's change requires), do not apply it: report \`status: blocked\` with
+\`reason: disputes <finding>: <the test or check it breaks, and why the issue requires the change>\`.
+That reason goes to a fresh Reviewer as the dispute, so make it specific.
 
 Do not re-scope, re-design or \"improve while you are in there\".
 
@@ -360,7 +390,7 @@ printf '%s\n' "$NEEDS" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("
 | while IFS=$'\t' read -r role ref head branch why; do
   case "$role" in
     tester)   gen_tester "$ref" "$head" "$branch" ;;
-    reviewer) gen_reviewer "$ref" "$head" "$branch" ;;
+    reviewer) gen_reviewer "$ref" "$head" "$branch" "$why" ;;
     fixer)
       # needs.sh says which kind: a red `app` CI check after both verdicts passed, or a fail verdict /
       # conflict. Both are role fixer, so the dispatcher's owed() check matches either.
