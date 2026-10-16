@@ -142,11 +142,14 @@
   border: var(--border-width-thin) solid var(--color-accent-border);
 }
 
-/* Ported from preview's responsive rules for the same classes. */
-@media (max-width: 760px) {
+/* Ported from preview's responsive rules for the same classes, rewritten as
+   container queries against the screen frame (issue 321): the rules must
+   follow the frame's width, not the viewport, so the Phone frame shows the
+   stacked Inbox and the 85% chat bubbles without resizing the browser. */
+@container (max-width: 760px) {
   .dsv-bubble { max-width: 85%; }
 }
-@media (max-width: 640px) {
+@container (max-width: 640px) {
   .dsv-inbox { grid-template-columns: 1fr; }
 }
 

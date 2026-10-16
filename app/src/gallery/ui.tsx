@@ -7,8 +7,9 @@
 // tokens from the Body source scan) — screen entries render a whole Body
 // with no <Demo> blocks, so the section badge is their only inspector
 // entry point.
-import { createContext, forwardRef, useContext } from "react";
+import { createContext, forwardRef, useContext, useState } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import type { GalleryEntry } from "./registry.ts";
 import { slugify } from "../lib/slug.ts";
 import { tokensForEntry } from "../lib/tokenUsage.ts";
@@ -116,6 +117,15 @@ export function Demo({ title, children }: { title: string; children: ReactNode }
   );
 }
 
+/** Device widths for the screen preview frame (issue #321) — these describe
+    devices, not the viewer's layout, so the px literals are intentional. */
+export type ScreenFrameWidth = "desktop" | "tablet" | "phone";
+const SCREEN_FRAME_MAX: Record<ScreenFrameWidth, number> = {
+  desktop: 1280,
+  tablet: 768,
+  phone: 390,
+};
+
 export function GallerySection({ id, label, desc, Body, hidden = false }: GalleryEntry & { hidden?: boolean }) {
   // Keyed by entry id, not Body.name (minified in production builds). The
   // scope id is the same stable id, matching the legacy tokensForScreen
@@ -123,17 +133,60 @@ export function GallerySection({ id, label, desc, Body, hidden = false }: Galler
   // without leaking into sibling sections.
   const tokens = tokensForEntry(id);
   const swapStyle = useSectionScopeStyle(id);
+  // Screen entries render a whole page at one width — Preview gets a
+  // Desktop/Tablet/Phone frame around the Body so narrow behaviour is
+  // visible without resizing the browser. One useState per section keeps
+  // each choice local while mounted (no storage, no URL param). Compare
+  // never shows the control (like the inspector badge, it would be
+  // ambiguous there) — and no frame either, so columns stay unchanged.
+  const inCompare = useContext(InCompareContext);
+  const isScreen = id.startsWith("screen-");
+  const [frameWidth, setFrameWidth] = useState<ScreenFrameWidth>("desktop");
+  const showFrame = isScreen && !inCompare;
   return (
     // Search hides (not unmounts) non-matching sections: the rail outline is
     // read from this DOM once, and demo state survives a query change.
     <section className="dsv-section" id={id} style={swapStyle} hidden={hidden}>
       <div className="dsv-section-head">
         <h2>{label}</h2>
-        <SectionScopeTrigger id={id} title={label} tokens={tokens} />
+        <div className="dsv-section-head-actions">
+          {showFrame && (
+            <ToggleGroup.Root
+              type="single"
+              aria-label="Frame width"
+              value={frameWidth}
+              onValueChange={(next) => {
+                if (next) setFrameWidth(next as ScreenFrameWidth);
+              }}
+              className="dsv-toggle-group"
+            >
+              <ToggleGroup.Item className="dsv-toggle" value="desktop" aria-label="Desktop">
+                Desktop
+              </ToggleGroup.Item>
+              <ToggleGroup.Item className="dsv-toggle" value="tablet" aria-label="Tablet">
+                Tablet
+              </ToggleGroup.Item>
+              <ToggleGroup.Item className="dsv-toggle" value="phone" aria-label="Phone">
+                Phone
+              </ToggleGroup.Item>
+            </ToggleGroup.Root>
+          )}
+          <SectionScopeTrigger id={id} title={label} tokens={tokens} />
+        </div>
       </div>
       <p>{desc}</p>
       <SectionIdContext.Provider value={id}>
-        <Body />
+        {showFrame ? (
+          <div
+            className="dsv-screen-frame"
+            data-frame-width={frameWidth}
+            style={{ maxWidth: SCREEN_FRAME_MAX[frameWidth] }}
+          >
+            <Body />
+          </div>
+        ) : (
+          <Body />
+        )}
       </SectionIdContext.Provider>
     </section>
   );
