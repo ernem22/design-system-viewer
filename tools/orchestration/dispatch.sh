@@ -345,6 +345,18 @@ deliver() {
   else
     N="$(hdr pr "$FILE")"; TITLE="[fixer] apply the verdict's findings (#$N)"
   fi
+  # Only app/ is delivered, so the index outside app/ is reset to HEAD first (the worktree is left as
+  # it is). Measured 2026-10-16: coder-328 finished #328 (623 tests passed) with an unmerged
+  # tools/orchestration/supervise.sh in its index that its own work never touched; git refused the
+  # commit ("unmerged files"), the work was recorded unknown and would have been redone from scratch.
+  # An unmerged file inside app/ is real unfinished work: not delivered.
+  if [ -n "$(git -C "$P" ls-files -u -- app 2>/dev/null)" ]; then
+    say "deliver: unmerged files under app/ in $P; not delivered"; return 1
+  fi
+  if [ -n "$(git -C "$P" diff --cached --name-only -- . ':(exclude)app' 2>/dev/null; git -C "$P" ls-files -u 2>/dev/null)" ]; then
+    say "deliver: index outside app/ reset to HEAD in $P: $(git -C "$P" diff --cached --name-only -- . ':(exclude)app' 2>/dev/null | sort -u | tr '\n' ' ')"
+    git -C "$P" reset -q -- . ':(exclude)app' 2>/dev/null
+  fi
   if [ -n "$(git -C "$P" status --porcelain --untracked-files=normal -- app 2>/dev/null)" ]; then
     git -C "$P" add -A -- app && git -C "$P" commit -q -m "$TITLE" \
       -m "Committed by the dispatcher: the worker settled succeeded and left this work uncommitted ($TASK)." \
