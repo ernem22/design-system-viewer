@@ -218,17 +218,23 @@ export default function LayoutBody() {
       <Demo title="Aspect Ratio (16:9)">
         <div className="dsv-aspect">
           <AspectRatio.Root ratio={16 / 9}>
-            <img
-              src="https://images.unsplash.com/photo-1503264116251-35a269479413?w=400&q=60"
-              alt=""
-              width={400}
-              height={225}
-              loading="lazy"
-              decoding="async"
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
-              }}
-            />
+            <div className="dsv-illus" aria-hidden="true">
+              <div className="dsv-illus-bar">
+                <span className="dsv-illus-dot" />
+                <span className="dsv-illus-dot" />
+                <span className="dsv-illus-dot" />
+              </div>
+              <div className="dsv-illus-cards">
+                <div className="dsv-illus-card">
+                  <span className="dsv-illus-line dsv-illus-line--short" />
+                  <span className="dsv-illus-line" />
+                </div>
+                <div className="dsv-illus-card">
+                  <span className="dsv-illus-line dsv-illus-line--short" />
+                  <span className="dsv-illus-line" />
+                </div>
+              </div>
+            </div>
           </AspectRatio.Root>
         </div>
       </Demo>

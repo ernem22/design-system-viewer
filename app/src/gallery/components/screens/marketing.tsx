@@ -1,6 +1,7 @@
 import { Button } from "../../ui.tsx";
 import { Icon } from "../../../lib/icons.tsx";
 import type { IconName } from "../../../lib/icons.tsx";
+import { REFERENCE_TOKEN_COUNT } from "../../../../../src/core/schema.js";
 import "./screens.css";
 
 const FEATURES: [IconName, string, string][] = [
@@ -40,7 +41,7 @@ export default function MarketingBody() {
         </div>
         <div className="dsv-hero-stats">
           <span>
-            <strong>192+</strong> tokens covered
+            <strong>{REFERENCE_TOKEN_COUNT}</strong> tokens covered
           </span>
           <span className="dsv-hero-stats-sep" aria-hidden="true" />
           <span>
@@ -53,13 +54,23 @@ export default function MarketingBody() {
         </div>
       </div>
       <div className="dsv-hero-img" style={{ marginBottom: "var(--space-8)" }}>
-        <img
-          src="https://images.unsplash.com/photo-1503264116251-35a269479413?w=900&q=60"
-          alt="Product preview"
-          loading="lazy"
-          width={900}
-          height={506}
-        />
+        <div className="dsv-illus" role="img" aria-label="Product preview">
+          <div className="dsv-illus-bar" aria-hidden="true">
+            <span className="dsv-illus-dot" />
+            <span className="dsv-illus-dot" />
+            <span className="dsv-illus-dot" />
+          </div>
+          <div className="dsv-illus-cards" aria-hidden="true">
+            <div className="dsv-illus-card">
+              <span className="dsv-illus-line dsv-illus-line--short" />
+              <span className="dsv-illus-line" />
+            </div>
+            <div className="dsv-illus-card">
+              <span className="dsv-illus-line dsv-illus-line--short" />
+              <span className="dsv-illus-line" />
+            </div>
+          </div>
+        </div>
         <span className="dsv-hero-img-cap">
           <span className="dsv-badge dsv-badge--on-dark">Live preview</span>
           <span>Tokens → gallery in one paste</span>
