@@ -52,6 +52,17 @@ BASH_EXE="$(winpath "$(command -v bash)")"
 CMD_FILE="$S/dispatcher.cmd"
 printf '@echo off\r\n"%s" -l "%s" --bind\r\n' "$BASH_EXE" "$(native "$HERE/dispatch.sh")" > "$CMD_FILE"
 
+# The terminal of the dispatcher this one replaces is closed first. Orca runs --command inside a
+# shell, and that shell outlives the dispatcher: measured 2026-10-16, the 11:24Z dispatcher's
+# terminal sat idle as "PowerShell" after its --stop, and every restart adds one more. Only the
+# handle this launcher recorded is closed, and only now that no dispatcher holds the lock.
+OLD_H="$(cat "$S/dispatcher.terminal" 2>/dev/null)"
+if [ -n "$OLD_H" ]; then
+  orca terminal close --terminal "$OLD_H" --json </dev/null >/dev/null 2>&1 \
+    && say "closed the previous dispatcher terminal $OLD_H" || say "previous dispatcher terminal $OLD_H not closed (already gone?)"
+  rm -f "$S/dispatcher.terminal"
+fi
+
 OUT="$(orca terminal create --worktree "id:$REPO_ID::$(native "$ROOT")" --title dsv-dispatcher \
   --command "cmd.exe /c $(winpath "$CMD_FILE")" --json </dev/null 2>/dev/null)"
 H="$(printf '%s' "$OUT" | node "$(native "$HERE")/lib/jget.cjs" result.terminal.handle)"
@@ -59,6 +70,7 @@ if [ -z "$H" ]; then
   say "terminal create failed: $(printf '%s' "$OUT" | tr '\n' ' ' | cut -c1-300)"; exit 1
 fi
 say "started dispatcher terminal $H ($CMD_FILE)"
+printf '%s\n' "$H" > "$S/dispatcher.terminal"
 
 # confirm it came up: the dispatcher writes its lock within a few seconds of starting
 for _ in $(seq 1 20); do alive >/dev/null && { say "dispatcher alive (pid $(alive))"; exit 0; }; sleep 3; done
