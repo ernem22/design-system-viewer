@@ -38,6 +38,23 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
    blocks, so this is their inspector entry point). */
 .dsv-section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin: 0 0 var(--space-1); }
 .dsv-section-head h2 { font-size: var(--heading-section); font-weight: var(--font-weight-semibold); margin: 0; }
+/* Right side of the section header: the screen frame-width control plus the
+   token-count badge. Screens have no Demo blocks, so both live here. */
+.dsv-section-head-actions { display: flex; align-items: center; gap: var(--space-3); }
+/* Device frame for screen-* sections (issue 321): a centred
+   container-type box whose max-width follows the Frame width control
+   (1280/768/390, set inline — the only literal sizes here, they describe
+   devices). Desktop fills a narrower content column; overflow clip (never
+   hidden — see shell contract) keeps the radius without adding a scroll
+   container, so the page never scrolls horizontally. */
+.dsv-screen-frame {
+  container-type: inline-size;
+  width: 100%;
+  margin-inline: auto;
+  border: var(--border-width-thin) solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: clip;
+}
 .dsv-section > p { color: var(--color-text-muted); margin: 0 0 var(--space-6); }
 /* Anchor-scroll target for Rail's per-demo links: without this, clicking
    one lands its top flush with .app-main's edge — above the scrollspy band
