@@ -7,8 +7,10 @@ import type { RailLink } from "./railTypes.ts";
    from the <Demo title="…"> calls that already declare them.
    useLayoutEffect, not useEffect: Rail renders from this same tick, so the
    real ids/labels must land before paint — otherwise Rail briefly shows
-   every group with 0 children and then jumps to the real counts. */
-export function useGalleryOutline(sectionIds: string[]): Record<string, RailLink[]> {
+   every group with 0 children and then jumps to the real counts.
+   `revision` bumps as code-split bodies finish loading (issue #328), so the
+   outline re-reads the anchors that only exist once a Body has mounted. */
+export function useGalleryOutline(sectionIds: string[], revision = 0): Record<string, RailLink[]> {
   const [outline, setOutline] = useState<Record<string, RailLink[]>>({});
 
   useLayoutEffect(() => {
@@ -19,7 +21,7 @@ export function useGalleryOutline(sectionIds: string[]): Record<string, RailLink
       next[id] = [...blocks].map((el) => ({ id: el.id, label: el.dataset.demoTitle ?? "" }));
     }
     setOutline(next);
-  }, [sectionIds]);
+  }, [sectionIds, revision]);
 
   return outline;
 }

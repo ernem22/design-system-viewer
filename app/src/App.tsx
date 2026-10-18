@@ -25,7 +25,7 @@ import { SystemMenu } from "./systems/SystemMenu.tsx";
 import { AddSystemDialog } from "./systems/AddSystemDialog.tsx";
 import "./systems/AddSystemDialog.css";
 import Rail from "./shell/Rail.tsx";
-import { COMPONENT_ENTRIES } from "./gallery/components/index.ts";
+import { COMPONENT_ENTRIES, preloadGalleryBodies } from "./gallery/components/index.ts";
 import { buildRailGroups } from "./gallery/registry.ts";
 import { GallerySection } from "./gallery/ui.tsx";
 import { TokensProps } from "./tokens/TokensProps.tsx";
@@ -201,7 +201,33 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const searching = query.trim().length > 0;
-  const outline = useGalleryOutline(ENTRY_IDS);
+  // Section bodies are code-split (issue #328): Shell force-mounts every tab's
+  // panel, so rendering them on the default Tokens tab would still fetch every
+  // demo chunk. Mount the Preview sections only after Preview has been opened
+  // (deep-linked ?tab=preview counts from the first render).
+  const [previewOpened, setPreviewOpened] = useState(
+    () => (readViewUrl().tab ?? "tokens") === "preview",
+  );
+  useEffect(() => {
+    if (tab === "preview") setPreviewOpened(true);
+  }, [tab]);
+  // Bumped as each lazy Body resolves, so the rail outline re-reads the demo
+  // anchors that only exist post-load.
+  const [bodiesLoaded, setBodiesLoaded] = useState(0);
+  const onBodyLoaded = useCallback(() => setBodiesLoaded((n) => n + 1), []);
+  const outline = useGalleryOutline(ENTRY_IDS, bodiesLoaded);
+  // First Preview open: wake the remaining section chunks on idle so scrolling
+  // to a section that has not mounted never waits on the network (issue #328).
+  useEffect(() => {
+    if (!previewOpened) return;
+    const run = () => preloadGalleryBodies();
+    if (typeof requestIdleCallback === "function") {
+      const handle = requestIdleCallback(run);
+      return () => cancelIdleCallback(handle);
+    }
+    const handle = window.setTimeout(run, 1);
+    return () => window.clearTimeout(handle);
+  }, [previewOpened]);
   const railGroups = useMemo(
     () => buildRailGroups(COMPONENT_ENTRIES, outline, query),
     [outline, query],
@@ -514,9 +540,15 @@ function App() {
             <>
               <PreviewNotes system={active} error={loadError} onRetry={retry} />
               {shownEntries?.size === 0 && <div className="dsv-err">No sections match “{query.trim()}”.</div>}
-              {COMPONENT_ENTRIES.map((entry) => (
-                <GallerySection key={entry.id} {...entry} hidden={shownEntries ? !shownEntries.has(entry.id) : false} />
-              ))}
+              {previewOpened &&
+                COMPONENT_ENTRIES.map((entry) => (
+                  <GallerySection
+                    key={entry.id}
+                    {...entry}
+                    hidden={shownEntries ? !shownEntries.has(entry.id) : false}
+                    onLoaded={onBodyLoaded}
+                  />
+                ))}
               <PreviewScopeDialog system={active} />
             </>
           ) : (

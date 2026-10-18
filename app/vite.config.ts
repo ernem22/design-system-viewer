@@ -207,4 +207,24 @@ export default defineConfig({
   // Relative base: the build works from any sub-path (GitHub Pages) as-is.
   base: './',
   plugins: [react(), systemsIndex(), fetchCssProxy()],
+  // Lazy gallery bodies (issue #328) split the demo code out of the entry
+  // chunk, but two eager groups still tripped Vite's 500 kB warning: the
+  // vendor side (React + the Radix primitives the shell and Compare import
+  // directly) and the raw demo source tokenUsage.ts globs in to build its
+  // token maps. Split both into their own chunks so no single file exceeds
+  // the limit; gallery bodies stay their own dynamic-import chunks.
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // tokenUsage's `?raw` globs: source text, not runnable demo code.
+          if (id.includes('?raw')) return 'gallery-source';
+          if (!id.includes('node_modules')) return;
+          if (/node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'react';
+          return 'vendor';
+        },
+      },
+    },
+  },
 })
+

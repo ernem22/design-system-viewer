@@ -7,7 +7,7 @@
 // tokens from the Body source scan) — screen entries render a whole Body
 // with no <Demo> blocks, so the section badge is their only inspector
 // entry point.
-import { createContext, forwardRef, useContext, useState } from "react";
+import { createContext, forwardRef, Suspense, useContext, useLayoutEffect, useState } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import type { GalleryEntry } from "./registry.ts";
@@ -126,7 +126,30 @@ const SCREEN_FRAME_MAX: Record<ScreenFrameWidth, number> = {
   phone: 390,
 };
 
-export function GallerySection({ id, label, desc, Body, hidden = false }: GalleryEntry & { hidden?: boolean }) {
+/** Fires once after the lazy Body inside the boundary has resolved, so the
+ *  rail outline can re-read the demo anchors that only exist post-load
+ *  (issue #328). Renders nothing — it mounts with the body it follows. */
+function BodyLoaded({ onLoaded }: { onLoaded?: () => void }) {
+  useLayoutEffect(() => {
+    onLoaded?.();
+  }, [onLoaded]);
+  return null;
+}
+
+/** Fixed-height stand-in while a section's code-split Body loads, so the
+ *  scrollspy anchors below it do not jump as chunks arrive. */
+function BodyFallback() {
+  return <div className="dsv-section-loading" aria-hidden="true" />;
+}
+
+export function GallerySection({
+  id,
+  label,
+  desc,
+  Body,
+  hidden = false,
+  onLoaded,
+}: GalleryEntry & { hidden?: boolean; onLoaded?: () => void }) {
   // Keyed by entry id, not Body.name (minified in production builds). The
   // scope id is the same stable id, matching the legacy tokensForScreen
   // keying; swaps land on this node so they inherit across the whole Body
@@ -182,10 +205,16 @@ export function GallerySection({ id, label, desc, Body, hidden = false }: Galler
             data-frame-width={frameWidth}
             style={{ maxWidth: SCREEN_FRAME_MAX[frameWidth] }}
           >
-            <Body />
+            <Suspense fallback={<BodyFallback />}>
+              <Body />
+              <BodyLoaded onLoaded={onLoaded} />
+            </Suspense>
           </div>
         ) : (
-          <Body />
+          <Suspense fallback={<BodyFallback />}>
+            <Body />
+            <BodyLoaded onLoaded={onLoaded} />
+          </Suspense>
         )}
       </SectionIdContext.Provider>
     </section>
