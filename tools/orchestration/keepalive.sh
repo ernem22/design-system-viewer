@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # The dsv-dispatcher Task Scheduler entry (install-dispatcher.ps1) is the only thing that restarts the
-# dispatcher after a crash, an Orca restart or a reboot. Measured 2026-10-18: hermes-start reported it
-# MISSING, and nothing put it back - installing it was a step a human had to remember.
+# dispatcher after a crash, an Orca restart or a reboot. Nothing re-installed it if it went away;
+# that was a step a human had to remember.
 #
 #   keepalive.sh            print "present" or "missing" (exit 0 / 1); "unknown" (exit 2) off Windows
 #   keepalive.sh --ensure   install it when missing (exit 0 when present afterwards)
 #
 # The query runs in PowerShell, not `schtasks //Query`: MSYS path conversion is off on this host, so
-# the doubled slashes reach schtasks.exe as written.
+# the doubled slashes reach schtasks.exe as written. Measured 2026-10-18: `schtasks //Query //TN
+# dsv-dispatcher` -> `ERROR: Invalid argument/option - '//Query'`, which hermes-start read as a
+# missing task (State=Ready, LastResult=0 at the time).
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TASK=dsv-dispatcher
