@@ -1,0 +1,27 @@
+# Model order per pipeline stage, owner-approved 2026-10-18: free models first, then cheap paid ones.
+# No Claude or GPT model may be listed here (owner: cost). One line per stage: `<stage>: <model> ...`.
+#
+# Stages (specgen.sh writes `stage:` into every spec): coder, fixer (a fail verdict's findings),
+# fixer-conflict (merge the base in), fixer-ci (red `app` check after both verdicts passed),
+# reviewer, reviewer-recheck (judges the PR again when a Fixer disputed the findings), tester.
+#
+# How the dispatcher picks (dispatch.sh model_of):
+#   * attempt 1 runs on the first model of the line that is not marked down;
+#   * a retry (attempt 2) runs on the next model AFTER the one that failed, so a model that cannot do
+#     the task does not get the same task twice;
+#   * a model whose worker showed a provider error (quota, rate limit, 401-429, billing, overloaded)
+#     is marked down for MODEL_DOWN_MIN minutes (default 60) and skipped by every stage meanwhile;
+#   * every model down: the first listed model runs anyway (nothing stalls), and it is logged.
+# A stage with no line falls back to its role config (roles/<write|readonly|tester>.opencode.json).
+#
+# Spread: Coder and Tester start on DeepSeek, Fixers and Reviewer on GLM, so concurrent workers do
+# not queue on one free model's rate limit, and a PR is reviewed by a different model than wrote it.
+# Jev (the decision model) is the referee: it judges a disputed PR first.
+# `opencode/...-free` is Zen's free tier; `opencode-go/...` is the Go subscription.
+coder:            opencode/deepseek-v4.1-flash-free opencode/glm-5.3-flash-free opencode-go/deepseek-v4.1-flash opencode-go/glm-5.3-flash
+fixer:            opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free opencode-go/glm-5.3-flash opencode-go/deepseek-v4.1-flash
+fixer-conflict:   opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free opencode-go/glm-5.3-flash opencode-go/deepseek-v4.1-flash
+fixer-ci:         opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free opencode-go/glm-5.3-flash opencode-go/deepseek-v4.1-flash
+reviewer:         opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free opencode-go/glm-5.3-flash opencode-go/deepseek-v4.1-flash
+reviewer-recheck: opencode/jev-1.13-free opencode/glm-5.3-flash-free opencode-go/jev-1.13 opencode-go/glm-5.3-flash
+tester:           opencode/deepseek-v4.1-flash-free opencode/glm-5.3-flash-free opencode-go/deepseek-v4.1-flash opencode-go/glm-5.3-flash

@@ -49,13 +49,16 @@ FREE="$(df -Pm "$S" 2>/dev/null | awk 'NR==2{print $4}')"; echo "disk free on st
 grep -E 'memory: [0-9]+ MB free' "$S/dispatch.log" 2>/dev/null | tail -1
 
 echo "== models"
-for C in write readonly tester; do
-  M="$(node "$HERE_NATIVE/lib/jget.cjs" model < "$HERE/roles/$C.opencode.json" 2>/dev/null)"
+# every model a stage can run on (roles/models.txt), each probed once; the dispatcher skips a model
+# that showed a provider error by itself (models-down/), so a failing probe here is a report, not a switch
+for M in $(sed -n 's/^[a-z-]*:[[:space:]]*//p' "$HERE/roles/models.txt" 2>/dev/null | tr ' ' '\n' | grep . | awk '!seen[$0]++'); do
   if [ -n "$PROBE" ]; then
-    R="$(bash "$HERE/model-switch.sh" --probe "$M")" || TODO+=("$C model $M does not answer: decide model-switch.sh (see ORCHESTRATION.md)")
-    echo "$C: $R"
-  else echo "$C: $M"; fi
+    R="$(bash "$HERE/model-switch.sh" --probe "$M")" || TODO+=("model $M does not answer: report it (stages skip it only after a provider error)")
+    echo "  $R"
+  else echo "  $M"; fi
 done
+echo "stages:"; grep -E '^[a-z-]+:' "$HERE/roles/models.txt" 2>/dev/null | sed 's/^/  /'
+find "$S/models-down" -type f -mmin -"${MODEL_DOWN_MIN:-60}" 2>/dev/null | sed 's|.*/|  down now: |'
 
 echo "== work"
 echo "running: $(ls "$S/running" 2>/dev/null | wc -l | tr -d ' ')  queued: $(ls "$S/queue" 2>/dev/null | wc -l | tr -d ' ')"
