@@ -56,6 +56,7 @@ Stopping or switching the dispatcher's code: never `kill` it. A kill lands insid
 | `orphaned` | an `active-<spec>` had no running env (a start a dead dispatcher never finished); moved to `done/<spec>.orphaned`, its work is owed again |
 | `disk-low` | the state/worktree drive has less than `DISK_MIN_MB` (2048) free; nothing starts; at most one per 30 min |
 | `provider-error` | a worker's screen showed a provider-looking error (quota, rate limit, 401/402/403/429, billing); `model=`, `msg=`; the screen is in `tail-<task>.txt` |
+| `model-down` | the dispatcher marked a model down after a `provider-error` (`model=`, `minutes=`); every stage skips it for that long and runs its next model in `roles/models.txt` |
 | `merged` | `close.sh` merged a PR (`pr=`, `sha=`); the manager adds it to the owner's test checklist |
 | `paused`, `resumed` | `dispatch.sh --pause "<reason>"` / `--resume`: new starts stop / restart (live workers and merges go on) |
 | `model-switch` | `model-switch.sh` moved a role config to another model (`config=`, `from=`, `to=`) |

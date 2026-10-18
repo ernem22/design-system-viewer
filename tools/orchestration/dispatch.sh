@@ -65,10 +65,34 @@ mkdir -p "$Q" "$DONE" "$RUN_DIR" 2>/dev/null || true
 MAX_WORKERS="${DISPATCH_MAX:-0}"
 REPO_SLUG="${DSV_REPO:-ernem22/design-system-viewer}"
 role_cfg() { case "$1" in coder|fixer) echo write;; reviewer) echo readonly;; tester) echo tester;; esac; }
-model_of() {   # spec file -> the model it will run on (its model: header, else its role's config)
-  local M; M="$(hdr model "$1")"
-  [ -n "$M" ] || M="$(node "$HERE_NATIVE/lib/jget.cjs" model < "$HERE/roles/$(role_cfg "$(hdr role "$1")").opencode.json" 2>/dev/null)"
-  echo "$M"
+# MODELS PER STAGE (roles/models.txt, owner-approved 2026-10-18): free models first, then cheap paid
+# ones. A retry runs on the model after the one that failed; a model that showed a provider error is
+# skipped by every stage for MODEL_DOWN_MIN minutes. Replaces "one model per role config, switched by
+# hand": the Go quota ran out mid-run on 2026-10-07 and nothing moved until Hermes switched it.
+MODELS="$HERE/roles/models.txt"
+stage_models() { sed -n "s/^$1:[[:space:]]*//p" "$MODELS" 2>/dev/null | head -1; }
+down_file() { printf '%s/models-down/%s' "$S" "$(printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_')"; }
+model_down() { [ -n "$(find "$(down_file "$1")" -mmin -"${MODEL_DOWN_MIN:-60}" 2>/dev/null)" ]; }
+mark_down() {   # model reason
+  mkdir -p "$S/models-down" 2>/dev/null; touch "$(down_file "$1")"
+  event "model-down model=$1 minutes=${MODEL_DOWN_MIN:-60} why=$2"
+}
+model_of() {   # spec file -> the model it will run on (model: header, else its stage's line, else its role's config)
+  local M L PREV PASSED="" C
+  M="$(hdr model "$1")"; [ -n "$M" ] && { echo "$M"; return; }
+  L="$(stage_models "$(hdr stage "$1")")"
+  if [ -n "$L" ]; then
+    # attempt 1: the first model up; a retry: the first model up AFTER the one that failed
+    PREV="$(hdr prev_model "$1")"; [ -n "$PREV" ] || PASSED=1
+    for C in $L; do
+      if [ -z "$PASSED" ]; then [ "$C" = "$PREV" ] && PASSED=1; continue; fi
+      model_down "$C" || { echo "$C"; return; }
+    done
+    for C in $L; do model_down "$C" || { echo "$C"; return; }; done
+    # every model is down: run the first listed one rather than stall
+    set -- $L; echo "$1"; return
+  fi
+  node "$HERE_NATIVE/lib/jget.cjs" model < "$HERE/roles/$(role_cfg "$(hdr role "$1")").opencode.json" 2>/dev/null
 }
 # 0 = no cap. A per-model cap is set only from a measured quota (MODEL_CAP_<model>=n); the old default
 # of 2 was a guess, and with Coder, Fixer and Tester on one model it made a Tester wait for Coders.
@@ -82,7 +106,7 @@ say() { printf '%s dispatch: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" | tee -
 # The dispatcher does not wait for anyone to read them; hermes-watch.sh wakes Hermes on the ones
 # that need attention. Kinds: up started finished delivered kept no-pr no-push unknown start-failed
 # start-refused verdict-refused merge-refused conflict leftover gave-up down dropped orphaned disk-low
-# provider-error merged paused resumed (and model-switch, written by model-switch.sh).
+# provider-error model-down merged paused resumed (and model-switch, written by model-switch.sh).
 event() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$S/events.log"; }
 acting() { [ -f "$S/dispatch.enabled" ]; }
 hdr() { sed -n "1,/^---\$/s/^$1:[[:space:]]*//p" "$2" | head -1; }
@@ -201,8 +225,8 @@ finish_running() {
         record "$FILE" succeeded
       elif [ "${ATTEMPT:-1}" -lt "$MAX_ATTEMPTS" ]; then
         say "$DISP ended '$OUTC' (attempt ${ATTEMPT:-1}/$MAX_ATTEMPTS): retrying the same Task"
-        { printf 'retry_task: %s\nretry_of: %s\nattempt: %s\n' "$TASK" "$DISP" "$(( ${ATTEMPT:-1} + 1 ))"
-          sed '/^retry_task:/d; /^retry_of:/d; /^attempt:/d' "$FILE"; } > "$Q/$BASE"
+        { printf 'retry_task: %s\nretry_of: %s\nattempt: %s\nprev_model: %s\n' "$TASK" "$DISP" "$(( ${ATTEMPT:-1} + 1 ))" "$(kv MODEL "$RUNNING")"
+          sed '/^retry_task:/d; /^retry_of:/d; /^attempt:/d; /^prev_model:/d' "$FILE"; } > "$Q/$BASE"
         rm -f "$FILE"
       else
         say "$DISP ended '$OUTC' after $MAX_ATTEMPTS attempts: giving up on $BASE"
@@ -619,7 +643,8 @@ start_one() {
   else ARGS+=("$SPEC" "$TITLE"); fi
   ARGS+=("${RO[@]+"${RO[@]}"}")
   [ -n "$SERVE" ] && ARGS+=(--serve "$SERVE")
-  [ -n "$(hdr model "$ACTIVE")" ] && ARGS+=(--model "$MODEL")
+  # the model is pinned per worker: the stage's pick, not whatever the role config holds
+  [ -n "$MODEL" ] && ARGS+=(--model "$MODEL")
 
   say "starting $ROLE '$NAME' on $MODEL (attempt $ATTEMPT, $(live_count) live) from $(basename "$FILE")"
   # with workers live, a memory shortfall must not hold this loop (and their polling) for 15 minutes:
@@ -739,6 +764,7 @@ check_provider() {   # running-env file -> reads the screen once, emits provider
   echo "PROVIDER_ERR=1" >> "$F"
   say "provider error on $D ($M): $(printf '%s' "$HIT" | cut -c1-200)"
   event "provider-error model=$M dispatch=$D spec=$(basename "$(kv FILE "$F")" | sed 's/^active-//') msg=$(printf '%s' "$HIT" | tr -s ' \t' ' ' | cut -c1-160)"
+  [ -n "$M" ] && mark_down "$M" "provider-error dispatch=$D"
 }
 provider_scan() {   # every live worker that has been up for 2 minutes or more
   local F ST NOW; NOW="$(date +%s)"
