@@ -776,9 +776,22 @@ provider_scan() {   # every live worker that has been up for 2 minutes or more
 }
 
 PASS_NO=0
+# The Task Scheduler entry that restarts this dispatcher after it dies (keepalive.sh): checked at the
+# first pass and hourly, and re-installed when gone, so a removed entry costs no restart guarantee.
+keepalive() {
+  [ -n "$(find "$S/keepalive.checked" -mmin -"${KEEPALIVE_MIN:-60}" 2>/dev/null)" ] && return 0
+  touch "$S/keepalive.checked"
+  local R; R="$(bash "$HERE/keepalive.sh" --ensure 2>&1)"
+  case "$R" in
+    present|unknown) ;;
+    reinstalled*) say "keep-alive task was missing; $R"; event "keepalive-reinstalled" ;;
+    *) say "keep-alive task: $R"; event "keepalive-missing why=$(printf '%s' "$R" | tr ' ' '_' | cut -c1-120)" ;;
+  esac
+}
 pass() {
   local F
   PASS_NO=$((PASS_NO+1))
+  acting && keepalive
   read_workers
   # the one-worker dispatcher kept its live worker in running.env: adopt it
   if [ -f "$S/running.env" ]; then

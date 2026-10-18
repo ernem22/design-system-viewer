@@ -34,10 +34,12 @@ else
   if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then echo "now alive: pid $PID"
   else echo "STILL NOT RUNNING"; TODO+=("dispatcher does not start: read $S/launcher.log and report it"); fi
 fi
-if command -v schtasks >/dev/null 2>&1; then
-  schtasks //Query //TN dsv-dispatcher >/dev/null 2>&1 && echo "keep-alive task: present" \
-    || { echo "keep-alive task: MISSING"; TODO+=("the dsv-dispatcher scheduled task is missing: report it (install-dispatcher.ps1)"); }
-fi
+KA="$(bash "$HERE/keepalive.sh" 2>/dev/null)"
+case "$KA" in
+  present) echo "keep-alive task: present" ;;
+  missing) echo "keep-alive task: MISSING (the dispatcher re-installs it within the hour; see keepalive-* events)"
+    TODO+=("the dsv-dispatcher scheduled task is missing: if no keepalive-reinstalled event follows within the hour, report the keepalive-missing event") ;;
+esac
 if [ -f "$S/dispatch.paused" ]; then echo "PAUSED since $(cat "$S/dispatch.paused")"; TODO+=("pipeline paused: check whether the reason still holds before dispatch.sh --resume")
 elif [ -f "$S/dispatch.enabled" ]; then echo "acting: yes"
 else echo "acting: NO (dispatch.enabled missing, no pause reason)"; TODO+=("dispatch.enabled is missing with no pause reason: report it, do not resume on your own")
