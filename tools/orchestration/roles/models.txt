@@ -17,11 +17,13 @@
 # Spread: Coder and Tester start on DeepSeek, Fixers and Reviewer on GLM, so concurrent workers do
 # not queue on one free model's rate limit, and a PR is reviewed by a different model than wrote it.
 # Jev (the decision model) is the referee: it judges a disputed PR first.
+# MiMo and Nemotron (free) and deepseek-v4-flash (the cheapest paid) were added unmeasured, as tail
+# fallbacks: they run only when the measured or owner-named models before them are down or failed.
 # `opencode/...-free` is Zen's free tier; `opencode-go/...` is the Go subscription.
-coder:            opencode/deepseek-v4.1-flash-free opencode/glm-5.3-flash-free opencode-go/deepseek-v4.1-flash opencode-go/glm-5.3-flash
-fixer:            opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free opencode-go/glm-5.3-flash opencode-go/deepseek-v4.1-flash
-fixer-conflict:   opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free opencode-go/glm-5.3-flash opencode-go/deepseek-v4.1-flash
-fixer-ci:         opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free opencode-go/glm-5.3-flash opencode-go/deepseek-v4.1-flash
-reviewer:         opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free opencode-go/glm-5.3-flash opencode-go/deepseek-v4.1-flash
-reviewer-recheck: opencode/jev-1.13-free opencode/glm-5.3-flash-free opencode-go/jev-1.13 opencode-go/glm-5.3-flash
-tester:           opencode/deepseek-v4.1-flash-free opencode/glm-5.3-flash-free opencode-go/deepseek-v4.1-flash opencode-go/glm-5.3-flash
+coder:            opencode/deepseek-v4.1-flash-free opencode/glm-5.3-flash-free opencode/mimo-v2.6-flash-free opencode/nemotron-3-ultra-free opencode-go/deepseek-v4.1-flash opencode-go/glm-5.3-flash opencode-go/deepseek-v4-flash
+fixer:            opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free opencode/mimo-v2.6-flash-free opencode/nemotron-3-ultra-free opencode-go/glm-5.3-flash opencode-go/deepseek-v4.1-flash opencode-go/deepseek-v4-flash
+fixer-conflict:   opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free opencode/mimo-v2.6-flash-free opencode/nemotron-3-ultra-free opencode-go/glm-5.3-flash opencode-go/deepseek-v4.1-flash opencode-go/deepseek-v4-flash
+fixer-ci:         opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free opencode/mimo-v2.6-flash-free opencode/nemotron-3-ultra-free opencode-go/glm-5.3-flash opencode-go/deepseek-v4.1-flash opencode-go/deepseek-v4-flash
+reviewer:         opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free opencode/mimo-v2.6-flash-free opencode/nemotron-3-ultra-free opencode-go/glm-5.3-flash opencode-go/deepseek-v4.1-flash opencode-go/deepseek-v4-flash
+reviewer-recheck: opencode/jev-1.13-free opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free opencode-go/jev-1.13 opencode-go/glm-5.3-flash opencode-go/deepseek-v4.1-flash
+tester:           opencode/deepseek-v4.1-flash-free opencode/glm-5.3-flash-free opencode/mimo-v2.6-flash-free opencode/nemotron-3-ultra-free opencode-go/deepseek-v4.1-flash opencode-go/glm-5.3-flash opencode-go/deepseek-v4-flash
