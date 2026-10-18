@@ -33,6 +33,9 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
    on .app-shell in shell.css) or an anchor-scrolled heading lands partly
    underneath it. */
 .dsv-section { margin-bottom: var(--desktop-section-spacing); scroll-margin-top: calc(var(--app-topbar-height) + var(--space-4)); }
+/* Placeholder held while a section's code-split Body loads (issue #328): a
+   fixed block so anchors below it do not jump as the chunk arrives. */
+.dsv-section-loading { min-height: 160px; }
 /* Section header row: title on the left, token-count badge on the right
    (same badge flow as .dsv-block-head, one level up — screens have no Demo
    blocks, so this is their inspector entry point). */
