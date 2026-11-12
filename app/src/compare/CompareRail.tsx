@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import * as Accordion from "@radix-ui/react-accordion";
 import * as Checkbox from "@radix-ui/react-checkbox";
 import { Icon } from "../lib/icons.tsx";
 import { RailGroup } from "../shell/RailGroup.tsx";
@@ -59,12 +58,14 @@ export function CompareRail({
   }, [systems, picked, systemQuery]);
   const atLimit = picked.length >= maxColumns;
   const allLabels = ["systems", ...optionGroups.map((g) => g.label)];
-  // Controlled (like Rail) instead of `defaultValue`, so a search can force
-  // every surviving group open without discarding the user's own collapses.
-  // Screens alone defaults collapsed (legacy: 27 links), short groups open.
+  // Controlled, so a search can force every surviving group open without
+  // discarding the user's own collapses. Screens alone defaults collapsed
+  // (legacy: 27 links), short groups open.
   const [openGroups, setOpenGroups] = useState<string[]>(() =>
     allLabels.filter((label) => !DEFAULT_COLLAPSED_GROUPS.includes(label)),
   );
+  const toggleGroup = (label: string) =>
+    setOpenGroups((cur) => (cur.includes(label) ? cur.filter((l) => l !== label) : [...cur, label]));
   const effectiveOpen = searching
     ? ["systems", ...visibleGroups.map((g) => g.label)]
     : systemSearching
@@ -78,13 +79,19 @@ export function CompareRail({
           <SectionSearch value={query} onChange={setQuery} />
         </div>
       )}
-      <Accordion.Root type="multiple" value={effectiveOpen} onValueChange={setOpenGroups}>
-        <RailGroup value="systems" label="Systems" count={`${picked.length}/${maxColumns}`}>
+      <div className="app-rail-groups">
+        <RailGroup
+          value="systems"
+          label="Systems"
+          count={`${picked.length}/${maxColumns}`}
+          open={effectiveOpen.includes("systems")}
+          onToggle={() => toggleGroup("systems")}
+        >
           <div className="cmp-rail-systems">
             <p className="cmp-rail-hint" aria-live="polite">
               {atLimit
-                ? `${maxColumns} of ${maxColumns} picked — unpick one to add another`
-                : `Pick 2–${maxColumns} systems`}
+                ? `${maxColumns} of ${maxColumns} selected — deselect one to add another`
+                : `Select 2–${maxColumns} systems`}
             </p>
             <div className="cmp-rail-filter">
               <label htmlFor="cmp-system-filter">Filter systems</label>
@@ -107,7 +114,7 @@ export function CompareRail({
                   key={s.slug}
                   className={`cmp-chip${isOn ? " on" : ""}`}
                   data-disabled={locked || undefined}
-                  title={locked ? `${s.name} — Max ${maxColumns} systems — unpick one first` : s.name}
+                  title={locked ? `${s.name} — Max ${maxColumns} systems — deselect one first` : s.name}
                 >
                   <Checkbox.Root
                     className="dsv-check"
@@ -143,6 +150,8 @@ export function CompareRail({
               value={group.label}
               label={group.label}
               count={group.items.length}
+              open={effectiveOpen.includes(group.label)}
+              onToggle={() => toggleGroup(group.label)}
               contentClassName="app-rail-group-items"
             >
               {group.items.map((o) => (
@@ -159,7 +168,7 @@ export function CompareRail({
               ))}
             </RailGroup>
           ))}
-      </Accordion.Root>
+      </div>
       {mode === "component" && searching && visibleGroups.length === 0 && (
         <p className="cmp-rail-empty">No components match “{query.trim()}”.</p>
       )}

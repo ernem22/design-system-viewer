@@ -95,7 +95,10 @@ describe("viewer chrome typography (issue #112)", () => {
     const offenders: string[] = [];
     for (const [name, css] of CHROME_CSS) {
       for (const m of css.matchAll(/font-size:\s*([^;]+);/g)) {
-        if (!m[1].includes("var(--font-size-")) {
+        // The shell chrome reads the viewer-private floor tokens so a compact
+        // inspected system cannot shrink the chrome below legible size; both
+        // the shared scale and the --app- floor resolve through the token root.
+        if (!/var\(--(app-)?font-size-/.test(m[1])) {
           offenders.push(`${name}: font-size: ${m[1].trim()}`);
         }
       }
@@ -103,9 +106,23 @@ describe("viewer chrome typography (issue #112)", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("gives the rail's Accordion <h3> a token size, not the UA default", () => {
-    const heading = declarationsFor(shellCss, ".app-rail-group > h3").join("\n");
-    expect(heading).toMatch(/font-size:\s*var\(--font-size-/);
+  it("floors the chrome type scale above the inspected system's compact sizes", () => {
+    const root = declarationsFor(tokensCss, ":root").join("\n");
+    for (const [name, role] of [
+      ["--app-font-size-xs", "--font-size-xs"],
+      ["--app-font-size-sm", "--font-size-sm"],
+      ["--app-font-size-base", "--font-size-base"],
+    ] as const) {
+      const m = root.match(new RegExp(`${name}\\s*:\\s*([^;]+);`));
+      expect(m, `${name} is declared in tokens.css`).not.toBeNull();
+      expect(m![1].trim(), `${name} is a max() floor`).toMatch(/^max\(/);
+      expect(m![1], `${name} floors the shared ${role}`).toContain(`var(${role})`);
+    }
+  });
+
+  it("gives the rail's Accordion heading a token size, not the UA default", () => {
+    const heading = declarationsFor(shellCss, ".app-rail-group > h2").join("\n");
+    expect(heading).toMatch(/font-size:\s*var\(--(app-)?font-size-/);
     expect(heading).toMatch(/font-family:\s*var\(--font-sans\)/);
   });
 
@@ -115,7 +132,7 @@ describe("viewer chrome typography (issue #112)", () => {
     // over `.app-sysbtn`'s token size. The reset now lives only on
     // `.app-iconbtn`.
     const sysbtn = declarationsFor(shellCss, ".app-sysbtn").join("\n");
-    expect(sysbtn).toMatch(/font-size:\s*var\(--font-size-/);
+    expect(sysbtn).toMatch(/font-size:\s*var\(--(app-)?font-size-/);
     expect(sysbtn).not.toMatch(/font:\s*inherit\b/);
     expect(declarationsFor(shellCss, ".app-iconbtn").join("\n")).toMatch(
       /font:\s*inherit\b/,
@@ -125,7 +142,7 @@ describe("viewer chrome typography (issue #112)", () => {
   it("gives the topbar search input a visible token focus ring", () => {
     // Issue #90: `:focus-visible { outline: 0 }` left no focus indicator the
     // audit could measure (outline-width 0px on a focused input).
-    const focus = declarationsFor(shellCss, ".app-topbar-search input:focus-visible").join(
+    const focus = declarationsFor(shellCss, ".app-rail-search input:focus-visible").join(
       "\n",
     );
     expect(focus).toMatch(/outline:\s*var\(--focus-ring-width\)/);

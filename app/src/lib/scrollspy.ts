@@ -1,102 +1,59 @@
 // ============================================
-// SCROLLSPY (activation-line scan)
+// SCROLLSPY (shared landing offset, stateless scan)
 // ============================================
 // Tracks which of a set of section ids is currently "current" inside the
 // scrollable content area, so a side rail can highlight the matching link
 // without every caller re-deriving that logic — one hook, reused by Tokens,
 // Preview and Compare, each handing it their own (differently shaped) id list.
 //
-// Previous implementation compared IntersectionObserver ratios across ids.
-// That broke two ways: (1) a short section fully inside the band always
-// out-ranked a tall one merely filling the band, because ratio is scaled by
-// the target's OWN height, not by how much of the band it occupies, so
-// highlighting jumped between neighbors having nothing to do with what was
-// actually under the header; (2) pinning (see below) skipped the callback
-// entirely, including the bookkeeping that removes an id from the ratio map
-// when it scrolls out of view — so a stale high ratio from minutes earlier
-// (e.g. the very first section, fully visible at mount) could sit in the map
-// forever and keep "winning" once the pin released, snapping the highlight
-// back to it regardless of actual scroll position. This rewrite recomputes
-// the answer from live geometry on every tick instead of accumulating any
-// state across ticks, so there is nothing left around to go stale.
+// One landing offset decides both sides of a click: an anchor scrolls a
+// section's top to `--app-rail-landing-offset` below the scroller's top edge,
+// and this scan calls the section whose top has passed that same line
+// "current". Because both read the identical offset, the id a click lands on
+// is by construction the id the scan reports — no click-pin is needed (the
+// app's anchor jumps are instant; there is no smooth scroll to survive).
+//
+// The offset is read from a followed element's resolved `scroll-margin-top`
+// (the same token the section CSS uses), falling back to a fixed default when
+// no element is measurable (happy-dom has no cascade). It is not a separate
+// constant that can drift from the CSS.
+//
+// The scan recomputes from live geometry on every tick — it accumulates no
+// state across ticks, so nothing can go stale (an earlier IntersectionObserver
+// ratio implementation did, and it out-ranked short sections on nothing).
+// Each anchor's offset in the scroller's content space is cached and only
+// rebuilt on resize / refresh / id change, so a scroll tick compares two
+// numbers per section instead of calling getBoundingClientRect on each.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-/** Fixed px below the scroller's own top edge that counts as "current" —
- *  matches the scroll-margin-top the followed sections/blocks land at
- *  (gallery.css / TokenGroup.css), so the id landed-on by a click is the
- *  same one the scan reports as active. Px, not %, so it doesn't drift with
- *  panel height. */
-const ACTIVATION_OFFSET = 100;
+/** Fallback landing offset (topbar + one space step ≈ 60px) used only when no
+ *  followed element is measurable to read its own resolved scroll-margin-top.
+ *  Kept in step with `--app-rail-landing-offset` in shell.css by
+ *  lib/scrollspy.test.ts. */
+export const DEFAULT_LANDING_OFFSET_PX = 60;
 
-/** Keys whose default action scrolls the content area. A keydown that isn't
- *  one of these (a letter typed into the search box, Escape, a shortcut) is
- *  never the user's own scroll intent, so it must leave a click-pin alone. */
-const SCROLL_KEYS = new Set([
-  "ArrowUp",
-  "ArrowDown",
-  "ArrowLeft",
-  "ArrowRight",
-  "PageUp",
-  "PageDown",
-  "Home",
-  "End",
-  " ",
-]);
-
-/** Whether a keydown happened in a field that owns the keystroke. Arrow /
- *  Home / End move a text caret there, not the scroller — so even a scroll
- *  key isn't scroll intent while the search box has focus. */
-function inEditable(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return (
-    target.isContentEditable ||
-    target.tagName === "INPUT" ||
-    target.tagName === "TEXTAREA"
-  );
-}
-
-/** Id of the element (from `ids`) whose top edge has most recently passed
- *  the activation line — i.e. the section currently under the header —
- *  falling back to whichever element sits topmost overall when none have
- *  passed it yet (top of the scroller). `null` only when no listed id has a
- *  matching element in the DOM. */
-function currentId(ids: string[], activationY: number): string | null {
-  let best: string | null = null;
-  let bestTop = -Infinity;
-  let topmost: string | null = null;
-  let topmostTop = Infinity;
+/** Resolved landing offset for these ids: the first followed element's own
+ *  computed `scroll-margin-top`, so the scan's activation line and the anchor
+ *  jump cannot disagree. Falls back to the fixed default when none resolve. */
+function landingOffset(ids: string[]): number {
   for (const id of ids) {
     const el = document.getElementById(id);
     if (!el) continue;
-    const top = el.getBoundingClientRect().top;
-    if (top < topmostTop) {
-      topmostTop = top;
-      topmost = id;
-    }
-    if (top <= activationY && top > bestTop) {
-      bestTop = top;
-      best = id;
-    }
+    if (typeof getComputedStyle !== "function") break;
+    const value = parseFloat(getComputedStyle(el).scrollMarginTop);
+    if (Number.isFinite(value) && value > 0) return value;
   }
-  return best ?? topmost;
+  return DEFAULT_LANDING_OFFSET_PX;
 }
 
 /** Id of the section currently current among `ids`, or `null` when none of
- *  them exist in the DOM yet.
- *
- *  Returns a `pin` setter too: clicking a link sets the highlight
- *  immediately and authoritatively, instead of waiting for the next scroll
- *  tick to confirm it (the jump itself fires one, but landing exactly on the
- *  activation line is a coin flip on the neighbor either side of it).
- *  Pinning suspends recomputation — not bookkeeping, there isn't any to
- *  suspend — so it can never leave anything stale. It releases on the
- *  user's next own scroll input (wheel / touch / keys), at which point live
- *  geometry takes over again; a click's own jump doesn't count as that
- *  input. Latest intent wins either way. */
-export function useScrollSpy(ids: string[], enabled = true): [string | null, (id: string) => void] {
+ *  them exist in the DOM yet. `refresh` rebuilds the offset cache when the
+ *  rail's own DOM changes without a resize (a group opened or collapsed),
+ *  which would otherwise leave every cached offset below it stale. */
+export function useScrollSpy(ids: string[], enabled = true): [string | null, () => void] {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const pinnedRef = useRef<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const idsRef = useRef(ids);
   idsRef.current = ids;
 
@@ -115,68 +72,68 @@ export function useScrollSpy(ids: string[], enabled = true): [string | null, (id
     const scroller = document.querySelector<HTMLElement>(".app-main");
     if (!scroller) return;
 
+    // id -> top offset inside the scroller's content box, stable while
+    // scrolling (it only moves with layout). null until built.
+    let offsets: Map<string, number> | null = null;
+    let offset = DEFAULT_LANDING_OFFSET_PX;
+
+    const build = () => {
+      const map = new Map<string, number>();
+      const base = scroller.getBoundingClientRect().top;
+      for (const id of idsRef.current) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        map.set(id, el.getBoundingClientRect().top - base + scroller.scrollTop);
+      }
+      offsets = map;
+      offset = landingOffset(idsRef.current);
+    };
+
     let raf = 0;
     const recompute = () => {
       raf = 0;
-      if (pinnedRef.current) return;
-      const activationY = scroller.getBoundingClientRect().top + ACTIVATION_OFFSET;
-      setActiveId(currentId(idsRef.current, activationY));
+      if (!offsets) build();
+      // The activation line, expressed in content space, so the cache can be
+      // compared without reading a rect per section.
+      const line = scroller.scrollTop + offset;
+      let best: string | null = null;
+      let bestOff = -Infinity;
+      let topmost: string | null = null;
+      let topmostOff = Infinity;
+      for (const [id, off] of offsets!) {
+        if (off < topmostOff) {
+          topmostOff = off;
+          topmost = id;
+        }
+        if (off <= line && off > bestOff) {
+          bestOff = off;
+          best = id;
+        }
+      }
+      setActiveId(best ?? topmost);
     };
     const schedule = () => {
       if (!raf) raf = requestAnimationFrame(recompute);
     };
+    // Rebuild eagerly (mount / resize / refresh): the answer must land before
+    // the click that triggered it paints, and a scroll tick alone is throttled.
+    const invalidate = () => {
+      offsets = null;
+      recompute();
+    };
 
-    schedule();
+    invalidate();
     scroller.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("resize", schedule);
+    window.addEventListener("resize", invalidate);
     return () => {
       cancelAnimationFrame(raf);
       scroller.removeEventListener("scroll", schedule);
-      window.removeEventListener("resize", schedule);
+      window.removeEventListener("resize", invalidate);
     };
-  }, [ids, enabled]);
+  }, [ids, enabled, refreshKey]);
 
-  // A pinned id that no longer exists (search narrowed the rail) releases
-  // the pin instead of pointing at nothing.
-  useEffect(() => {
-    if (pinnedRef.current && !ids.includes(pinnedRef.current)) pinnedRef.current = null;
-  }, [ids]);
-
-  // The user's own scroll intent hands the highlight back to live geometry.
-  // The anchor jump a click causes doesn't fire these; real input does — so
-  // a click-pin survives the jump it caused but not the user's next manual
-  // scroll. Gated like the scan above: a hidden tab's unpin would recompute
-  // meaningless geometry on the shared scroller's every wheel/touch/key.
-  useEffect(() => {
-    if (!enabled) return;
-    const scroller = document.querySelector<HTMLElement>(".app-main");
-    const unpin = () => {
-      pinnedRef.current = null;
-      const activationY = scroller ? scroller.getBoundingClientRect().top + ACTIVATION_OFFSET : 0;
-      setActiveId(currentId(idsRef.current, activationY));
-    };
-    // Only a scroll-producing key is the user's own scroll intent. Typing a
-    // search query fires a keydown per character; an unfiltered unpin would
-    // release a click-pin and jump the highlight on every keystroke.
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (inEditable(event.target)) return;
-      if (!SCROLL_KEYS.has(event.key)) return;
-      unpin();
-    };
-    scroller?.addEventListener("wheel", unpin, { passive: true });
-    scroller?.addEventListener("touchmove", unpin, { passive: true });
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      scroller?.removeEventListener("wheel", unpin);
-      scroller?.removeEventListener("touchmove", unpin);
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [enabled]);
-
-  const pin = (id: string) => {
-    pinnedRef.current = id;
-    setActiveId(id);
-  };
-
-  return [activeId, pin];
+  // Rebuild the offset cache on demand: a group expanding shifts every offset
+  // below it, and no resize or change to `ids` fires for that.
+  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+  return [activeId, refresh];
 }

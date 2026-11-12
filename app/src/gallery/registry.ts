@@ -16,54 +16,45 @@ export type EntryOutline = Record<string, RailLink[]>;
 /** Turkish-aware fold (legacy preview search), so "İ"/"ı" queries match. */
 const searchKey = (s: string) => s.trim().toLocaleLowerCase("tr");
 
-/** Folds entries + their discovered Demo children into the `[parentLabel,
-   children][]` shape Rail expects — one entry per parent, its Demo blocks
-   as children, except screen-* entries (issue #317), which hold no <Demo>
-   blocks and would each render as a one-item group pushing every section
-   below the fold: they fold into a single "Screens" parent with one child
-   link per screen ({ id: entry.id, label: entry.label }) in registry order.
-   Empty `query` keeps everything; otherwise a parent whose label matches
-   keeps all its children, and a parent that doesn't match keeps only the
-   children that do (dropped entirely if none do) — Rail's `searching` flag
-   then force-opens whatever survives. */
+const isScreen = (e: GalleryEntry) => e.id.startsWith("screen-");
+
+/** Sections that are not Radix components but product patterns (issue-2
+ *  Extras port). Shared with Compare, which splits its picker into the same
+ *  Components / Extras / Screens families — one source, so the two rails agree. */
+export const EXTRA_SECTION_IDS = new Set([
+  "foundation",
+  "patterns",
+  "data-display",
+  "status",
+  "nav-extras",
+]);
+
+/** Folds entries into the `[parentLabel, sections][]` shape Rail expects. A
+    rail row is a *section* (the scroll target), grouped into the same
+    Components / Extras / Screens families Compare uses — the section is the
+    unit, its demos stay reachable by deep-link (and via the section row's
+    id), never as rows of their own.
+    Each row carries the number of Demo blocks it holds as its count (the
+    "items the row represents"); a screen holds none, so it has no count.
+    Empty `query` keeps everything; otherwise only rows whose label matches
+    survive, and a family with no surviving rows is dropped. */
 export function buildRailGroups(
   entries: GalleryEntry[],
   outline: EntryOutline,
   query: string,
 ): RailGroups {
-  // Screens hold no <Demo> blocks — link the section itself, or it would be
-  // unreachable from the rail and invisible to scrollspy.
-  const childrenOf = (e: GalleryEntry): RailLink[] => {
-    const demos = outline[e.id] ?? [];
-    return demos.length ? demos : [{ id: e.id, label: e.label }];
-  };
   const q = searchKey(query);
-  const screens = entries.filter((e) => e.id.startsWith("screen-"));
-  const screenChildren: RailLink[] = screens.map((e) => ({ id: e.id, label: e.label }));
-  const visibleScreens = (parentMatches: boolean): RailLink[] =>
-    parentMatches
-      ? screenChildren
-      : screenChildren.filter((c) => searchKey(c.label).includes(q));
-  if (!q) {
-    const groups: RailGroups = entries
-      .filter((e) => !e.id.startsWith("screen-"))
-      .map((e) => [e.label, childrenOf(e)] as [string, RailLink[]]);
-    if (screens.length) groups.push(["Screens", screenChildren]);
-    return groups;
-  }
-
+  const row = (e: GalleryEntry): RailLink => {
+    const demos = (outline[e.id] ?? []).length;
+    return demos ? { id: e.id, label: e.label, count: demos } : { id: e.id, label: e.label };
+  };
   const groups: RailGroups = [];
-  for (const e of entries) {
-    if (e.id.startsWith("screen-")) continue;
-    const children = childrenOf(e);
-    const parentMatches = searchKey(e.label).includes(q);
-    const visible = parentMatches ? children : children.filter((c) => searchKey(c.label).includes(q));
-    if (parentMatches || visible.length > 0) groups.push([e.label, visible]);
-  }
-  if (screens.length) {
-    const parentMatches = searchKey("Screens").includes(q);
-    const visible = visibleScreens(parentMatches);
-    if (parentMatches || visible.length > 0) groups.push(["Screens", visible]);
-  }
+  const push = (label: string, list: GalleryEntry[]) => {
+    const rows = list.filter((e) => !q || searchKey(e.label).includes(q)).map(row);
+    if (rows.length) groups.push([label, rows]);
+  };
+  push("Components", entries.filter((e) => !isScreen(e) && !EXTRA_SECTION_IDS.has(e.id)));
+  push("Extras", entries.filter((e) => !isScreen(e) && EXTRA_SECTION_IDS.has(e.id)));
+  push("Screens", entries.filter(isScreen));
   return groups;
 }

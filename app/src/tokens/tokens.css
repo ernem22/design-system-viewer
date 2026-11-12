@@ -462,6 +462,22 @@
   --app-motion-distance-md: 8px;
   --app-motion-scale-active: 0.97;
   --app-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  /* The rail's one authored row-color ease (issue #284): position never
+     animates, only the active row's color/opacity settle. Private like the
+     durations above, so an inspected system cannot freeze or restyle it. */
+  --app-ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Viewer chrome type floor (private). The inspected system overwrites the
+     shared --font-size-* names inline (App.tsx), so a compact system — the
+     seed "Aurora" ships --font-size-xs: 11px, base 14px — renders the viewer's
+     own chrome below a legible size. max() keeps the chrome following the
+     system upward but never below the viewer's floor; the type counterpart of
+     the --app-duration-* literals above. The motion tokens are fixed literals
+     because no system defines --app-*; the type floor reads the shared name on
+     purpose so a system that enlarges type still enlarges the chrome. */
+  --app-font-size-xs: max(0.75rem, var(--font-size-xs));
+  --app-font-size-sm: max(0.875rem, var(--font-size-sm));
+  --app-font-size-base: max(1rem, var(--font-size-base));
 
   /* Motion Blur */
   --motion-blur-enter: 8px;

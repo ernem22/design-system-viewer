@@ -81,7 +81,7 @@ describe("issue #227 RED: skip link targets <main>, loading notice is live", () 
 describe("issue #227 companion findings", () => {
   it("gives the topbar search input a visible focus indicator (not outline: 0)", () => {
     const css = shellCss();
-    const m = css.match(/\.app-topbar-search\s+input:focus-visible\s*\{([^}]*)\}/);
+    const m = css.match(/\.app-rail-search\s+input:focus-visible\s*\{([^}]*)\}/);
     expect(m, "search input:focus-visible rule exists").not.toBeNull();
     const body = m![1];
     expect(body, "no outline: 0/none reset").not.toMatch(/outline:\s*(0|none)\b/);

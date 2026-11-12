@@ -6,6 +6,11 @@
      so anchor-scrolled content clears the sticky topbar instead of
      landing underneath it. */
   --app-topbar-height: 44px;
+  /* One shared landing offset: both the section anchors' scroll-margin-top
+     and the scrollspy's activation line read it, so a clicked row is by
+     construction the row the spy reports (lib/scrollspy.ts). Structural, like
+     the topbar height — resolved from the token root, no literal here. */
+  --app-rail-landing-offset: calc(var(--app-topbar-height) + var(--space-4));
   position: fixed;
   inset: 0;
   display: grid;
@@ -23,7 +28,7 @@
   /* The chrome is part of the design system it displays: every shell rule
      resolves type from the token root, never the platform stack. */
   font-family: var(--font-sans);
-  font-size: var(--font-size-base);
+  font-size: var(--app-font-size-base);
 }
 
 /* Skip link (issue #227): the only keyboard entry past the topbar/rail
@@ -38,7 +43,7 @@
   border-radius: var(--radius-md);
   background: var(--color-surface-raised);
   color: var(--color-text);
-  font-size: var(--font-size-sm);
+  font-size: var(--app-font-size-sm);
   font-weight: var(--font-weight-semibold);
   text-decoration: none;
   transform: translateY(-300%);
@@ -97,7 +102,7 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  font-size: var(--font-size-sm);
+  font-size: var(--app-font-size-sm);
   font-weight: var(--font-weight-bold);
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -105,6 +110,12 @@
 
 .app-brand-mark {
   flex: none;
+}
+
+/* Focus-return anchor for the narrow drawer (App.tsx): the span carries the
+   ref but takes no box, so the toggle stays the topbar cluster's flex item. */
+.app-rail-toggle-slot {
+  display: contents;
 }
 
 .app-brand-name {
@@ -121,7 +132,7 @@
   align-items: center;
   gap: 6px;
   font-family: inherit;
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-secondary);
   background: transparent;
@@ -208,7 +219,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   padding: 6px 8px 6px 24px;
   border-radius: var(--radius-md);
   color: var(--color-text-secondary);
@@ -238,14 +249,14 @@
   margin-left: auto;
   padding-left: 12px;
   font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   color: var(--color-warning-text);
   flex: none;
 }
 
 .app-topbar-cov {
   font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   font-weight: var(--font-weight-medium);
   color: var(--color-warning-text);
   background: var(--color-warning-subtle);
@@ -255,29 +266,28 @@
   flex: none;
 }
 
-/* ── section search (topbar) ── */
+/* ── section search (inside the rail frame, every tab that has a rail) ── */
 
-.app-topbar-search {
+.app-rail-search {
   position: relative;
   display: flex;
   align-items: center;
-  width: 200px;
-  /* Shrinkable: when the actions cluster is tight the input compresses
-     instead of pushing the search over the tab triggers. */
-  flex: 0 1 auto;
+  width: 100%;
   min-width: 0;
+  /* Separates the field from the first family header below it. */
+  margin-bottom: var(--space-2);
 }
 
-.app-topbar-search > svg {
+.app-rail-search > svg {
   position: absolute;
-  left: 10px;
+  left: var(--space-2-5);
   color: var(--color-text-muted);
   pointer-events: none;
 }
 
-.app-topbar-search input {
+.app-rail-search input {
   font: inherit;
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   color: var(--color-text);
   background: var(--color-surface-sunken);
   border: 1px solid transparent;
@@ -287,15 +297,15 @@
   width: 100%;
   min-width: 0;
   transition:
-    background var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
+    background var(--app-duration-fast) var(--app-ease-out),
+    border-color var(--app-duration-fast) var(--app-ease-out);
 }
 
-.app-topbar-search input:hover {
+.app-rail-search input:hover {
   border-color: var(--color-border);
 }
 
-.app-topbar-search input:focus-visible {
+.app-rail-search input:focus-visible {
   /* The border/background tint alone is too subtle to read as focus (the
      audit measured outline-width 0px on :focus-visible). Give the input the
      same token ring every other control uses. */
@@ -305,15 +315,15 @@
   border-color: var(--color-accent-border);
 }
 
-.app-topbar-search input::placeholder {
+.app-rail-search input::placeholder {
   color: var(--color-text-disabled);
 }
 
-.app-topbar-search input::-webkit-search-cancel-button {
+.app-rail-search input::-webkit-search-cancel-button {
   display: none;
 }
 
-.app-topbar-search button {
+.app-rail-search button {
   position: absolute;
   right: 3px;
   width: 24px;
@@ -321,7 +331,7 @@
   padding: 0;
   display: grid;
   place-items: center;
-  font-size: var(--font-size-base);
+  font-size: var(--app-font-size-base);
   line-height: 1;
   background: none;
   border: none;
@@ -330,12 +340,12 @@
   cursor: pointer;
 }
 
-.app-topbar-search button:hover {
+.app-rail-search button:hover {
   color: var(--color-text);
   background: var(--color-hover-overlay);
 }
 
-.app-topbar-search button:focus-visible {
+.app-rail-search button:focus-visible {
   outline: var(--focus-ring-width) solid var(--color-focus-ring);
   outline-offset: 1px;
 }
@@ -400,7 +410,7 @@
   border: 0;
   background: none;
   font-family: var(--font-sans);
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   font-weight: var(--font-weight-semibold);
   padding: 3px 12px;
   border-radius: 99px;
@@ -455,7 +465,7 @@
   width: 208px;
   height: 100%;
   overflow-y: auto;
-  padding: 8px 10px 20px;
+  padding: var(--space-2) var(--space-2-5) var(--space-5);
   /* Compositor-only enter (issue #282): the column snaps, the content slides
      with transform and fades with opacity (~200ms ease-out), so a toggle
      costs one layout and never relayouts mid-animation. Motion resolves from
@@ -507,11 +517,11 @@
   min-width: 0;
   min-height: 0;
   padding: 24px;
-  /* Scrollspy's observed band sits well above the viewport bottom (see
-     lib/scrollspy.ts's rootMargin) — without slack below the last section,
-     it can never scroll up into that band, so its Rail link never settles
-     as active. */
-  padding-bottom: 50vh;
+  /* Slack below the last section so its top can reach the shared landing
+     line at max scroll (a section activates only once its top passes that
+     line). Sized from the viewport minus the topbar and the line itself —
+     exact, not the 50vh guess that left tall screens unable to activate. */
+  padding-bottom: calc(100vh - var(--app-topbar-height) - var(--app-rail-landing-offset));
   overflow-y: auto;
 }
 
@@ -575,22 +585,40 @@
   .app-props-clip[data-open="false"] .app-props-inner {
     transform: none;
   }
+
+  /* The row color/background settle and the family caret are the two other
+     chrome transitions; a reduced-motion user gets the new state instantly
+     (positions never animate in the first place). */
+  .app-rail-link,
+  .app-rail-group-label,
+  .app-rail-group-chevron {
+    transition: none;
+  }
 }
 
 .app-placeholder {
   margin: 0;
-  font-size: var(--font-size-sm);
+  font-size: var(--app-font-size-sm);
   color: var(--color-text-muted);
 }
 
-/* Radix Accordion.Header renders an <h3>; without a size it falls back to the
-   UA default (18.72px/700) and the rail's heading role disagrees with every
-   other heading in the app. The label button below owns the visual scale, so
-   the heading box just carries the token size. */
-.app-rail-group > h3 {
+/* The group header is an <h2> so the outline does not jump h1 → h3 (the rail
+   sits before main in the DOM). Without a size it falls back to the UA default
+   (18.72px/700); the label button/static label inside owns the visual scale,
+   so the heading box just carries the token size. */
+.app-rail-group > h2 {
+  /* Sticky current-family cue: the header pins to the top of the rail's own
+     frame while its rows scroll, so the active family stays readable even
+     when its rows are offstage. The opaque background is what keeps the rows
+     from showing through while pinned. */
+  position: sticky;
+  top: 0;
+  z-index: 2;
   margin: 0;
+  padding: 6px 0 2px;
+  background: var(--color-bg);
   font-family: var(--font-sans);
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   font-weight: var(--font-weight-semibold);
 }
 
@@ -608,17 +636,17 @@
   align-items: center;
   gap: 6px;
   font: inherit;
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   font-weight: var(--font-weight-bold);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--letter-spacing-wider);
   color: var(--color-text-muted);
-  margin: 12px 0 4px;
-  padding: 4px 8px;
-  border-radius: 6px;
+  margin: 0;
+  padding: 2px 8px;
+  border-radius: var(--radius-md);
   transition:
-    color 150ms var(--ease-out),
-    background 150ms var(--ease-out);
+    color var(--app-duration-fast) var(--app-ease-out),
+    background var(--app-duration-fast) var(--app-ease-out);
 }
 
 .app-rail-group-label:hover {
@@ -626,31 +654,54 @@
   background: var(--color-hover-overlay);
 }
 
-.app-rail-group-label > span:not(.app-rail-count) {
+.app-rail-group-text {
   flex: 1;
+  min-width: 0;
   text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Search active: the header is a static label, not a toggle. Same type as the
+   toggle so the two states do not jump, minus the hover/pointer affordances. */
+.app-rail-group-static {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  font-size: var(--app-font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+  color: var(--color-text-muted);
 }
 
 .app-rail-group-chevron {
   flex: none;
   color: var(--color-text-muted);
-  transition: transform 200ms var(--ease-out);
+  transition: transform var(--app-duration-normal) var(--app-ease-out);
 }
 
 .app-rail-group-label[data-state="closed"] .app-rail-group-chevron {
   transform: rotate(-90deg);
 }
 
-.app-rail-count {
+/* Counts share ONE meaning and one treatment: a group count is its child
+   rows, a row count is the items that row represents ("Component / Button 11").
+   Both render inline, mono, tabular and muted — the pill/vs-plain split the
+   redesign removed. */
+.app-rail-count,
+.app-rail-item-count {
+  flex: none;
+  margin-left: auto;
   font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   font-weight: var(--font-weight-medium);
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0;
   color: var(--color-text-muted);
-  background: var(--color-surface-sunken);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 999px;
-  padding: 1px 7px;
+  white-space: nowrap;
 }
 
 .app-rail-group-items {
@@ -666,13 +717,16 @@
   gap: var(--space-2);
   min-width: 0;
   white-space: nowrap;
-  padding: 5px 10px;
-  border-radius: 10px;
+  padding: var(--space-1-5) var(--space-2-5);
+  border-radius: var(--radius-lg);
   color: var(--color-text-secondary);
   text-decoration: none;
-  font-size: var(--font-size-sm);
+  font-size: var(--app-font-size-sm);
   font-weight: var(--font-weight-medium);
-  transition: color 150ms var(--ease-out);
+  /* Only the row's color/background settle (~100ms) — position never animates. */
+  transition:
+    color var(--app-duration-fast) var(--app-ease-out),
+    background var(--app-duration-fast) var(--app-ease-out);
 }
 
 /* Rail names stay on one line (issue #286): the row never wraps, the name
@@ -687,16 +741,6 @@
   white-space: nowrap;
 }
 
-.app-rail-item-count {
-  flex: none;
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
 .app-rail-link:hover {
   color: var(--color-text);
   background: var(--color-hover-overlay);
@@ -707,25 +751,35 @@
   outline-offset: 1px;
 }
 
+/* Active row = per-row background + a thin inset accent bar + weight/color
+   shift. There is no sliding indicator element and no position animation:
+   the shared landing offset (lib/scrollspy.ts) makes the clicked row the
+   geometry winner, so the highlight needs no pin and never glides. */
+.app-rail-link[aria-current="location"],
 .app-rail-link[aria-current="true"] {
   color: var(--color-accent-text);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
+  background: var(--color-accent-subtle);
+  box-shadow: inset var(--border-width-thick) 0 0 var(--color-accent);
 }
 
-/* Sliding highlight behind the active link — one element that glides
-   between positions instead of each link toggling its own flat
-   background, so switching sections reads as motion, not a jump-cut. */
-.app-rail-indicator {
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  z-index: 0;
-  background: var(--color-accent-subtle);
-  border-radius: 10px;
-  box-shadow: inset 2.5px 0 0 var(--color-accent);
-  transition:
-    top 220ms var(--ease-emphasized),
-    height 220ms var(--ease-emphasized);
+/* Current-family cue: when a family holds the active section its header reads
+   a step stronger than the other collapsed families, even when the rows are
+   offstage (the sticky header stays pinned). */
+.app-rail-group[data-active] .app-rail-group-label,
+.app-rail-group[data-active] .app-rail-group-static {
+  color: var(--color-text);
+}
+
+.app-rail-nav {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-rail-empty {
+  margin: var(--space-2);
+  font-size: var(--app-font-size-sm);
+  color: var(--color-text-muted);
 }
 
 .app-loading {
@@ -745,7 +799,7 @@
   background: var(--color-accent-subtle);
   color: var(--color-text);
   font: inherit;
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   cursor: pointer;
 }
 
@@ -754,7 +808,7 @@
   border-radius: var(--radius-full);
   background: var(--color-accent);
   color: var(--color-on-accent);
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
 }
 
 /* ── narrow viewport: rails become overlay drawers ── */
@@ -813,6 +867,24 @@
   .app-rail-inner,
   .app-props-inner {
     max-width: 85vw;
+  }
+
+  /* Touch targets: every rail row and family header clears the token's 44px
+     minimum in the drawer (the mouse-sized desktop rows are shorter). */
+  .app-rail-link,
+  .app-rail-group-label {
+    min-height: var(--touch-target-min);
+  }
+
+  /* Wheel/touch chains stop at the open rail drawer instead of scrolling the
+     background content behind it; the wheel lock itself is JS (App.tsx),
+     since `overflow: hidden` is banned on the shell's layout containers. */
+  .app-rail-clip {
+    overscroll-behavior: contain;
+  }
+
+  .app-shell[data-drawer-open] .app-main {
+    touch-action: none;
   }
 
   /* A closed clip is zero-width — drop its edge/shadow so no 1px seam
@@ -946,8 +1018,9 @@
 }
 
 /* Phone overflow menu (issue #282): the action cluster behind "More actions".
-   A wrapping row, not a menuitem list — its children are icon buttons, pills
-   and the search field, which keep their own chrome and behaviour. */
+   A wrapping row, not a menuitem list — its children are icon buttons and
+   pills, which keep their own chrome and behaviour. (The section search is no
+   longer here — it lives in the rail frame.) */
 .app-menu {
   z-index: var(--z-popover);
   display: flex;
@@ -960,9 +1033,4 @@
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-}
-
-.app-menu .app-topbar-search {
-  flex: 1 1 100%;
-  width: auto;
 }

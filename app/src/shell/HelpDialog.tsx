@@ -59,8 +59,8 @@ const STEPS: Step[] = [
     body: (
       <>
         <b>Component</b> shows one component in up to 4 systems side by side.{" "}
-        <b>Token diff</b> puts every category side by side, with an{" "}
-        <b>only differences</b> toggle.
+        <b>Token diff</b> puts every category side by side, with a <b>Show</b>{" "}
+        control — <b>Different</b>, <b>Missing</b>, or <b>All</b>.
       </>
     ),
   },

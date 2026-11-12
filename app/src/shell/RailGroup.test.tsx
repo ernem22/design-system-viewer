@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import type { Root } from "react-dom/client";
-import * as Accordion from "@radix-ui/react-accordion";
 import { RailGroup } from "./RailGroup.tsx";
 import Rail from "./Rail.tsx";
 import { CompareRail } from "../compare/CompareRail.tsx";
@@ -14,11 +13,10 @@ import type { CompareViewModel } from "../compare/useCompareView.ts";
 import type { DesignSystem } from "../systems/store.ts";
 import type { RailGroups } from "../lib/railTypes.ts";
 
-// Issue #17: Rail and CompareRail hand-built the same Accordion group shell
-// (label + chevron + count). Both now compose this shared RailGroup, and
-// CompareRail's system chips no longer put aria-disabled on a <label>.
-// Importing RailGroup here is itself the RED guard: on the parent commit the
-// module does not exist, so this file fails before the change and passes after.
+// The shared rail group shell: label + chevron + count header both Rail and
+// CompareRail hand-built before. It is presentational — collapse state and
+// focus live in the callers — and hand-rolled (not Radix Accordion) so the
+// rail can drive its own roving focus and swap the toggle for a static label.
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 
@@ -49,32 +47,40 @@ async function renderInto(node: React.ReactNode): Promise<HTMLElement> {
   return host;
 }
 
-describe("issue #17 shared rail group shell", () => {
+describe("shared rail group shell", () => {
   it("exists once in RailGroup and is imported by both rails", () => {
-    // The shell markup lives in exactly one place.
     expect(railGroupSrc).toContain("app-rail-group-label");
     expect(railGroupSrc).toContain("app-rail-group-chevron");
     expect(railGroupSrc).toContain("app-rail-count");
-    // Both rails compose it instead of hand-building Accordion.Item shells.
     expect(railSrc).toContain("RailGroup");
     expect(compareRailSrc).toContain("RailGroup");
-    expect(railSrc).not.toContain("app-rail-group-label\">");
-    expect(compareRailSrc).not.toContain("app-rail-group-label\">");
+    expect(railSrc).not.toContain('app-rail-group-label">');
+    expect(compareRailSrc).not.toContain('app-rail-group-label">');
   });
 
-  it("renders the label/chevron/count shell", async () => {
+  it("renders the label/chevron/count shell when open", async () => {
     const el = await renderInto(
-      <Accordion.Root type="multiple" value={["g"]}>
-        <RailGroup value="g" label="Basics" count={3} contentClassName="app-rail-group-items">
-          <span>body</span>
-        </RailGroup>
-      </Accordion.Root>,
+      <RailGroup value="g" label="Basics" count={3} open onToggle={() => {}} contentClassName="app-rail-group-items">
+        <span>body</span>
+      </RailGroup>,
     );
     const trigger = el.querySelector(".app-rail-group-label");
     expect(trigger).toBeTruthy();
+    expect(trigger!.getAttribute("aria-expanded")).toBe("true");
     expect(trigger!.querySelector(".app-rail-group-chevron")).toBeTruthy();
     expect(trigger!.querySelector(".app-rail-count")?.textContent).toBe("3");
     expect(trigger!.textContent).toContain("Basics");
+    expect(el.querySelector(".app-rail-group-items")?.textContent).toContain("body");
+  });
+
+  it("renders a static label instead of a toggle while searching", async () => {
+    const el = await renderInto(
+      <RailGroup value="g" label="Basics" count={3} open staticLabel onToggle={() => {}}>
+        <span>body</span>
+      </RailGroup>,
+    );
+    expect(el.querySelector(".app-rail-group-label")).toBeNull();
+    expect(el.querySelector(".app-rail-group-static")?.textContent).toContain("Basics");
   });
 
   it("both rails render their group headers through the shared shell", async () => {
@@ -143,14 +149,10 @@ describe("issue #17 shared rail group shell", () => {
       { slug: "extra", name: "Extra", css: "" },
     ] as unknown as DesignSystem[];
     const el = await renderInto(<CompareRail systems={systems} view={view} />);
-    // No widget-less aria-disabled anywhere in the rail.
     expect(compareRailSrc).not.toContain("aria-disabled");
     expect(el.querySelector("label[aria-disabled]")).toBeNull();
-    // The locked (maxed-out, unpicked) chip still reads as disabled.
     const locked = el.querySelector('label.cmp-chip[data-disabled="true"]');
     expect(locked).toBeTruthy();
-    // Native disabled semantics live on the checkbox itself (Radix renders a
-    // disabled <button role="checkbox">); the <label> only carries the visual hook.
     const box = locked!.querySelector('[role="checkbox"]');
     expect(box).toBeTruthy();
     expect(
@@ -158,7 +160,6 @@ describe("issue #17 shared rail group shell", () => {
         box!.getAttribute("data-disabled") !== null ||
         box!.getAttribute("aria-disabled") === "true",
     ).toBe(true);
-    // The visual dim hook moved with it.
     expect(compareCss).toContain('.cmp-chip[data-disabled="true"]');
     expect(compareCss).not.toContain('.cmp-chip[aria-disabled="true"]');
   });

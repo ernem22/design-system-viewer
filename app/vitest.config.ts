@@ -12,5 +12,13 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    // A full run otherwise spawns one worker per core minus one; on a loaded
+    // machine the React/happy-dom suites then starve and time out at the 5s
+    // default. The Budget-mounting suites also issue a real fetch for
+    // systems/index.json (absolute to the test origin), which a refused
+    // connection drags out. Cap the pool and give the timeout headroom so the
+    // signal stays stable; real failures still surface well under 15s.
+    maxWorkers: 6,
+    testTimeout: 15000,
   },
 })

@@ -4,7 +4,6 @@ import ErrorBoundary from "./shell/ErrorBoundary.tsx";
 import Brand from "./shell/Brand.tsx";
 import IconToggleButton from "./shell/IconToggleButton.tsx";
 import IconActionButton from "./shell/IconActionButton.tsx";
-import { SectionSearch } from "./shell/SectionSearch.tsx";
 import { Toasts } from "./shell/Toasts.tsx";
 import { DropOverlay, Welcome } from "./shell/Welcome.tsx";
 import { copyLinkToView } from "./lib/copyLink.ts";
@@ -181,6 +180,40 @@ function App() {
       document.removeEventListener("pointerdown", onPointer);
     };
   }, [narrowPanels, railOpen, propsOpen, closePanels]);
+
+  // Narrow drawers move focus into the drawer on open and return it to the
+  // rail toggle on close (WCAG 2.4.3 — focus is never orphaned behind a
+  // closed overlay). Desktop panels keep their own inline controls.
+  const railToggleRef = useRef<HTMLSpanElement>(null);
+  const wasRailOpen = useRef(false);
+  useEffect(() => {
+    if (!narrowPanels) return;
+    if (railOpen && !wasRailOpen.current) {
+      const panel = document.querySelector<HTMLElement>(
+        '#app-rail [role="tabpanel"]:not([data-state="inactive"])',
+      );
+      panel?.querySelector<HTMLElement>("input, button, a[href]")?.focus();
+    } else if (!railOpen && wasRailOpen.current) {
+      railToggleRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    }
+    wasRailOpen.current = railOpen;
+  }, [narrowPanels, railOpen]);
+
+  // Lock the background scroller while a drawer is open. `overflow: hidden` is
+  // banned on the shell's layout containers, so the lock is wheel/touch
+  // prevention: `.app-main` is still the one scroller, it just cannot move.
+  useEffect(() => {
+    if (!narrowPanels || (!railOpen && !propsOpen)) return;
+    const main = document.querySelector<HTMLElement>(".app-main");
+    if (!main) return;
+    const block = (e: Event) => e.preventDefault();
+    main.addEventListener("wheel", block, { passive: false });
+    main.addEventListener("touchmove", block, { passive: false });
+    return () => {
+      main.removeEventListener("wheel", block);
+      main.removeEventListener("touchmove", block);
+    };
+  }, [narrowPanels, railOpen, propsOpen]);
   // Active tab lives here (not in Shell) so the URL sync below sees every
   // switch — Shell stays a controlled chrome shell. A deep-linked ?tab=
   // wins; otherwise this is "tokens", exactly as before.
@@ -206,18 +239,16 @@ function App() {
     () => buildRailGroups(COMPONENT_ENTRIES, outline, query),
     [outline, query],
   );
-  // Search narrows the Preview content too, not just its rail (legacy).
-  // Screen sections live under the single "Screens" rail parent (issue
-  // #317), so a matching screen is visible via its child link id, not via
-  // a parent label — non-screen parents still match by label, and demo
-  // child ids can never equal an entry id (`${sectionId}-${slug}`).
+  // Search narrows the Preview content too, not just its rail (legacy). A
+  // rail row is a section, so the surviving row ids are exactly the entries
+  // to keep visible.
   const shownEntries = useMemo(() => {
     if (!searching) return null;
-    const labels = new Set(railGroups.map(([label]) => label));
-    const childIds = new Set(railGroups.flatMap(([, links]) => links.map((l) => l.id)));
-    return new Set(
-      COMPONENT_ENTRIES.filter((e) => labels.has(e.label) || childIds.has(e.id)).map((e) => e.id),
-    );
+    // Rail rows ARE sections now, so a surviving row id is exactly the entry
+    // to keep: matching section labels become row ids, and there is no
+    // separate parent-label path to reconcile.
+    const ids = new Set(railGroups.flatMap(([, links]) => links.map((l) => l.id)));
+    return new Set(COMPONENT_ENTRIES.filter((e) => ids.has(e.id)).map((e) => e.id));
   }, [searching, railGroups]);
 
   // A new query reshapes the page — start the results from the top instead
@@ -479,6 +510,7 @@ function App() {
     {
       id: "tokens",
       label: "Tokens",
+      railLabel: "Token groups",
       content: (
         <>
           {tab === "tokens" && sharedBanner}
@@ -507,6 +539,7 @@ function App() {
     {
       id: "preview",
       label: "Preview",
+      railLabel: "Sections",
       content: (
         <>
           {tab === "preview" && sharedBanner}
@@ -540,6 +573,13 @@ function App() {
           searching={searching}
           syncSection={sectionSyncArmed && tab === "preview"}
           active={tab === "preview"}
+          search={{
+            value: query,
+            onChange: setQuery,
+            placeholder: "Search components...",
+            ariaLabel: "Search components",
+            name: "q",
+          }}
         />
       ),
       propsPanel: <PreviewProps system={active} active={tab === "preview" && propsOpen} />,
@@ -547,6 +587,7 @@ function App() {
     {
       id: "compare",
       label: "Compare",
+      railLabel: "Systems",
       content: (
         <>
           {tab === "compare" && sharedBanner}
@@ -564,13 +605,17 @@ function App() {
         <Shell
           brand={
             <>
-              <IconToggleButton
-                pressed={railOpen}
-                onPressedChange={toggleRail}
-                icon={<Icon name="panelLeft" size={15} />}
-                labelWhenOn="Hide sidebar"
-                labelWhenOff="Show sidebar"
-              />
+              {/* Wrapper exists only so narrow-drawer focus can return here on
+                  close (the toggle itself is a Radix Toggle with no ref slot). */}
+              <span className="app-rail-toggle-slot" ref={railToggleRef}>
+                <IconToggleButton
+                  pressed={railOpen}
+                  onPressedChange={toggleRail}
+                  icon={<Icon name="panelLeft" size={15} />}
+                  labelWhenOn="Hide sidebar"
+                  labelWhenOff="Show sidebar"
+                />
+              </span>
               <Brand />
             </>
           }
@@ -608,7 +653,6 @@ function App() {
                   <span className="app-pill-reset">Reset</span>
                 </button>
               )}
-              {tab === "preview" && <SectionSearch value={query} onChange={setQuery} />}
               <IconActionButton onClick={copyLink} icon={<Icon name="link" size={15} />} label="Copy link to this view" />
               <IconActionButton
                 onClick={() => openAdd()}
@@ -627,6 +671,7 @@ function App() {
           tabs={tabs}
           railOpen={railOpen}
           propsOpen={propsOpen}
+          drawerOpen={narrowPanels && (railOpen || propsOpen)}
           tab={tab}
           onTabChange={setTab}
         />

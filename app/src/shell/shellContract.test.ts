@@ -112,7 +112,7 @@ describe("topbar keeps its functional controls at narrow widths (#134)", () => {
       ".app-pill",
       ".app-topbar-cov",
       ".app-brand",
-      ".app-topbar-search",
+      ".app-rail-search",
       '.app-iconbtn[aria-label="Copy link to this view"]',
     ];
     for (const selector of controls) {

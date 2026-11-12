@@ -20,6 +20,10 @@ export interface ShellTab {
   label: string;
   content: ReactNode;
   rail?: ReactNode;
+  /** Accessible name for the shell's single rail landmark while this tab is
+      active — the one nav holds different content per tab (sections, token
+      groups, systems), so its label tracks the tab. Falls back to "Sections". */
+  railLabel?: string;
   propsPanel?: ReactNode;
 }
 
@@ -35,6 +39,9 @@ export interface ShellSlots {
   /** Whole-panel collapse state for the one props frame Shell renders, same
      lifted-from-App shape as `railOpen`. */
   propsOpen: boolean;
+  /** True while a narrow-viewport drawer is open — surfaces a hook the CSS
+     uses to lock the background scroller (no `overflow: hidden`). */
+  drawerOpen?: boolean;
   /** Controlled tab state — App.tsx lifts this so its URL-sync effect sees
      every switch. Shell still owns layout; this is chrome state passed down
      as props, same shape as railOpen/propsOpen. Absent = uncontrolled. */
@@ -52,15 +59,15 @@ function isKnownTab(value: string, tabs: ShellTab[]): value is AppTab {
  * Layout + tab state only. All content arrives via slots —
  * Shell never owns gallery, preview, compare or panel content.
  *
- * The Rail/Props <aside> chrome (open/close toggle, width, animation) is
- * the same across every tab — only what's inside swaps with the active
- * tab. Both frames (RailFrame, PropsFrame) are rendered once, outside the
- * tab map, so exactly one `.app-rail-inner` and one `.app-props-inner`
- * exist and a tab switch swaps their content instead of rebuilding the
- * scrollers (which would reset scroll). Each tab's rail/props content is
- * still forceMount'ed, same as `main`'s, so switching tabs hides it (via
- * the [data-state="inactive"] rule in shell.css) instead of unmounting it —
- * Rail keeps its open/collapsed groups when you tab away and back.
+ * The Rail/Props chrome (open/close toggle, width, animation) is the same
+ * across every tab — only what's inside swaps with the active tab. Both
+ * frames (RailFrame, PropsFrame) are rendered once, outside the tab map, so
+ * exactly one `.app-rail-inner` and one `.app-props-inner` exist and a tab
+ * switch swaps their content instead of rebuilding the scrollers (which would
+ * reset scroll). Each tab's rail/props content is still forceMount'ed, same as
+ * `main`'s, so switching tabs hides it (via the [data-state="inactive"] rule
+ * in shell.css) instead of unmounting it — Rail keeps its open/collapsed
+ * groups when you tab away and back.
  */
 export default function Shell({
   brand,
@@ -69,6 +76,7 @@ export default function Shell({
   tabs,
   railOpen,
   propsOpen,
+  drawerOpen,
   tab: controlledTab,
   onTabChange,
 }: ShellSlots) {
@@ -84,6 +92,9 @@ export default function Shell({
   // frame. Every control stays mounted — just relocated — so no affordance is
   // lost on small screens.
   const phone = usePhoneViewport();
+  // The rail's accessible name follows the active tab's content (Preview
+  // sections, Tokens groups, Compare systems); one nav, one label at a time.
+  const railLabel = tabs.find((t) => t.id === tab)?.railLabel ?? "Sections";
 
   return (
     <Tabs.Root
@@ -95,7 +106,7 @@ export default function Shell({
       }}
       asChild
     >
-      <div className="app-shell" data-tab={tab}>
+      <div className="app-shell" data-tab={tab} data-drawer-open={drawerOpen || undefined}>
         {/* Skip link (issue #227): the single keyboard entry to <main>, which
             carries the matching id below. TabIndex -1 on main lets the anchor
             move focus there without adding it to the tab order. */}
@@ -104,7 +115,7 @@ export default function Shell({
         </a>
         <header className="app-topbar">
           {/* The document's single h1 (issue #117): the viewer had 0 h1 and
-             94 h2, so the outline had no top. Visually hidden (absolutely
+              94 h2, so the outline had no top. Visually hidden (absolutely
               positioned, so it takes no grid track) — the visible identity is
               the brand lockup, but screen readers get the page root. */}
           <VisuallyHidden.Root asChild>
@@ -143,7 +154,7 @@ export default function Shell({
           )}
         </header>
 
-        <aside id="app-rail" className="app-rail" aria-label="Sections">
+        <nav id="app-rail" className="app-rail" aria-label={railLabel}>
           <RailFrame open={railOpen}>
             {tabs.map(({ id, rail }) =>
               rail ? (
@@ -153,7 +164,7 @@ export default function Shell({
               ) : null,
             )}
           </RailFrame>
-        </aside>
+        </nav>
 
         <main id="app-main" className="app-main" tabIndex={-1}>
           {tabs.map(({ id, content }) => (

@@ -14,6 +14,7 @@ import * as Accordion from "@radix-ui/react-accordion";
 import * as Progress from "@radix-ui/react-progress";
 import { Button, Field, useCompareIdPrefix, usePortalContainer } from "../gallery/ui.tsx";
 import { COMPONENT_ENTRIES } from "../gallery/components/index.ts";
+import { EXTRA_SECTION_IDS } from "../gallery/registry.ts";
 import type { GalleryEntry } from "../gallery/registry.ts";
 import { Icon } from "../lib/icons.tsx";
 
@@ -290,16 +291,16 @@ const isScreenEntry = (e: GalleryEntry) => e.id.startsWith("screen-");
 /** The issue-2 Extras port: these sections live in COMPONENT_ENTRIES next to
    the original components but get their own picker group, mirroring legacy
    OPT_GROUPS' Components / Extras / Screens split. */
-const EXTRA_IDS = new Set(["foundation", "patterns", "data-display", "status", "nav-extras"]);
+
 
 /** Original component sections (Forms … Utilities). */
 export const COMPONENT_OPTIONS: ComparableOption[] = COMPONENT_ENTRIES.filter(
-  (e) => !isScreenEntry(e) && !EXTRA_IDS.has(e.id),
+  (e) => !isScreenEntry(e) && !EXTRA_SECTION_IDS.has(e.id),
 ).map(toComparable);
 
 /** Extras sections (Foundation … Navigation extras). */
 export const EXTRA_OPTIONS: ComparableOption[] = COMPONENT_ENTRIES.filter(
-  (e) => !isScreenEntry(e) && EXTRA_IDS.has(e.id),
+  (e) => !isScreenEntry(e) && EXTRA_SECTION_IDS.has(e.id),
 ).map(toComparable);
 
 /** Whole-page screen mockups (Data viz … Command palette). */

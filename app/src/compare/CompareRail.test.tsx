@@ -222,7 +222,7 @@ describe("CompareRail systems filter", () => {
 
   it("names the limit once four are picked", async () => {
     const two = await renderSystemsRail(["aurora", "chatgpt"]);
-    expect(two.querySelector(".cmp-rail-hint")?.textContent).toContain("Pick 2–4 systems");
+    expect(two.querySelector(".cmp-rail-hint")?.textContent).toContain("Select 2–4 systems");
     expect(two.querySelector(".cmp-rail-hint")?.getAttribute("aria-live")).toBe("polite");
 
     act(() => root?.unmount());
@@ -230,7 +230,7 @@ describe("CompareRail systems filter", () => {
     host?.remove();
 
     const four = await renderSystemsRail(["aurora", "chatgpt", "gemini-new-1", "gemini-new-2"]);
-    expect(four.querySelector(".cmp-rail-hint")?.textContent).toContain("unpick one");
+    expect(four.querySelector(".cmp-rail-hint")?.textContent).toContain("deselect one");
   });
 
   it("clears the filter on Escape", async () => {

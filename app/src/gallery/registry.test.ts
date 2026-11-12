@@ -1,53 +1,71 @@
-// Issue #317: the 27 screen sections ("Data viz", "Files", … "Command
-// palette") each rendered as a separate rail parent with a single child —
-// themselves — pushing every section below the fold. They fold into one
-// "Screens" parent with one child link per screen, in registry order.
+// The rail redesign: a row is a *section* (the scroll target), grouped into
+// the same Components / Extras / Screens families Compare uses. Demo-level
+// rows are gone — a section row carries its demo count instead, so the "11"
+// of "Component / Button 11" is still reachable without a row per demo.
 import { describe, expect, it } from "vitest";
 import { COMPONENT_ENTRIES } from "./components/index.ts";
-import { buildRailGroups } from "./registry.ts";
+import { buildRailGroups, EXTRA_SECTION_IDS } from "./registry.ts";
+import type { EntryOutline } from "./registry.ts";
 
-describe("buildRailGroups screens folding (issue #317)", () => {
-  it("folds every screen-* entry into exactly one Screens parent", () => {
+describe("buildRailGroups taxonomy", () => {
+  it("groups every section into Components / Extras / Screens, in that order", () => {
     const groups = buildRailGroups(COMPONENT_ENTRIES, {}, "");
-    const screens = groups.filter(([label]) => label === "Screens");
-    expect(screens).toHaveLength(1);
-    const ids = screens[0][1].map((c) => c.id);
-    expect(ids).toContain("screen-login");
-    expect(ids).toContain("screen-command");
-    // No other parent holds a screen section.
-    for (const [label, links] of groups) {
-      if (label === "Screens") continue;
-      for (const l of links) expect(l.id.startsWith("screen-")).toBe(false);
-    }
+    expect(groups.map(([label]) => label)).toEqual(["Components", "Extras", "Screens"]);
   });
 
-  it("keeps registry order with one child link per screen", () => {
+  it("splits the 12 non-screen sections 7 / 5 and keeps all 27 screens", () => {
     const groups = buildRailGroups(COMPONENT_ENTRIES, {}, "");
-    const screens = groups.find(([label]) => label === "Screens");
-    expect(screens).toBeTruthy();
-    const expected = COMPONENT_ENTRIES.filter((e) => e.id.startsWith("screen-")).map(
-      (e) => ({ id: e.id, label: e.label }),
-    );
-    expect(screens![1]).toEqual(expected);
+    const byLabel = new Map(groups);
+    expect(byLabel.get("Components")).toHaveLength(7);
+    expect(byLabel.get("Extras")).toHaveLength(5);
+    expect(byLabel.get("Screens")).toHaveLength(27);
+    // The extras family is exactly the shared EXTRA_SECTION_IDS set.
+    expect(new Set(byLabel.get("Extras")!.map((l) => l.id))).toEqual(EXTRA_SECTION_IDS);
   });
 
-  it("filters inside Screens on search, keeping only matching children", () => {
+  it("renders one row per section (12 + 27 = 39), never a row per demo", () => {
+    const groups = buildRailGroups(COMPONENT_ENTRIES, {}, "");
+    const ids = groups.flatMap(([, links]) => links.map((l) => l.id));
+    expect(ids).toHaveLength(39);
+    expect(new Set(ids).size).toBe(39);
+    for (const id of ids) expect(COMPONENT_ENTRIES.some((e) => e.id === id)).toBe(true);
+  });
+
+  it("carries a section's demo count as its row count; screens have none", () => {
+    const outline: EntryOutline = {
+      forms: [
+        { id: "forms-a", label: "A" },
+        { id: "forms-b", label: "B" },
+      ],
+    };
+    const groups = buildRailGroups(COMPONENT_ENTRIES, outline, "");
+    const components = new Map(groups).get("Components")!;
+    expect(components.find((l) => l.id === "forms")?.count).toBe(2);
+    const screens = new Map(groups).get("Screens")!;
+    expect(screens.every((l) => l.count === undefined)).toBe(true);
+  });
+
+  it("narrows to matching section rows and drops empty families", () => {
     const groups = buildRailGroups(COMPONENT_ENTRIES, {}, "log");
-    const screens = groups.find(([label]) => label === "Screens");
-    expect(screens).toBeTruthy();
-    const ids = screens![1].map((c) => c.id);
-    // "Login" and "Activity log" both match "log".
+    const labels = groups.map(([label]) => label);
+    // "Login" is a screen, "Activity log" too — Extras/Components drop out.
+    expect(labels).toEqual(["Screens"]);
+    const ids = groups[0][1].map((l) => l.id);
     expect(ids).toContain("screen-login");
     expect(ids).toContain("screen-activity");
-    for (const c of screens![1]) {
-      expect(c.label.toLocaleLowerCase("tr").includes("log")).toBe(true);
+    for (const [, links] of groups) {
+      for (const l of links) {
+        expect(l.label.toLocaleLowerCase("tr").includes("log")).toBe(true);
+      }
     }
   });
 
-  it("leaves non-screen entries as one parent per entry", () => {
-    const groups = buildRailGroups(COMPONENT_ENTRIES, {}, "");
-    const forms = groups.find(([label]) => label === "Forms");
-    expect(forms).toBeTruthy();
-    expect(forms![1]).toEqual([{ id: "forms", label: "Forms" }]);
+  it("matches section labels for non-screen families too", () => {
+    const groups = buildRailGroups(COMPONENT_ENTRIES, {}, "form");
+    const components = new Map(groups).get("Components")!;
+    const ids = components.map((l) => l.id);
+    expect(ids).toContain("forms");
+    expect(ids).toContain("form");
+    expect(new Map(groups).has("Screens")).toBe(false);
   });
 });

@@ -139,10 +139,8 @@ tr.is-diff td { background: color-mix(in srgb, var(--color-warning) 8%, transpar
 .cmp-diff-missing { color: var(--color-text-disabled); }
 
 /* ── rail: vertical system-picker chips ── */
-/* SectionSearch is topbar-sized (200px); the rail's content box is narrower,
-   so it must stretch to fit instead of overflowing the clip. */
+/* SectionSearch now lives in the rail frame and stretches to its width. */
 .cmp-rail-search { margin-bottom: var(--space-2); }
-.cmp-rail-search .app-topbar-search { width: 100%; }
 .cmp-rail-empty { margin: var(--space-2) var(--space-2) 0; font-size: var(--font-size-sm); color: var(--color-text-muted); }
 /* Issue #324: hint + filter live inside the Systems group, above the chip
    list. Tokens only — no literal sizes. */

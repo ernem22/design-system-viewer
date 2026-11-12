@@ -32,7 +32,7 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
 /* scroll-margin-top must clear the sticky topbar (--app-topbar-height, set
    on .app-shell in shell.css) or an anchor-scrolled heading lands partly
    underneath it. */
-.dsv-section { margin-bottom: var(--desktop-section-spacing); scroll-margin-top: calc(var(--app-topbar-height) + var(--space-4)); }
+.dsv-section { margin-bottom: var(--desktop-section-spacing); scroll-margin-top: var(--app-rail-landing-offset); }
 /* Section header row: title on the left, token-count badge on the right
    (same badge flow as .dsv-block-head, one level up — screens have no Demo
    blocks, so this is their inspector entry point). */
@@ -60,7 +60,7 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
    one lands its top flush with .app-main's edge — above the scrollspy band
    (lib/scrollspy.ts's rootMargin starts ~20% down the viewport) — so the
    link it just followed never shows as active. */
-.dsv-block { margin-bottom: var(--space-10); scroll-margin-top: calc(var(--app-topbar-height) + 96px); }
+.dsv-block { margin-bottom: var(--space-10); scroll-margin-top: var(--app-rail-landing-offset); }
 .dsv-block-head {
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
   margin: 0 0 var(--space-3); padding-bottom: var(--space-2);

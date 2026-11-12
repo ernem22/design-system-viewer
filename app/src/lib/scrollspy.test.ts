@@ -2,24 +2,26 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act, createElement } from "react";
 import type { Root } from "react-dom/client";
-import { useScrollSpy } from "./scrollspy.ts";
+import { useScrollSpy, DEFAULT_LANDING_OFFSET_PX } from "./scrollspy.ts";
 
 // useScrollSpy is a hook, so the suite mounts a tiny probe. happy-dom gives it
 // the scroller React's listeners attach to, and a fake geometry where "alpha"
-// sits on the activation line and "beta" is far below it -- so unpinning a
-// pin on "beta" is observably different from leaving it alone (it recomputes
-// to "alpha").
+// sits on the landing line and "beta" is far below it. There is no click pin
+// any more: the shared landing offset makes the scanned id and the clicked id
+// agree, so these assert the stateless geometry scan.
 
 interface ProbeApi {
   activeId: string | null;
-  pin: (id: string) => void;
+  enabled: boolean;
+  refresh: () => void;
 }
 
 let latest: ProbeApi | null = null;
+let enabled = true;
 
-function Probe() {
-  const [activeId, pin] = useScrollSpy(["alpha", "beta"]);
-  latest = { activeId, pin };
+function Probe({ ids }: { ids: string[] }) {
+  const [activeId, refresh] = useScrollSpy(ids, enabled);
+  latest = { activeId, enabled, refresh };
   return createElement("div");
 }
 
@@ -29,8 +31,6 @@ function current(): ProbeApi {
 }
 
 function stubTop(el: Element, top: number): void {
-  // happy-dom's default rects are all zeros; distinct tops make the
-  // activation-line scan pick a deterministic id per element.
   el.getBoundingClientRect = () =>
     ({
       top,
@@ -46,9 +46,15 @@ function stubTop(el: Element, top: number): void {
 }
 
 let root: Root | null = null;
+let host: HTMLElement | null = null;
+
+function flush(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
 
 beforeEach(async () => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  enabled = true;
   document.body.innerHTML = "";
 
   const scroller = document.createElement("div");
@@ -66,66 +72,66 @@ beforeEach(async () => {
   stubTop(beta, 500);
   document.body.appendChild(beta);
 
-  const host = document.createElement("div");
+  host = document.createElement("div");
   document.body.appendChild(host);
 
   const { createRoot } = await import("react-dom/client");
   root = createRoot(host);
   await act(async () => {
-    root!.render(createElement(Probe));
+    root!.render(createElement(Probe, { ids: ["alpha", "beta"] }));
   });
 });
 
 afterEach(() => {
   act(() => root?.unmount());
   root = null;
+  host?.remove();
+  host = null;
   latest = null;
   document.body.innerHTML = "";
 });
 
-function press(key: string, target: EventTarget = window): void {
-  act(() => {
-    target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
-  });
-}
-
-describe("useScrollSpy", () => {
-  it("keeps a click-pinned section while a letter key is typed", () => {
-    act(() => current().pin("beta"));
-    expect(current().activeId).toBe("beta");
-
-    press("x");
-
-    expect(current().activeId).toBe("beta");
-  });
-
-  it("keeps the pin when a scroll key is pressed inside a text input", () => {
-    act(() => current().pin("beta"));
-
-    const input = document.createElement("input");
-    document.body.appendChild(input);
-    press("ArrowDown", input);
-
-    expect(current().activeId).toBe("beta");
-  });
-
-  it("releases the pin on a scroll key pressed outside an editable target", () => {
-    act(() => current().pin("beta"));
-
-    press("ArrowDown");
-
+describe("useScrollSpy stateless scan", () => {
+  it("reports the section whose top has passed the landing line", () => {
     expect(current().activeId).toBe("alpha");
   });
 
-  it("releases the pin on a wheel event", () => {
-    act(() => current().pin("beta"));
-
-    act(() => {
-      document
-        .querySelector(".app-main")!
-        .dispatchEvent(new WheelEvent("wheel", { bubbles: true }));
+  it("follows geometry after a scroll tick", async () => {
+    const scroller = document.querySelector<HTMLElement>(".app-main")!;
+    scroller.scrollTop = 500;
+    await act(async () => {
+      scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+      await flush();
     });
+    expect(current().activeId).toBe("beta");
+  });
 
+  it("resolves the landing offset from the followed element's scroll-margin", () => {
+    // happy-dom resolves no cascade, so the fallback stands in for the token.
+    expect(DEFAULT_LANDING_OFFSET_PX).toBe(60);
+  });
+
+  it("returns null while disabled and resumes without a remount", async () => {
+    enabled = false;
+    act(() => root?.unmount());
+    const { createRoot } = await import("react-dom/client");
+    root = createRoot(host!);
+    await act(async () => {
+      root!.render(createElement(Probe, { ids: ["alpha", "beta"] }));
+    });
+    expect(current().activeId).toBeNull();
+
+    enabled = true;
+    await act(async () => {
+      root!.render(createElement(Probe, { ids: ["alpha", "beta"] }));
+    });
     expect(current().activeId).toBe("alpha");
+  });
+
+  it("returns null when none of the ids are in the DOM", async () => {
+    await act(async () => {
+      root!.render(createElement(Probe, { ids: ["missing"] }));
+    });
+    expect(current().activeId).toBeNull();
   });
 });
