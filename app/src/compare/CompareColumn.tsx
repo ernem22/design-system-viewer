@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import type { CSSProperties } from "react";
 import { CompareIdPrefixContext, InCompareContext, PortalContainerContext } from "../gallery/ui.tsx";
 import { REFERENCE_TOKEN_COUNT } from "../../../src/core/schema.js";
@@ -38,7 +38,11 @@ export function CompareColumn({
     <CompareIdPrefixContext.Provider value={`${slug}-`}>
       <InCompareContext.Provider value={true}>
         <div className="cmp-col-body" role="group" aria-label={`${name} preview`} tabIndex={0}>
-          <Render />
+          {/* Gallery section renderers are React.lazy (issue #328); a fixed
+              stand-in keeps the column from collapsing while its chunk loads. */}
+          <Suspense fallback={<div className="dsv-section-loading" aria-hidden="true" />}>
+            <Render />
+          </Suspense>
         </div>
       </InCompareContext.Provider>
     </CompareIdPrefixContext.Provider>

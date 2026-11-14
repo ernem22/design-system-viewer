@@ -147,6 +147,11 @@ bash tools/orchestration/needs.sh
 
 - `install-dispatcher.ps1` registers a Task Scheduler entry, `dsv-dispatcher`. It runs at logon and
   every 5 minutes. Remove it with `-Uninstall`.
+- The dispatcher checks that entry itself, at its first pass and hourly (`keepalive.sh --ensure`,
+  through PowerShell's `Get-ScheduledTask`), and runs `install-dispatcher.ps1` when it is gone
+  (`keepalive-reinstalled` / `keepalive-missing` events); a present entry logs nothing. Measured
+  2026-10-18: the old `schtasks //Query` check failed on its own arguments and reported a present
+  entry as missing. `-Uninstall` therefore holds only while no dispatcher runs.
 - The task runs `bootstrap.sh` from the state dir, a copy of `dispatcher-bootstrap.sh` kept outside
   every worktree. If the code tree is gone it re-creates it, detached at `origin/<base>`, then runs
   that tree's `launch-dispatcher.sh`. Measured 2026-10-04: the code tree vanished from git's worktree

@@ -34,10 +34,12 @@ else
   if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then echo "now alive: pid $PID"
   else echo "STILL NOT RUNNING"; TODO+=("dispatcher does not start: read $S/launcher.log and report it"); fi
 fi
-if command -v schtasks >/dev/null 2>&1; then
-  schtasks //Query //TN dsv-dispatcher >/dev/null 2>&1 && echo "keep-alive task: present" \
-    || { echo "keep-alive task: MISSING"; TODO+=("the dsv-dispatcher scheduled task is missing: report it (install-dispatcher.ps1)"); }
-fi
+KA="$(bash "$HERE/keepalive.sh" 2>/dev/null)"
+case "$KA" in
+  present) echo "keep-alive task: present" ;;
+  missing) echo "keep-alive task: MISSING (the dispatcher re-installs it within the hour; see keepalive-* events)"
+    TODO+=("the dsv-dispatcher scheduled task is missing: if no keepalive-reinstalled event follows within the hour, report the keepalive-missing event") ;;
+esac
 if [ -f "$S/dispatch.paused" ]; then echo "PAUSED since $(cat "$S/dispatch.paused")"; TODO+=("pipeline paused: check whether the reason still holds before dispatch.sh --resume")
 elif [ -f "$S/dispatch.enabled" ]; then echo "acting: yes"
 else echo "acting: NO (dispatch.enabled missing, no pause reason)"; TODO+=("dispatch.enabled is missing with no pause reason: report it, do not resume on your own")
@@ -49,13 +51,16 @@ FREE="$(df -Pm "$S" 2>/dev/null | awk 'NR==2{print $4}')"; echo "disk free on st
 grep -E 'memory: [0-9]+ MB free' "$S/dispatch.log" 2>/dev/null | tail -1
 
 echo "== models"
-for C in write readonly tester; do
-  M="$(node "$HERE_NATIVE/lib/jget.cjs" model < "$HERE/roles/$C.opencode.json" 2>/dev/null)"
+# every model a stage can run on (roles/models.txt), each probed once; the dispatcher skips a model
+# that showed a provider error by itself (models-down/), so a failing probe here is a report, not a switch
+for M in $(sed -n 's/^[a-z-]*:[[:space:]]*//p' "$HERE/roles/models.txt" 2>/dev/null | tr ' ' '\n' | grep . | awk '!seen[$0]++'); do
   if [ -n "$PROBE" ]; then
-    R="$(bash "$HERE/model-switch.sh" --probe "$M")" || TODO+=("$C model $M does not answer: decide model-switch.sh (see ORCHESTRATION.md)")
-    echo "$C: $R"
-  else echo "$C: $M"; fi
+    R="$(bash "$HERE/model-switch.sh" --probe "$M")" || TODO+=("model $M does not answer: report it (stages skip it only after a provider error)")
+    echo "  $R"
+  else echo "  $M"; fi
 done
+echo "stages:"; grep -E '^[a-z-]+:' "$HERE/roles/models.txt" 2>/dev/null | sed 's/^/  /'
+find "$S/models-down" -type f -mmin -"${MODEL_DOWN_MIN:-60}" 2>/dev/null | sed 's|.*/|  down now: |'
 
 echo "== work"
 echo "running: $(ls "$S/running" 2>/dev/null | wc -l | tr -d ' ')  queued: $(ls "$S/queue" 2>/dev/null | wc -l | tr -d ' ')"
