@@ -20,26 +20,32 @@ let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 let writeText: ReturnType<typeof vi.fn>;
 
-function Harness({ system, push }: { system: DesignSystem; push: PushToast }) {
+function Harness({
+  system,
+  push,
+  onPick,
+}: {
+  system: DesignSystem;
+  push: PushToast;
+  onPick?: (token: { name: string; value: string }) => void;
+}) {
   const view = useTokensView(system, push);
   return (
-    <SchemaView
-      view={view}
-      onPick={view.copyToken}
-      editingName={view.editingName}
-      onEdit={view.onEdit}
-      onSave={() => {}}
-    />
+    <SchemaView view={view} onPick={onPick ?? view.selectToken} />
   );
 }
 
-async function mount(system: DesignSystem, push: PushToast): Promise<HTMLDivElement> {
+async function mount(
+  system: DesignSystem,
+  push: PushToast,
+  onPick?: (token: { name: string; value: string }) => void,
+): Promise<HTMLDivElement> {
   const { createRoot } = await import("react-dom/client");
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => {
-    root!.render(<Harness system={system} push={push} />);
+    root!.render(<Harness system={system} push={push} onPick={onPick} />);
   });
   return host;
 }
@@ -72,23 +78,39 @@ afterEach(() => {
 });
 
 describe("SchemaView row clicks", () => {
-  it("copies `name: ;` when a missing row is clicked", async () => {
-    const el = await mount(system, vi.fn());
+  it("selects (does not copy) when a missing row is clicked", async () => {
+    const onPick = vi.fn();
+    const el = await mount(system, vi.fn(), onPick);
     const missing = el.querySelector('[data-token="--color-accent-hover"]');
     expect(missing).not.toBeNull();
 
     click(missing!);
 
-    expect(writeText).toHaveBeenCalledWith("--color-accent-hover: ;");
+    expect(onPick, "click selects the token").toHaveBeenCalledWith({
+      name: "--color-accent-hover",
+      value: "",
+    });
+    expect(writeText, "click must not copy").not.toHaveBeenCalled();
   });
 
-  it("still copies `name: value;` from a present row", async () => {
-    const el = await mount(system, vi.fn());
+  it("selects (does not copy) when a present row is clicked", async () => {
+    const onPick = vi.fn();
+    const el = await mount(system, vi.fn(), onPick);
     const present = el.querySelector('[data-token="--color-accent"]');
 
     click(present!);
 
-    expect(writeText).toHaveBeenCalledWith("--color-accent: #4f46e5;");
+    expect(onPick, "click selects the token").toHaveBeenCalledWith({
+      name: "--color-accent",
+      value: "#4f46e5",
+    });
+    expect(writeText, "click must not copy").not.toHaveBeenCalled();
+  });
+
+  it("has no inline Update/Add editor — every row only selects (inspector owns editing)", async () => {
+    const el = await mount(system, vi.fn());
+    expect(el.querySelector("table.tok-raw button"), "no per-row edit control").toBeNull();
+    expect(el.querySelector(".tok-update"), "the old popover trigger is gone").toBeNull();
   });
 });
 
@@ -102,7 +124,7 @@ describe("SchemaView row clicks", () => {
 // from the DOM declarations plus the stylesheet text (rows.type.test.tsx
 // precedent) — the browser Tester's ±1px measurement is the layout proof.
 describe("SchemaView shared column template", () => {
-  const expectedTracks = ["tok-schema-col-name", "tok-schema-col-value", "tok-schema-col-actions"];
+  const expectedTracks = ["tok-schema-col-name", "tok-schema-col-value"];
 
   it("declares the same colgroup in every schema table", async () => {
     const el = await mount(system, vi.fn());

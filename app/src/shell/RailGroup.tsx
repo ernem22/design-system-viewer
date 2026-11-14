@@ -68,6 +68,7 @@ export function RailGroup({
             type="button"
             className="app-rail-group-label"
             aria-expanded={open}
+            data-state={open ? "open" : "closed"}
             aria-controls={itemsId}
             tabIndex={headerTabIndex}
             data-rail-key={headerKey}

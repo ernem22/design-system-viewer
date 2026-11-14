@@ -29,7 +29,7 @@ export default function MarketingBody() {
           visualized
         </h3>
         <p className="dsv-lede" style={{ margin: "0 auto var(--space-6)", maxWidth: "var(--text-measure-md)" }}>
-          Paste tokens, get a gallery, a live preview and a diff. One link per view — light and dark.
+          Paste tokens, get a gallery, a live preview and a diff. One shareable link per view.
         </p>
         <div className="dsv-inline" style={{ justifyContent: "center", gap: "var(--space-3)", flexWrap: "wrap" }}>
           <Button size="lg" className="dsv-hero-cta">

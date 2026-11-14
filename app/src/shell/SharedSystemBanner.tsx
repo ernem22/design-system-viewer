@@ -23,19 +23,32 @@ export function SharedSystemBanner({
   onDismiss,
 }: SharedSystemBannerProps) {
   return (
-    <div className="app-shared-banner" role="status">
-      <span className="app-shared-banner-text">
-        Shared system: {name} · {tokenCount} token{tokenCount === 1 ? "" : "s"}
-        {dropped > 0 ? ` · ${dropped} dropped` : ""}
+    <div className="app-shared-banner">
+      <span className="app-shared-banner-text" role="status">
+        Shared system:{" "}
+        <span className="app-shared-banner-name">{name}</span>
+        {" · "}
+        {tokenCount} token{tokenCount === 1 ? "" : "s"}
+        {dropped > 0
+          ? ` · ${dropped} value${dropped === 1 ? "" : "s"} skipped (unsafe)`
+          : ""}
       </span>
       <span className="app-shared-banner-actions">
         <button type="button" className="app-shared-banner-btn" onClick={onOpen}>
-          Open
+          Open (not saved)
         </button>
-        <button type="button" className="app-shared-banner-btn" onClick={onAdd}>
+        <button
+          type="button"
+          className="app-shared-banner-btn app-shared-banner-btn--primary"
+          onClick={onAdd}
+        >
           Add to my systems
         </button>
-        <button type="button" className="app-shared-banner-btn" onClick={onDismiss}>
+        <button
+          type="button"
+          className="app-shared-banner-btn app-shared-banner-btn--secondary"
+          onClick={onDismiss}
+        >
           Dismiss
         </button>
       </span>

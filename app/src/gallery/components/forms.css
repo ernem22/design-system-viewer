@@ -47,7 +47,6 @@
   color: var(--color-on-accent); flex: none;
 }
 .dsv-check[data-state="checked"], .dsv-check[data-state="indeterminate"] { background: var(--color-accent); border-color: var(--color-accent); }
-.dsv-check[data-disabled] { opacity: 0.5; }
 .dsv-radio {
   width: var(--size-icon-md); height: var(--size-icon-md); border-radius: var(--radius-full);
   border: var(--border-width-thin) solid var(--color-border-strong);
@@ -62,13 +61,28 @@
   transition: background var(--duration-fast) var(--ease-out);
 }
 .dsv-switch[data-state="checked"] { background: var(--color-accent); }
-.dsv-switch[data-disabled] { opacity: 0.5; }
 .dsv-switch-thumb {
   display: block; width: 18px; height: 18px; border-radius: var(--radius-full);
   background: var(--color-on-accent); box-shadow: var(--shadow-sm);
   transform: translateX(2px); transition: transform var(--duration-fast) var(--ease-out);
 }
 .dsv-switch[data-state="checked"] .dsv-switch-thumb { transform: translateX(20px); }
+
+/* Disabled is a token state, not an opacity veil (same rule as .dsv-btn):
+   fade the whole control and its glyphs demote together and land under AA in
+   the dark variant. Place after the checked rules so a disabled checked
+   control still drops its accent fill. */
+.dsv-check[data-disabled],
+.dsv-radio[data-disabled],
+.dsv-switch[data-disabled] {
+  opacity: 1;
+  cursor: not-allowed;
+  background: var(--color-surface-disabled);
+  border-color: var(--color-border-disabled);
+  color: var(--color-icon-disabled);
+}
+.dsv-radio[data-disabled] .dsv-radio-indicator::after { background: var(--color-icon-disabled); }
+.dsv-switch[data-disabled] .dsv-switch-thumb { background: var(--color-surface); }
 
 .dsv-slider { position: relative; display: flex; align-items: center; width: min(200px, 100%); height: var(--size-control-md); touch-action: none; user-select: none; flex: none; }
 .dsv-slider-track { position: relative; flex-grow: 1; background: var(--color-surface-sunken); border-radius: var(--radius-full); height: 4px; }
@@ -86,10 +100,21 @@
   background: var(--color-surface); color: var(--color-input-text);
   border: var(--input-border-width) solid var(--color-border); border-radius: var(--input-radius); cursor: pointer;
 }
+.dsv-select-trigger:hover:not([data-disabled]) { background: var(--color-hover-overlay); border-color: var(--color-border-strong); }
+.dsv-select-trigger[data-state="open"] { background: var(--color-hover-overlay); border-color: var(--color-accent-border); }
+.dsv-select-trigger[data-disabled] {
+  cursor: not-allowed;
+  background: var(--color-surface-disabled);
+  color: var(--color-text-muted);
+  border-color: var(--color-border-disabled);
+}
 .dsv-select-content {
   background: var(--color-surface-raised); border: var(--border-width-thin) solid var(--color-border-subtle);
   border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); padding: var(--space-1-5);
   z-index: var(--z-popover);
+  /* Popper positioning otherwise sizes the panel to its content, so a short
+     option list renders narrower than the trigger it belongs to. */
+  min-width: var(--radix-select-trigger-width);
 }
 .dsv-select-item {
   display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm);
@@ -101,3 +126,13 @@
 .dsv-select-item[data-state="checked"] { color: var(--color-text); font-weight: var(--font-weight-medium); }
 .dsv-select-item-indicator { position: absolute; left: var(--space-2); display: inline-flex; }
 .dsv-select-label { padding: var(--space-1-5) var(--space-2); font-size: var(--font-size-xs); color: var(--color-text-muted); }
+
+/* Shared token focus ring for the form primitives. */
+.dsv-check:focus-visible,
+.dsv-radio:focus-visible,
+.dsv-switch:focus-visible,
+.dsv-slider-thumb:focus-visible,
+.dsv-select-trigger:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}

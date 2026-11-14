@@ -478,6 +478,22 @@
   --app-font-size-xs: max(0.75rem, var(--font-size-xs));
   --app-font-size-sm: max(0.875rem, var(--font-size-sm));
   --app-font-size-base: max(1rem, var(--font-size-base));
+  --app-heading-section: max(1.5rem, var(--heading-section));
+
+  /* Viewer chrome error fallback (private, issue T13). The fallback renders
+     after a shell crash that the inspected system may itself have caused, so
+     it cannot read the themed --color-* names it is recovering from. Fixed
+     literals, like the motion tokens above. */
+  --app-error-bg: #f6f7f9;
+  --app-error-surface: #ffffff;
+  --app-error-border: #d8dbe0;
+  --app-error-text: #1a1d21;
+  --app-error-text-secondary: #4b5563;
+  --app-error-details-bg: #eceef1;
+  --app-error-danger: #b91c1c;
+  --app-error-button-bg: #1a1d21;
+  --app-error-button-text: #ffffff;
+  --app-error-focus: #4f46e5;
 
   /* Motion Blur */
   --motion-blur-enter: 8px;

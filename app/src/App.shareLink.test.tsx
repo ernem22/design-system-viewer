@@ -113,7 +113,7 @@ describe("shared-system link (issue #337)", () => {
     const el = await mountApp();
     const banner = await waitForBanner(el);
     expect(banner).not.toBeNull();
-    await clickButton(banner!, "Open");
+    await clickButton(banner!, "Open (not saved)");
 
     // The Tokens tab shows the three shared tokens, from the session system.
     expect(el.querySelector('[data-token="--shr-one"]')).not.toBeNull();
@@ -159,7 +159,7 @@ describe("shared-system link (issue #337)", () => {
     const el = await mountApp();
     const banner = await waitForBanner(el);
     expect(banner).not.toBeNull();
-    expect(banner!.textContent).toContain("1 dropped");
+    expect(banner!.textContent).toContain("1 value skipped (unsafe)");
     expect(el.querySelector('[data-token="--shr-x"]')).toBeNull();
   });
 });

@@ -108,6 +108,11 @@ describe("token architecture: primitive → semantic aliasing (issue #128)", () 
     const offenders: string[] = [];
     for (const [name, declared] of tokens) {
       if (isPrimitive(name)) continue;
+      // Viewer-private --app-* tokens are deliberately literals (like
+      // --app-duration-*): the inspected system overwrites the themed tokens
+      // inline, so the chrome fallback must not alias them. They are not part
+      // of the themed tier hierarchy this rule protects.
+      if (name.startsWith("--app-")) continue;
       if (/^#[0-9a-fA-F]{6}$/.test(declared) && primitives.has(declared.toLowerCase()))
         offenders.push(`${name}: ${declared}`);
     }

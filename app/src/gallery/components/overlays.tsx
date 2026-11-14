@@ -5,7 +5,7 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as HoverCard from "@radix-ui/react-hover-card";
 import * as Popover from "@radix-ui/react-popover";
 import * as Tooltip from "@radix-ui/react-tooltip";
-import { Button, Demo, Field, usePortalContainer } from "../ui.tsx";
+import { Button, Demo, Field, useCompareIdPrefix, usePortalContainer } from "../ui.tsx";
 import { Icon } from "../../lib/icons.tsx";
 import "./overlays.css";
 
@@ -22,6 +22,7 @@ const MEGA_MENU: MegaMenuGroup[] = [
 
 export default function OverlaysBody() {
   const portalContainer = usePortalContainer();
+  const id = useCompareIdPrefix();
   return (
     <>
       <Demo title="Dialog">
@@ -39,11 +40,11 @@ export default function OverlaysBody() {
                 <p>Changes apply after saving.</p>
               </Dialog.Description>
               <div className="dsv-stack">
-                <Field label="Name" id="d-name">
-                  <input id="d-name" className="dsv-input" defaultValue="Ada Lovelace" />
+                <Field label="Name" id={`${id}d-name`}>
+                  <input id={`${id}d-name`} className="dsv-input" defaultValue="Ada Lovelace" />
                 </Field>
-                <Field label="Username" id="d-user">
-                  <input id="d-user" className="dsv-input" defaultValue="@ada" />
+                <Field label="Username" id={`${id}d-user`}>
+                  <input id={`${id}d-user`} className="dsv-input" defaultValue="@ada" />
                 </Field>
               </div>
               <div className="dsv-modal-actions dsv-modal-actions--spaced">
@@ -97,14 +98,18 @@ export default function OverlaysBody() {
             <Button variant="outline">Size settings</Button>
           </Popover.Trigger>
           <Popover.Portal container={portalContainer}>
-            <Popover.Content className="dsv-pop" sideOffset={6}>
+            <Popover.Content
+              className="dsv-pop"
+              sideOffset={6}
+              aria-labelledby={`${id}pop-title`}
+            >
               <div className="dsv-stack">
-                <strong className="dsv-pop-heading">Dimensions</strong>
-                <Field label="Width" id="p-w">
-                  <input id="p-w" className="dsv-input" defaultValue="240px" />
+                <h4 className="dsv-pop-heading" id={`${id}pop-title`}>Dimensions</h4>
+                <Field label="Width" id={`${id}p-w`}>
+                  <input id={`${id}p-w`} className="dsv-input" defaultValue="240px" />
                 </Field>
-                <Field label="Height" id="p-h">
-                  <input id="p-h" className="dsv-input" defaultValue="auto" />
+                <Field label="Height" id={`${id}p-h`}>
+                  <input id={`${id}p-h`} className="dsv-input" defaultValue="auto" />
                 </Field>
               </div>
               <Popover.Arrow className="dsv-pop-arrow" />
@@ -123,7 +128,7 @@ export default function OverlaysBody() {
             </Tooltip.Trigger>
             <Tooltip.Portal container={portalContainer}>
               <Tooltip.Content className="dsv-tooltip" sideOffset={6}>
-                Notifications
+                View notifications
                 <Tooltip.Arrow className="dsv-tooltip-arrow" />
               </Tooltip.Content>
             </Tooltip.Portal>
@@ -141,8 +146,9 @@ export default function OverlaysBody() {
           <DropdownMenu.Portal container={portalContainer}>
             <DropdownMenu.Content className="dsv-menu" sideOffset={6} align="start">
               <DropdownMenu.Label className="dsv-menu-label">Account</DropdownMenu.Label>
-              <DropdownMenu.Item className="dsv-menu-item">
-                <Icon name="user" size={14} /> Profile <span className="dsv-menu-shortcut">⌘P</span>
+              <DropdownMenu.Item className="dsv-menu-item" aria-keyshortcuts="Meta+P">
+                <Icon name="user" size={14} /> Profile{" "}
+                <span className="dsv-menu-shortcut" aria-hidden="true">⌘P</span>
               </DropdownMenu.Item>
               <DropdownMenu.Item className="dsv-menu-item">
                 <Icon name="settings" size={14} /> Settings
@@ -153,16 +159,25 @@ export default function OverlaysBody() {
                 </DropdownMenu.SubTrigger>
                 <DropdownMenu.Portal container={portalContainer}>
                   <DropdownMenu.SubContent className="dsv-menu" sideOffset={2} alignOffset={-4}>
-                    <DropdownMenu.Item className="dsv-menu-item">Light</DropdownMenu.Item>
-                    <DropdownMenu.Item className="dsv-menu-item">Dark</DropdownMenu.Item>
-                    <DropdownMenu.Item className="dsv-menu-item">System</DropdownMenu.Item>
+                    <DropdownMenu.RadioGroup defaultValue="system">
+                      {["Light", "Dark", "System"].map((theme) => (
+                        <DropdownMenu.RadioItem
+                          key={theme}
+                          value={theme.toLowerCase()}
+                          className="dsv-menu-item dsv-menu-check"
+                        >
+                          <DropdownMenu.ItemIndicator className="dsv-menu-item-indicator">
+                            <Icon name="check" size={14} />
+                          </DropdownMenu.ItemIndicator>
+                          {theme}
+                        </DropdownMenu.RadioItem>
+                      ))}
+                    </DropdownMenu.RadioGroup>
                   </DropdownMenu.SubContent>
                 </DropdownMenu.Portal>
               </DropdownMenu.Sub>
               <DropdownMenu.Separator className="dsv-menu-sep" />
-              <DropdownMenu.Item className="dsv-menu-item dsv-menu-item--danger">
-                <Icon name="trash" size={14} /> Sign out
-              </DropdownMenu.Item>
+              <DropdownMenu.Item className="dsv-menu-item">Sign out</DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
@@ -171,15 +186,22 @@ export default function OverlaysBody() {
       <Demo title="Context Menu (right-click)">
         <ContextMenu.Root>
           <ContextMenu.Trigger asChild>
-            <button type="button" className="dsv-card dsv-card--dashed" style={{ font: "inherit", color: "inherit" }}>Right-click here</button>
+            <button
+              type="button"
+              className="dsv-card dsv-card--dashed dsv-context-trigger"
+              aria-haspopup="menu"
+              aria-label="Open the canvas context menu"
+            >
+              Right-click here
+            </button>
           </ContextMenu.Trigger>
           <ContextMenu.Portal container={portalContainer}>
             <ContextMenu.Content className="dsv-menu">
-              <ContextMenu.Item className="dsv-menu-item">
-                Undo <span className="dsv-menu-shortcut">⌘Z</span>
+              <ContextMenu.Item className="dsv-menu-item" aria-keyshortcuts="Meta+Z">
+                Undo <span className="dsv-menu-shortcut" aria-hidden="true">⌘Z</span>
               </ContextMenu.Item>
-              <ContextMenu.Item className="dsv-menu-item">
-                Redo <span className="dsv-menu-shortcut">⇧⌘Z</span>
+              <ContextMenu.Item className="dsv-menu-item" aria-keyshortcuts="Meta+Shift+Z">
+                Redo <span className="dsv-menu-shortcut" aria-hidden="true">⇧⌘Z</span>
               </ContextMenu.Item>
               <ContextMenu.Separator className="dsv-menu-sep" />
               <ContextMenu.CheckboxItem className="dsv-menu-item dsv-menu-check" defaultChecked>
@@ -198,9 +220,9 @@ export default function OverlaysBody() {
       <Demo title="Hover Card">
         <HoverCard.Root openDelay={150}>
           <HoverCard.Trigger asChild>
-            <a className="dsv-link" href="#overlays">
+            <button type="button" className="dsv-link dsv-hovercard-trigger">
               @ada
-            </a>
+            </button>
           </HoverCard.Trigger>
           <HoverCard.Portal container={portalContainer}>
             <HoverCard.Content className="dsv-pop" sideOffset={6}>
@@ -225,7 +247,11 @@ export default function OverlaysBody() {
             <Button variant="outline">Mega menu</Button>
           </Popover.Trigger>
           <Popover.Portal container={portalContainer}>
-            <Popover.Content className="dsv-pop dsv-pop--lg" sideOffset={6}>
+            <Popover.Content
+              className="dsv-pop dsv-pop--lg"
+              sideOffset={6}
+              aria-label="Product menu"
+            >
               <div className="dsv-mega-menu-grid">
                 {MEGA_MENU.map((group) => (
                   <div key={group.heading}>

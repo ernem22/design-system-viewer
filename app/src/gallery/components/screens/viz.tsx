@@ -9,12 +9,19 @@ export default function VizBody() {
     <div className="dsv-stack">
       <div className="dsv-inline" style={{ justifyContent: "space-between" }}>
         <h3 style={{ margin: 0, fontSize: "var(--font-size-lg)" }}>Channel mix</h3>
-        <span className="dsv-chart-tip">Q2 · all channels</span>
+        <span className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>
+          Q2 · all channels
+        </span>
       </div>
       <div className="dsv-card">
         <div
           className="dsv-inline"
-          style={{ alignItems: "flex-end", gap: "var(--space-2)", height: 150 }}
+          style={{
+            alignItems: "flex-end",
+            gap: "var(--space-2)",
+            height: 150,
+            borderBottom: "var(--border-width-thick) solid var(--color-chart-axis)",
+          }}
           role="img"
           aria-label={`Channel mix: ${CHANNELS.map((c, i) => `${c} ${BARS[i]}%`).join(", ")}`}
         >
@@ -32,8 +39,6 @@ export default function VizBody() {
             />
           ))}
         </div>
-        <div className="dsv-chart-grid" style={{ height: "var(--space-5)" }} />
-        <div className="dsv-chart-axis" />
         <div className="dsv-inline" style={{ gap: "var(--space-3)", marginTop: "var(--space-3)", flexWrap: "wrap" }}>
           {CHANNELS.map((l, i) => (
             <span key={l} className="dsv-inline" style={{ fontSize: "var(--font-size-xs)" }}>
@@ -46,6 +51,9 @@ export default function VizBody() {
                 }}
               />
               {l}
+              <span className="dsv-muted" style={{ fontVariantNumeric: "tabular-nums" }}>
+                {BARS[i]}%
+              </span>
             </span>
           ))}
         </div>

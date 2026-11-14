@@ -127,7 +127,7 @@ describe("Compare a11y (#222)", () => {
     for (const code of codes) expect(code.getAttribute("spellcheck")).toBe("false");
   });
 
-  it("announces the selection count through a live region", async () => {
+  it("names the comparison identity and reference in the content header", async () => {
     const el = await renderNode(
       <Harness
         systems={[
@@ -136,9 +136,15 @@ describe("Compare a11y (#222)", () => {
         ]}
       />,
     );
-    const hint = el.querySelector(".cmp-hint")!;
-    expect(hint.textContent).toContain("selected");
-    expect(hint.getAttribute("aria-live")).toBe("polite");
+    const title = el.querySelector(".cmp-title")!;
+    expect(title.textContent).toContain("Comparing:");
+    expect(title.textContent).toContain("Button");
+    const meta = el.querySelector(".cmp-meta")!;
+    expect(meta.textContent).toContain("Reference: a");
+    // One count in the content header; the n/4 selection count lives in the rail.
+    expect(meta.querySelectorAll(".cmp-meta-count")).toHaveLength(1);
+    expect(meta.textContent).toContain("2 systems");
+    expect(el.querySelector(".cmp-hint")).toBeNull();
   });
 
   it("hides the decorative column swatch from assistive tech", async () => {

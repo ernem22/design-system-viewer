@@ -28,14 +28,15 @@
 
 .tok-row[aria-selected="true"] {
   background: var(--color-accent-subtle);
-  outline: 1px solid var(--color-accent-border);
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .tok-row-name {
   min-width: 0;
   font-family: var(--font-mono);
   font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-sm);
+  font-size: var(--app-font-size-sm);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -44,7 +45,7 @@
 /* The one value treatment: muted in a demo row and in a flat row alike. */
 .tok-row-value {
   min-width: 0;
-  font-size: var(--font-size-sm);
+  font-size: var(--app-font-size-sm);
   color: var(--color-text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -53,7 +54,7 @@
 
 .tok-ref {
   color: var(--color-accent-text);
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   font-weight: var(--font-weight-semibold);
   white-space: nowrap;
 }
@@ -84,8 +85,9 @@
 }
 
 .tok-swatch[aria-selected="true"] {
-  border-color: var(--color-accent-border);
-  outline: 1px solid var(--color-accent-border);
+  border-color: var(--color-focus-ring);
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .tok-chip {
@@ -98,7 +100,7 @@
 
 .tok-swatch-name {
   font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -109,7 +111,7 @@
 }
 
 .tok-swatch-value {
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   color: var(--color-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -154,7 +156,8 @@
 }
 
 .tok-ramp-cell[aria-selected="true"] {
-  outline: var(--border-width-medium) solid var(--color-accent-border);
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .tok-ramp-cell[aria-selected="true"] .tok-ramp-meta {
@@ -178,7 +181,7 @@
 
 .tok-ramp-step {
   font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text);
   white-space: nowrap;
@@ -187,7 +190,7 @@
 }
 
 .tok-ramp-value {
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   color: var(--color-text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -195,7 +198,7 @@
 }
 
 .tok-ramp-ratio {
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   font-variant-numeric: tabular-nums;
   color: var(--color-text-muted);
   white-space: nowrap;
@@ -271,9 +274,9 @@
    --space-16 by --space-12 inside a padded stage with room for a 72px blur
    to spread without the row clipping it (the stage never scrolls, so
    scrollWidth === clientWidth). The stage ground flips between the page and
-   the inverse surface via the group-level toggle; on the light stage the
-   card matches the stage so a dark shadow reads. Every ink and size resolves
-   from the token layer — no literals. */
+   the inverse surface via the group-level toggle; on the inverse (dark in
+   the light theme) stage the card matches the stage so a light shadow reads.
+   Every ink and size resolves from the token layer — no literals. */
 .tok-shadowgroup {
   display: flex;
   flex-direction: column;
@@ -286,8 +289,13 @@
   gap: var(--space-2);
 }
 
+.tok-shadowcaption {
+  font-size: var(--app-font-size-xs);
+  color: var(--color-text-muted);
+}
+
 .tok-shadowtoggle button {
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-full);
   border: 1px solid var(--color-border);
@@ -300,6 +308,11 @@
   background: var(--color-accent-subtle);
   color: var(--color-accent-text);
   border-color: var(--color-accent-border);
+}
+
+.tok-shadowtoggle button:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .tok-shadowstage {
@@ -315,7 +328,7 @@
   overflow: visible;
 }
 
-.tok-shadowstage[data-stage="light"] {
+.tok-shadowstage[data-stage="inverse"] {
   background: var(--color-surface-inverse);
 }
 
@@ -328,7 +341,7 @@
   background: var(--color-surface-raised);
 }
 
-.tok-shadowstage[data-stage="light"] .tok-shadowcard {
+.tok-shadowstage[data-stage="inverse"] .tok-shadowcard {
   background: var(--color-surface-inverse);
 }
 
@@ -395,7 +408,7 @@
 
 .tok-typeresolved {
   display: block;
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -412,19 +425,20 @@
 
 .tok-num {
   font-family: var(--font-mono);
-  font-size: var(--font-size-sm);
+  font-size: var(--app-font-size-sm);
   font-variant-numeric: tabular-nums;
   background: var(--color-surface-raised);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
 }
 
-/* Keyboard focus must be visible without changing the resting look:
-   reuse the selected accent outline for rows, swatches and schema rows. */
+/* Keyboard focus must be visible without changing the resting look: the
+   shared focus ring (not the accent border, which is too low-contrast on the
+   row surface) for rows, swatches, ramp cells and schema rows. */
 .tok-row:focus-visible,
 .tok-swatch:focus-visible,
 .tok-ramp-cell:focus-visible,
 .tok-raw tr[data-token]:focus-visible {
-  outline: 2px solid var(--color-accent-border);
-  outline-offset: 1px;
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }

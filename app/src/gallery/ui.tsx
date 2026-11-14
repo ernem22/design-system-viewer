@@ -7,8 +7,18 @@
 // tokens from the Body source scan) — screen entries render a whole Body
 // with no <Demo> blocks, so the section badge is their only inspector
 // entry point.
-import { createContext, forwardRef, useContext, useState } from "react";
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import {
+  Children,
+  Fragment,
+  cloneElement,
+  createContext,
+  forwardRef,
+  isValidElement,
+  useContext,
+  useId,
+  useState,
+} from "react";
+import type { ButtonHTMLAttributes, ReactElement, ReactNode } from "react";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import type { GalleryEntry } from "./registry.ts";
 import { slugify } from "../lib/slug.ts";
@@ -68,11 +78,35 @@ export interface FieldProps {
   label?: ReactNode;
   hint?: ReactNode;
   error?: ReactNode;
+  /** Invalid styling state; defaults to whether `error` is present. */
+  invalid?: boolean;
   id?: string;
   children: ReactNode;
 }
 
-export function Field({ label, hint, error, id, children }: FieldProps) {
+export function Field({ label, hint, error, invalid, id, children }: FieldProps) {
+  // The hint/error text needs an id so the control can reference it. Derive it
+  // from the field id when present (readable, and Compare's per-column prefix
+  // flows through for free), otherwise fall back to a stable generated id.
+  const generatedId = useId();
+  const messageId = id ? `${id}-msg` : `dsv-field-${generatedId}-msg`;
+  const hasMessage = Boolean(error) || Boolean(hint);
+  const isInvalid = invalid ?? Boolean(error);
+
+  // Clone a single element child so the control itself carries the
+  // association. Composite children (e.g. an input-wrap div) are left
+  // untouched rather than crashing or putting ARIA on the wrong node.
+  let control = children;
+  if (Children.count(children) === 1 && isValidElement(children) && children.type !== Fragment) {
+    const child = children as ReactElement<Record<string, unknown>>;
+    const existing = child.props["aria-describedby"];
+    const describedBy = [existing, hasMessage ? messageId : null].filter(Boolean).join(" ");
+    control = cloneElement(child, {
+      ...(describedBy ? { "aria-describedby": describedBy } : {}),
+      ...(isInvalid ? { "aria-invalid": true } : {}),
+    });
+  }
+
   return (
     <div className="dsv-field">
       {label && (
@@ -80,11 +114,15 @@ export function Field({ label, hint, error, id, children }: FieldProps) {
           {label}
         </label>
       )}
-      {children}
+      {control}
       {error ? (
-        <span className="dsv-hint dsv-hint--err">{error}</span>
+        <span className="dsv-hint dsv-hint--err" id={messageId} role="alert">
+          {error}
+        </span>
       ) : hint ? (
-        <span className="dsv-hint">{hint}</span>
+        <span className="dsv-hint" id={messageId}>
+          {hint}
+        </span>
       ) : null}
     </div>
   );

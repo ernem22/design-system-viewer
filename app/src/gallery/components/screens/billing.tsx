@@ -19,12 +19,12 @@ const dueStamp = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeri
 
 export default function BillingBody() {
   return (
-    <div style={{ maxWidth: 560, margin: "0 auto" }}>
+    <div className="dsv-card" style={{ maxWidth: 560, margin: "0 auto" }}>
       <div
         className="dsv-screen-subnav dsv-inline"
         style={{ padding: "var(--space-2) var(--space-3)", marginBottom: "var(--space-4)", borderRadius: "var(--radius-md)" }}
       >
-        <strong style={{ fontSize: "var(--font-size-sm)" }}>INV-2026-041</strong>
+        <h3 style={{ margin: 0, fontSize: "var(--font-size-sm)" }}>INV-2026-041</h3>
         <span className="dsv-badge dsv-badge--warning">Due {dueStamp}</span>
         <span style={{ flex: 1 }} />
         <Button size="sm" variant="ghost">

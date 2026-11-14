@@ -1,6 +1,7 @@
+import { useRef, useState } from "react";
 import * as Progress from "@radix-ui/react-progress";
+import { Button, useCompareIdPrefix } from "../../ui.tsx";
 import { Icon } from "../../../lib/icons.tsx";
-import { ScreenLink } from "./screenBits.tsx";
 import "./screens.css";
 
 const FILES: [string, string, number][] = [
@@ -10,9 +11,22 @@ const FILES: [string, string, number][] = [
 ];
 
 export default function UploadBody() {
+  const id = useCompareIdPrefix();
+  const [files, setFiles] = useState(FILES);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const inputId = `${id}upload-file`;
+
   return (
     <div style={{ maxWidth: 520, margin: "0 auto" }}>
       <div className="dsv-card">
+        <input
+          ref={inputRef}
+          id={inputId}
+          type="file"
+          multiple
+          aria-label="Choose files to upload"
+          hidden
+        />
         <div
           style={{
             border: "var(--border-width-thick) dashed var(--color-border-strong)",
@@ -37,12 +51,15 @@ export default function UploadBody() {
           >
             <Icon name="plus" size={20} />
           </span>
-          <div style={{ fontSize: "var(--font-size-sm)" }}>
-            Drag files here or <ScreenLink to="#screen-upload">browse</ScreenLink>
+          <div style={{ fontSize: "var(--font-size-sm)", marginBottom: "var(--space-3)" }}>
+            Drag files here or choose them below.
           </div>
+          <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
+            Browse files
+          </Button>
         </div>
         <div className="dsv-stack" style={{ marginTop: "var(--space-4)", gap: "var(--space-3)" }}>
-          {FILES.map(([name, size, pct]) => (
+          {files.map(([name, size, pct]) => (
             <div key={name}>
               <div
                 className="dsv-inline"
@@ -51,8 +68,20 @@ export default function UploadBody() {
                 <span className="dsv-inline">
                   <Icon name="file" size={14} /> {name}
                 </span>
-                <span className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>
-                  {pct === 100 ? size : `${pct}%`}
+                <span className="dsv-inline" style={{ gap: "var(--space-2)" }}>
+                  <span className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>
+                    {pct === 100 ? size : `${pct}%`}
+                  </span>
+                  {pct < 100 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setFiles((prev) => prev.filter(([n]) => n !== name))}
+                      aria-label={`Cancel upload of ${name}`}
+                    >
+                      Cancel
+                    </Button>
+                  )}
                 </span>
               </div>
               <Progress.Root
@@ -64,7 +93,7 @@ export default function UploadBody() {
                 <Progress.Indicator
                   className="dsv-progress-indicator"
                   style={{
-                    width: `${pct}%`,
+                    transform: `scaleX(${pct / 100})`,
                     background: pct === 100 ? "var(--color-success)" : "var(--color-accent)",
                   }}
                 />

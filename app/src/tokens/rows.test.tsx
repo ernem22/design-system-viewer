@@ -20,14 +20,7 @@ async function renderRow(name: string, value: string): Promise<HTMLDivElement> {
   root = createRoot(host);
   await act(async () => {
     root!.render(
-      <OpacityRow
-        tokens={[{ name, value }]}
-        selectedName={null}
-        onPick={() => {}}
-        editingName={null}
-        onEdit={() => {}}
-        onSave={() => {}}
-      />,
+      <OpacityRow tokens={[{ name, value }]} selectedName={null} onPick={() => {}} />,
     );
   });
   return host;

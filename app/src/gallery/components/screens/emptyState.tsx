@@ -6,9 +6,7 @@ export default function EmptyStateBody() {
   return (
     <div style={{ maxWidth: 520, margin: "0 auto" }}>
       <div className="dsv-breadcrumb" style={{ marginBottom: "var(--space-4)" }}>
-        <a className="dsv-link" href="#screen-empty" style={{ textDecoration: "none" }}>
-          Workspace
-        </a>
+        <span>Workspace</span>
         <Icon name="chevronRight" size={12} />
         <span aria-current="page">Projects</span>
       </div>

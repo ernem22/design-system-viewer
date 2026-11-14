@@ -48,9 +48,9 @@ describe("compare columns wrap instead of overflowing (issue #322)", () => {
     expect(scrollers).toEqual([]);
   });
 
-  it("keeps the 240px column minimum", () => {
+  it("keeps the 340px column minimum", () => {
     const cols = declarationsFor(".cmp-cols").join("\n");
-    expect(cols).toMatch(/minmax\([^;]*240px/);
+    expect(cols).toMatch(/minmax\([^;]*340px/);
   });
 
   it("never uses overflow: hidden on a compare layout container", () => {

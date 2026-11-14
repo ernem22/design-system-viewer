@@ -1,0 +1,593 @@
+/* Switcher + Add-system row in the topbar (SystemSwitcher owns no css file of
+   its own, so the wrapper lives here next to the import sheet). */
+.app-syswrap {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.app-syswrap .tok-btn {
+  height: var(--space-8);
+  flex: none;
+}
+
+/* ── Import sheet ────────────────────────────────────────────────────────
+   One calm surface for both "Add a system" and "Add tokens". Fixed head and
+   foot, a single scrolling body, one primary action. Two classes on purpose:
+   `.tok-dialog` owns the base frame, this file owns the sheet's proportions. */
+.tok-dialog.app-import-sheet {
+  width: min(calc(var(--container-max-width-md) - var(--space-12)), 94vw);
+  height: auto;
+  max-height: 90vh;
+  padding: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: clip;
+}
+
+.app-import-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border-bottom: var(--border-width-thin) solid var(--color-border-subtle);
+}
+
+.app-import-headtext {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.app-import-title {
+  margin: 0;
+  font-size: var(--app-font-size-base);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+
+.app-import-sub {
+  margin: 0;
+  font-size: var(--app-font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.app-import-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  margin-left: auto;
+  width: var(--space-7);
+  height: var(--space-7);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.app-import-close:hover {
+  background: var(--color-hover-overlay);
+  color: var(--color-text);
+}
+
+.app-import-close:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.app-import-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-height: 0;
+  padding: var(--space-5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ── Editor: paste-first, with a quiet source line ─────────────────────── */
+.app-import-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.app-import-sourcebar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.app-import-sourcelabel {
+  margin-right: var(--space-1);
+  font-size: var(--app-font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.app-import-sourcebtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--space-6);
+  padding: 0 var(--space-2);
+  border: var(--border-width-thin) solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--app-font-size-xs);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.app-import-sourcebtn:hover {
+  background: var(--color-hover-overlay);
+  color: var(--color-text);
+}
+
+.app-import-sourcebtn[aria-expanded="true"] {
+  color: var(--color-text);
+  background: var(--color-accent-subtle);
+  border-color: var(--color-accent-border);
+}
+
+.app-import-sourcebtn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.app-import-source {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: var(--app-font-size-xs);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.app-import-source b {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.app-import-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+
+.app-import-inline .tok-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.app-import-inline-json .tok-textarea {
+  flex: 1 1 100%;
+  min-height: var(--space-40);
+}
+
+/* Flexible, content-sized paste box: never the whole sheet, never clipped.
+   The min keeps a comfortable editing surface when empty; the max stops a
+   large paste from pushing the summary and footer out of view. */
+.app-import-textarea {
+  width: 100%;
+  min-height: var(--space-28);
+  max-height: var(--space-64);
+  padding: var(--space-3);
+  border: var(--border-width-thin) solid var(--color-input-border);
+  border-radius: var(--radius-md);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font-family: var(--font-mono);
+  font-size: var(--app-font-size-xs);
+  line-height: var(--line-height-normal);
+  resize: vertical;
+}
+
+.app-import-textarea::placeholder {
+  color: var(--color-input-placeholder);
+}
+
+.app-import-textarea:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.app-import-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Live summary strip: a quiet, contained read of what the buffer will do.
+   CssPreview owns the wording; this file only frames it as one secondary row. */
+.app-import-editor .tok-dialog-preview {
+  margin: 0;
+  padding: var(--space-3);
+  border: var(--border-width-thin) solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  font-size: var(--app-font-size-xs);
+}
+
+.app-import-editor .tok-dialog-preview .tok-dialog-meta {
+  font-size: var(--app-font-size-xs);
+}
+
+.app-import-editor .tok-dialog-preview code {
+  font-size: var(--app-font-size-xs);
+}
+
+/* Empty state: one calm hint and a single first-token example, not a big
+   blank panel. It names the shape of a valid line without teaching a tutorial. */
+.app-import-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-3);
+  border: var(--border-width-thin) dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.app-import-emptyhint {
+  margin: 0;
+  font-size: var(--app-font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.app-import-emptyexample {
+  padding: var(--space-0-5) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--app-font-size-xs);
+}
+
+/* ── Secondary schema disclosure ───────────────────────────────────────── */
+.app-import-schema {
+  border: var(--border-width-thin) solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.app-import-schemasummary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--app-font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.app-import-schemasummary::-webkit-details-marker {
+  display: none;
+}
+
+.app-import-schematitle {
+  min-width: 0;
+}
+
+.app-import-schemasummary .app-import-sub {
+  margin-left: auto;
+  font-weight: var(--font-weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+
+.app-import-schemasummary:hover {
+  color: var(--color-text);
+}
+
+.app-import-schemasummary:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-md);
+}
+
+/* Disclosure chevron: one icon for both disclosures, rotated when open. */
+.app-import-disclosureicon {
+  flex: none;
+  color: var(--color-text-muted);
+  transition: transform var(--app-duration-fast) var(--app-ease-out);
+}
+
+details[open] > .app-import-schemasummary .app-import-disclosureicon,
+details[open] > .app-import-reviewsummary .app-import-disclosureicon {
+  transform: rotate(90deg);
+}
+
+/* The fill surface can be 432 rows; it scrolls inside itself so opening it
+   never takes over the sheet. The sticky group heads in SchemaFill.css then
+   stay put within this scroller. */
+.app-import-schemabody {
+  padding: var(--space-2) var(--space-4) var(--space-4);
+  border-top: var(--border-width-thin) solid var(--color-border-subtle);
+  min-width: 0;
+  max-height: var(--space-72);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ── Identity / target (new-system mode only) ───────────────────────────── */
+.app-import-identity {
+  padding-top: var(--space-4);
+  border-top: var(--border-width-thin) solid var(--color-border-subtle);
+}
+
+.app-import-identityrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.app-import-modes {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: var(--border-width-thin) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.app-import-modebtn {
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  font-size: var(--app-font-size-xs);
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.app-import-modebtn:hover {
+  color: var(--color-text);
+}
+
+.app-import-modebtn[aria-checked="true"] {
+  background: var(--color-accent-subtle);
+  color: var(--color-text);
+}
+
+.app-import-modebtn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.app-import-name {
+  flex: 1 1 var(--space-48);
+  min-width: 0;
+}
+
+.app-import-target {
+  flex: 0 1 var(--space-48);
+  min-width: 0;
+}
+
+/* ── Footer: one primary, a review disclosure, inline collision/error ───── */
+.app-import-sheet-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5) var(--space-4);
+  border-top: var(--border-width-thin) solid var(--color-border-subtle);
+  background: var(--color-surface);
+}
+
+.app-import-reviewsummary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--app-font-size-xs);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  list-style: none;
+}
+
+.app-import-reviewsummary::-webkit-details-marker {
+  display: none;
+}
+
+.app-import-reviewsummary:hover {
+  color: var(--color-text);
+}
+
+.app-import-reviewsummary:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+/* "compares to <target>" sets the frame; the counts below are the diff. */
+.app-import-compare {
+  margin: 0;
+  font-size: var(--app-font-size-xs);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.app-import-reviewcounts {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-1) 0 0;
+  font-size: var(--app-font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.app-import-reviewbody {
+  padding-top: var(--space-1);
+}
+
+/* Added / overridden / removed are the meaningful rows and take colour;
+   unchanged stays muted at every count so the eye lands on what changes. */
+.app-import-diffstat {
+  white-space: nowrap;
+}
+
+.app-import-diffstat b {
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+.app-import-diffstat.is-added,
+.app-import-diffstat.is-added b {
+  color: var(--color-accent-text);
+}
+
+.app-import-diffstat.is-overridden,
+.app-import-diffstat.is-overridden b {
+  color: var(--color-warning-text);
+}
+
+.app-import-diffstat.is-removed,
+.app-import-diffstat.is-removed b {
+  color: var(--color-danger-text);
+}
+
+.app-import-collision {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--app-font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.app-import-collision b {
+  color: var(--color-text);
+}
+
+.app-import-collision code {
+  font-family: var(--font-mono);
+  color: var(--color-text);
+}
+
+.app-import-error {
+  margin: 0;
+  font-size: var(--app-font-size-sm);
+  color: var(--color-danger-text);
+  overflow-wrap: anywhere;
+}
+
+.app-import-footbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.app-import-targetnote {
+  font-size: var(--app-font-size-xs);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.app-import-targetnote b {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.app-import-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+/* Narrow: single column, quiet controls fold rather than squeeze. */
+@media (max-width: 600px) {
+  .tok-dialog.app-import-sheet {
+    height: auto;
+    max-height: 90vh;
+  }
+
+  .app-import-sheet-head,
+  .app-import-sheet-body,
+  .app-import-sheet-foot {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  .app-import-sheet-body {
+    gap: var(--space-4);
+  }
+
+  .app-import-sourcebar {
+    row-gap: var(--space-2);
+  }
+
+  .app-import-source {
+    flex: 1 1 100%;
+  }
+
+  .app-import-identityrow,
+  .app-import-modes,
+  .app-import-footbar,
+  .app-import-actions,
+  .app-import-reviewcounts,
+  .app-import-collision {
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+  }
+
+  .app-import-name,
+  .app-import-target {
+    flex: 1 1 100%;
+  }
+
+  .app-import-actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+
+  /* Disclosures fold first: their summaries wrap onto their own rows so the
+     counts never squeeze the title, and the fill surface scrolls shorter. */
+  .app-import-schemasummary {
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+  }
+
+  .app-import-schemasummary .app-import-sub {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+
+  .app-import-schemabody {
+    max-height: var(--space-56);
+  }
+
+  .app-import-empty {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .app-import-textarea {
+    min-height: var(--space-24);
+  }
+}

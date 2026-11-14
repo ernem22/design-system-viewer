@@ -6,6 +6,13 @@
      so anchor-scrolled content clears the sticky topbar instead of
      landing underneath it. */
   --app-topbar-height: 44px;
+  /* Structural rail width, not a themed token (like the topbar height): the
+     rail frame and the topbar's leading nav cell both read it, so the rail
+     toggle lands on the same seam as the rail's right edge. */
+  --app-rail-width: 208px;
+  /* Topbar inset, read by both the bar's padding and the nav cell's width so
+     the cell still ends on the rail seam (padding + cell = rail width). */
+  --app-topbar-padding-inline: var(--space-3);
   /* One shared landing offset: both the section anchors' scroll-margin-top
      and the scrollspy's activation line read it, so a clicked row is by
      construction the row the spy reports (lib/scrollspy.ts). Structural, like
@@ -74,7 +81,7 @@
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 12px;
-  padding: 0 12px;
+  padding: 0 var(--app-topbar-padding-inline);
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-divider);
 }
@@ -95,6 +102,28 @@
 /* Actions stay pinned to the topbar's end edge while the track stretches. */
 .app-topbar-right {
   justify-content: flex-end;
+}
+
+/* Leading nav cell above the rail (Rail toggle). It occupies the rail column's
+   width so the toggle's trailing edge sits on the rail/content seam, mirroring
+   the props toggle at the trailing edge of the action cluster. Structural
+   width, not themed: the topbar inset is subtracted because the cell starts
+   inside the bar's padding, so padding + cell still equals the rail width. */
+.app-topbar-nav {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: calc(var(--app-rail-width) - var(--app-topbar-padding-inline));
+}
+
+/* Thin separator between nav chrome and the brand lockup, so the toggle reads
+   as a control rather than part of the wordmark. */
+.app-topbar-divider {
+  flex: none;
+  width: var(--border-width-thin);
+  height: var(--space-4);
+  background: var(--color-divider);
 }
 
 .app-brand {
@@ -447,7 +476,7 @@
 /* ── sidebar (Rail.tsx) ── */
 
 .app-rail-clip {
-  width: 208px;
+  width: var(--app-rail-width);
   height: 100%;
   /* clip mirrors the shell contract: a layout frame must not be scrollable. */
   overflow: clip;
@@ -462,7 +491,7 @@
 
 .app-rail-inner {
   position: relative;
-  width: 208px;
+  width: var(--app-rail-width);
   height: 100%;
   overflow-y: auto;
   padding: var(--space-2) var(--space-2-5) var(--space-5);
@@ -478,32 +507,39 @@
 }
 
 .app-rail-inner,
-.app-main {
+.app-main,
+.app-props-inner {
   /* Themed scrollbar (same tokens as the ScrollArea demo's thumb/track —
      gallery/components/layout.css) instead of the browser default, so it
-     resolves from the active system like everything else in the shell. */
+     resolves from the active system like everything else in the shell. The
+     props panel scrolls inside its own frame too, so its bar takes the same
+     treatment as the rail and main. */
   scrollbar-width: thin;
   scrollbar-color: var(--color-border-strong) transparent;
 }
 
 .app-rail-inner::-webkit-scrollbar,
-.app-main::-webkit-scrollbar {
+.app-main::-webkit-scrollbar,
+.app-props-inner::-webkit-scrollbar {
   width: 8px;
 }
 
 .app-rail-inner::-webkit-scrollbar-track,
-.app-main::-webkit-scrollbar-track {
+.app-main::-webkit-scrollbar-track,
+.app-props-inner::-webkit-scrollbar-track {
   background: transparent;
 }
 
 .app-rail-inner::-webkit-scrollbar-thumb,
-.app-main::-webkit-scrollbar-thumb {
+.app-main::-webkit-scrollbar-thumb,
+.app-props-inner::-webkit-scrollbar-thumb {
   background: var(--color-border-strong);
   border-radius: var(--radius-full);
 }
 
 .app-rail-inner::-webkit-scrollbar-thumb:hover,
-.app-main::-webkit-scrollbar-thumb:hover {
+.app-main::-webkit-scrollbar-thumb:hover,
+.app-props-inner::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-muted);
 }
 
@@ -517,12 +553,26 @@
   min-width: 0;
   min-height: 0;
   padding: 24px;
-  /* Slack below the last section so its top can reach the shared landing
-     line at max scroll (a section activates only once its top passes that
-     line). Sized from the viewport minus the topbar and the line itself —
-     exact, not the 50vh guess that left tall screens unable to activate. */
-  padding-bottom: calc(100vh - var(--app-topbar-height) - var(--app-rail-landing-offset));
   overflow-y: auto;
+}
+
+/* Slack below the last section so its top can reach the shared landing line
+   at max scroll (a section activates only once its top passes that line).
+   Sized from the viewport minus the topbar and the line itself — exact, not
+   the 50vh guess that left tall screens unable to activate. Only the tabs
+   that scroll to section anchors get it: Compare has no anchors, and the
+   global rule left a full viewport of empty scroll below its content. */
+.app-shell[data-tab="tokens"] .app-main,
+.app-shell[data-tab="preview"] .app-main {
+  padding-bottom: calc(100vh - var(--app-topbar-height) - var(--app-rail-landing-offset));
+}
+
+/* Compare's diff table can be wider than the content column when several
+   systems are picked. The one content scroller owns that horizontal overflow
+   too: a nested `overflow-x` wrapper would become the thead's sticky
+   reference on both axes and break its vertical stickiness against main. */
+.app-shell[data-tab="compare"] .app-main {
+  overflow-x: auto;
 }
 
 /* Tabs.Content uses forceMount (Shell.tsx) — in main so gallery ids exist
@@ -811,9 +861,16 @@
   font-size: var(--app-font-size-xs);
 }
 
+/* Topbar controls sit tight against their neighbours, so this pill uses the
+   same 1px offset as the other chrome rings instead of the full token gap. */
+.app-pill:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
 /* ── narrow viewport: rails become overlay drawers ── */
 
-/* Below this width the two fixed-width rails (208px + 300px) would squeeze
+/* Below this width the two fixed-width rails (rail + props) would squeeze
    .app-main to near-zero when both are open, so they stop participating in
    the grid and float above main instead. Open/close state (topbar toggles +
    localStorage) is untouched — the same data-open clips just render as
@@ -925,6 +982,13 @@
   .app-topbar-left {
     flex: 0 1 auto;
     min-width: min(var(--space-32), 100%);
+  }
+
+  /* Below 900px the rail is a drawer, not a grid column, so there is no rail
+     seam to align to: shrink the nav cell to its content and give the width
+     back to the brand and switcher. */
+  .app-topbar-nav {
+    width: auto;
   }
 
   .app-topbar-right,

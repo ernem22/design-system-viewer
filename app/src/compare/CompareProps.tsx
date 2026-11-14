@@ -1,59 +1,42 @@
-import { Icon } from "../lib/icons.tsx";
 import { systemCoveragePercent } from "../systems/store.ts";
 import { REFERENCE_TOKEN_COUNT } from "../../../src/core/schema.js";
 import type { CompareViewModel } from "./useCompareView.ts";
 
-/** Compare tab's right rail: coverage of each picked system, at a glance —
-   the diff table's own bar already carries live diff counts, so this panel
-   doesn't duplicate them. The block is also where a pick is removed: a real
-   button per row calls the view model's one `toggle`, so unpicking no longer
-   means scrolling back to the rail and no second selection model exists. */
+/** Compare tab's right rail: a read-only *reference* summary, not a second
+   selection surface and not a third copy of the picked-system list. The rail
+   already owns the selected set (removable chips) and the catalogue; the
+   content header owns the system count. This panel adds the one fact those
+   surfaces do not state together: which system is the baseline and what
+   "changed" means against it. */
 export function CompareProps({ view }: { view: CompareViewModel }) {
-  const { cols, mode, toggle } = view;
+  const { cols } = view;
+  const reference = cols[0];
+  const pct = reference ? systemCoveragePercent(reference) : null;
+
   return (
     <div className="cmp-props">
       <div className="cmp-props-block">
-        <h3>Selected systems</h3>
-        {cols.length ? (
-          <ul className="cmp-props-list">
-            {cols.map((s) => {
-              const pct = systemCoveragePercent(s);
-              const label = `Remove ${s.name} from the comparison`;
-              return (
-                <li key={s.slug}>
-                  <span className="cmp-props-name">{s.name}</span>
-                  {pct != null && pct < 100 && (
-                    <span
-                      className="cmp-props-pct"
-                      title={`${pct}% of the ${REFERENCE_TOKEN_COUNT} schema tokens`}
-                    >
-                      {pct}%
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    className="cmp-props-remove"
-                    aria-label={label}
-                    title={label}
-                    onClick={() => toggle(s.slug)}
-                  >
-                    <Icon name="x" size={14} />
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+        <h3>Reference</h3>
+        {reference ? (
+          <div className="cmp-props-reference">
+            <p className="cmp-props-ref-name">{reference.name}</p>
+            {pct != null && pct < 100 && (
+              <span
+                className="cmp-props-pct"
+                title={`${pct}% of the ${REFERENCE_TOKEN_COUNT} schema tokens`}
+                aria-label={`${pct}% of ${REFERENCE_TOKEN_COUNT} schema tokens`}
+              >
+                {pct}%
+              </span>
+            )}
+            <p className="cmp-props-note">
+              Every column and diff cell is compared against this system. In Token diff, only
+              values that differ from it are marked changed.
+            </p>
+          </div>
         ) : (
-          <p className="cmp-props-empty">Pick systems in the rail to compare them.</p>
+          <p className="cmp-props-empty">Select systems in the rail to compare them.</p>
         )}
-      </div>
-      <div className="cmp-props-block">
-        <h3>View</h3>
-        <p className="cmp-props-empty">
-          {mode === "diff"
-            ? "Token diff — every category, side by side."
-            : "Component — the same demo rendered once per system's own tokens."}
-        </p>
       </div>
     </div>
   );

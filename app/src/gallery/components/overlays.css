@@ -4,7 +4,9 @@
 
 .dsv-modal-actions--spaced { margin-top: var(--space-5); }
 .dsv-dialog-close { position: absolute; top: var(--space-3); right: var(--space-3); }
-.dsv-pop-heading { font-size: var(--font-size-sm); }
+.dsv-pop-heading { margin: 0; font-size: var(--font-size-sm); }
 .dsv-menu-subtrigger-chevron { margin-left: auto; }
+.dsv-context-trigger { font: inherit; color: inherit; }
+.dsv-hovercard-trigger { padding: 0; border: 0; background: none; font: inherit; cursor: pointer; }
 .dsv-mega-menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-4); }
 .dsv-mega-menu-link { display: block; padding: var(--space-1) 0; text-decoration: none; }

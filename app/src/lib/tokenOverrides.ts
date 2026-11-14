@@ -50,6 +50,7 @@
 import { useSyncExternalStore, type CSSProperties } from "react";
 import { REFERENCE } from "../../../src/core/schema.js";
 import { CATEGORIES } from "../../../src/core/taxonomy.js";
+import { NARROW_QUERY } from "./panelStorage.ts";
 import { slugify } from "./slug.ts";
 
 export type TokenKind = "color" | "type" | "length" | "shadow" | "motion" | "number" | "raw";
@@ -253,14 +254,17 @@ export function getReturnFocus(): HTMLElement | null {
 }
 
 /** Desktop docks the scope into the persistent right properties panel;
-    small screens keep the overlay dialog (same content, different shell).
+    narrow viewports keep the overlay dialog (same content, different shell).
+    The threshold is the shell's own narrow query, not a second breakpoint:
+    the props rail collapses to a drawer at 900px, so a scope opened between
+    761 and 900px would otherwise target a panel the shell no longer shows.
     `opener` is the trigger that was activated; it is the focus target on
     Escape, so the caller passes `event.currentTarget` (the click itself is not
     guaranteed to have focused a <button>). */
 export function openScope(scope: InspectorScope, opener?: HTMLElement | null): void {
   const mobile =
     typeof window !== "undefined" && typeof window.matchMedia === "function"
-      ? window.matchMedia("(max-width: 760px)").matches
+      ? window.matchMedia(NARROW_QUERY).matches
       : false;
   if (state.selected?.id !== scope.id) {
     returnFocus =

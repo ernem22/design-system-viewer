@@ -1,41 +1,7 @@
-/* Inline token editor (Radix Popover anchored to the row — no custom
-   fixed-position floating input). .tok-update sizing adapts to its container:
-   in its own grid cell in token rows, full-width in swatches, compact in
-   tables. */
-
-.tok-update {
-  height: 26px;
-  font-size: var(--font-size-xs);
-  flex: none;
-}
-
-.tok-swatch .tok-update {
-  width: 100%;
-  margin-top: var(--space-2);
-}
-
-.tok-pop {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-overlay);
-  padding: var(--space-3);
-  box-shadow: var(--shadow-md);
-  z-index: var(--z-modal);
-  width: 280px;
-}
-
-.tok-pop-label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  font-size: var(--font-size-xs);
-}
-
-.tok-pop-label code {
-  font-family: var(--font-mono);
-  color: var(--color-text-secondary);
-  word-break: break-all;
-}
+/* Inspector token editor — the only token edit form. It renders inside the
+   right rail after the explicit Edit action (or as the Add-token form for a
+   missing schema token). .tok-pop-input keeps its historical class name; the
+   popover that named it is gone. */
 
 .tok-pop-input {
   border: 1px solid var(--color-input-border);
@@ -48,10 +14,6 @@
   width: 100%;
   box-sizing: border-box;
 }
-
-/* Inspector edit form: the popover form without the trigger — the input
-   reuses .tok-pop-input above, Save/Cancel replace blur-to-save. Spacing
-   from the token layer, no literals. */
 
 .tok-edit-form {
   display: flex;
@@ -70,10 +32,4 @@
 .tok-edit-actions {
   display: flex;
   gap: var(--space-2);
-}
-
-.tok-pop-hint {
-  margin: var(--space-2) 0 0;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
 }

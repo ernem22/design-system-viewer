@@ -157,7 +157,7 @@ export const COMPONENT_ENTRIES: GalleryEntry[] = [
   {
     id: "screen-schedule",
     label: "Calendar / schedule",
-    desc: "Sticky sub-nav + week grid with events.",
+    desc: "Week grid with dated columns, events and a today marker.",
     Body: ScheduleBody,
   },
   {

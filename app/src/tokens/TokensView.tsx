@@ -1,4 +1,3 @@
-import { useCallback } from "react";
 import type { DesignSystem } from "../systems/store.ts";
 import { ContrastSection } from "./ContrastSection.tsx";
 import { SchemaView } from "./SchemaView.tsx";
@@ -9,20 +8,18 @@ import { groupAnchor } from "./useTokensView.ts";
 import "./TokensView.css";
 
 /**
- * Tokens tab main column: lint row + toolbar + gallery/schema.
- * Click a token = copy + select it for the right-rail inspector;
- * double-click selects it and focuses the inspector's edit form.
+ * Tokens tab main column: lint row + toolbar + gallery/schema. Clicking any
+ * token row selects it for the right-rail inspector — the only editor; rows
+ * never copy or edit in place.
  */
 export function TokensView({
   system,
   view,
-  onMerge,
-  onPatch,
+  onAddTokens,
 }: {
   system: DesignSystem;
   view: TokensViewModel;
-  onMerge: (css: string) => void;
-  onPatch: (name: string, value: string) => void;
+  onAddTokens: () => void;
 }) {
   const {
     warnings,
@@ -32,25 +29,8 @@ export function TokensView({
     searching,
     schemaMode,
     filter,
-    pushToast,
-    copyToken,
-    editingName,
-    onEdit,
+    selectToken,
   } = view;
-
-  // Stable identity (like copyToken): the memo()'d row renderers receive
-  // this, so it must not be a fresh closure every render.
-  const handleSave = useCallback(
-    (name: string, value: string) => {
-      try {
-        onPatch(name, value);
-        pushToast(`${name} updated`, "ok");
-      } catch (e) {
-        pushToast(`Save failed: ${e instanceof Error ? e.message : String(e)}`, "err");
-      }
-    },
-    [onPatch, pushToast],
-  );
 
   return (
     <div className="tok-view">
@@ -72,16 +52,10 @@ export function TokensView({
       <TokenToolbar
         view={view}
         system={system}
-        onMerge={onMerge}
+        onAddTokens={onAddTokens}
       />
       {schemaMode ? (
-        <SchemaView
-          view={view}
-          onPick={copyToken}
-          editingName={editingName}
-          onEdit={onEdit}
-          onSave={handleSave}
-        />
+        <SchemaView view={view} onPick={selectToken} />
       ) : (
         <div className="tok-gallery">
           {visibleGroups.map((v) => (
@@ -90,10 +64,7 @@ export function TokensView({
               visible={v}
               showMissing={view.showMissing}
               selectedName={view.selected?.name ?? null}
-              onPick={copyToken}
-              editingName={editingName}
-              onEdit={onEdit}
-              onSave={handleSave}
+              onPick={selectToken}
             />
           ))}
           {view.showMissing &&

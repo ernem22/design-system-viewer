@@ -30,9 +30,14 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  font-size: var(--font-size-sm);
+  font-size: var(--app-font-size-sm);
   color: var(--color-text-secondary);
   white-space: nowrap;
+}
+
+.app-fill-check input:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 /* Single expand/collapse toggle: never split across rows on its own. */
@@ -109,7 +114,7 @@
 
 .app-fill-prog,
 .app-fill-miss {
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -181,7 +186,7 @@
 .app-fill-name {
   min-width: 0;
   font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
+  font-size: var(--app-font-size-xs);
   color: var(--color-text-secondary);
   overflow-wrap: anywhere;
 }
@@ -190,7 +195,7 @@
   flex: 1 1 auto;
   min-width: 80px;
   height: 26px;
-  font-size: var(--font-size-sm);
+  font-size: var(--app-font-size-sm);
 }
 
 .app-fill-clear {
@@ -209,6 +214,12 @@
   color: var(--color-text);
 }
 
+/* Compact clear control in a clipped schema row: keep the ring inside. */
+.app-fill-clear:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: calc(-1 * var(--focus-ring-width));
+}
+
 .app-fill-extras {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -219,6 +230,6 @@
 }
 
 .app-fill-head-static {
-  font-size: var(--font-size-sm);
+  font-size: var(--app-font-size-sm);
   color: var(--color-warning);
 }

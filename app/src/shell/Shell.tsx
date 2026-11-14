@@ -28,6 +28,12 @@ export interface ShellTab {
 }
 
 export interface ShellSlots {
+  /** Leading nav cell above the rail column: the rail toggle lives here, at
+      the cell's trailing edge (the rail/content seam), separated from the
+      brand by a divider. Distinct from `brand` so the toggle reads as nav
+      chrome, not part of the lockup, and mirrors the props toggle on the
+      trailing side. */
+  leadingNav?: ReactNode;
   brand: ReactNode;
   systemSwitcher?: ReactNode;
   actions?: ReactNode;
@@ -70,6 +76,7 @@ function isKnownTab(value: string, tabs: ShellTab[]): value is AppTab {
  * groups when you tab away and back.
  */
 export default function Shell({
+  leadingNav,
   brand,
   systemSwitcher,
   actions,
@@ -122,6 +129,12 @@ export default function Shell({
             <h1>Design System Viewer</h1>
           </VisuallyHidden.Root>
           <div className="app-topbar-left">
+            {leadingNav ? (
+              <>
+                <div className="app-topbar-nav">{leadingNav}</div>
+                <span className="app-topbar-divider" aria-hidden="true" />
+              </>
+            ) : null}
             {brand}
             {systemSwitcher}
           </div>

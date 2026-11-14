@@ -23,9 +23,17 @@
 
 .dsv-kanban-card { background: var(--color-surface); border: var(--border-width-thin) solid var(--color-border-subtle); border-radius: var(--radius-md); padding: var(--space-3); margin-bottom: var(--space-2); box-shadow: var(--shadow-xs); font-size: var(--font-size-sm); transition: box-shadow var(--motion-hover), transform var(--motion-hover), border-color var(--motion-hover); }
 
-.dsv-kanban-card:hover { box-shadow: var(--shadow-md); transform: translateY(calc(-1 * var(--motion-distance-xs))); border-color: var(--color-border-strong); }
+/* Cards are not draggable here, so the hover is a quiet surface change rather than the lift an actionable card would promise. */
+.dsv-kanban-card:hover { box-shadow: var(--shadow-sm); border-color: var(--color-border-strong); }
+
+.dsv-tag--success { background: var(--color-success-subtle); color: var(--color-success-text); border-color: var(--color-success-border); }
+
+.dsv-tag--info { background: var(--color-info-subtle); color: var(--color-info-text); border-color: var(--color-info-border); }
 
 .dsv-chat { display: flex; flex-direction: column; gap: var(--space-3); }
+
+/* Inline spans ignore the spinner's width/height, so a block box is what makes it render as a circle. */
+.dsv-chat .dsv-spinner { display: inline-block; vertical-align: middle; }
 
 .dsv-bubble { max-width: 70%; padding: var(--space-2) var(--space-3); border-radius: var(--radius-lg); font-size: var(--font-size-sm); line-height: var(--line-height-normal); overflow-wrap: anywhere; }
 
@@ -40,6 +48,29 @@
 .dsv-screen-subnav { position: static; }
 
 .dsv-feature-card { border-radius: var(--radius-2xl); }
+
+/* Product-screen specimen fixes. */
+.dsv-stat .v { font-variant-numeric: tabular-nums; }
+
+/* Stat deltas are coloured by sentiment, not by arrow direction: a falling
+   error rate is good news even though its caret points down. */
+.dsv-stat .d.positive { color: var(--color-success-text); background: var(--color-success-subtle); }
+
+.dsv-stat .d.negative { color: var(--color-danger-text); background: var(--color-danger-subtle); }
+
+.dsv-analytics .dsv-datalist { grid-template-columns: 1fr max-content; }
+
+.dsv-analytics .dsv-datalist dd { text-align: right; font-variant-numeric: tabular-nums; }
+
+.dsv-analytics .dsv-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.dsv-display--serif { font-family: var(--font-serif); }
+
+.dsv-file-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: var(--border-width-thin) solid var(--color-border-subtle); }
+
+.dsv-file-row:last-child { border-bottom: 0; }
+
+.dsv-file-row:hover { background: var(--color-hover-overlay); }
 
 .dsv-badge--on-dark { background: color-mix(in srgb, var(--color-neutral-50) 18%, transparent); color: var(--color-neutral-50); border-color: color-mix(in srgb, var(--color-neutral-50) 35%, transparent); }
 
@@ -81,16 +112,29 @@
 
 .dsv-hero-panel .dsv-display { color: var(--color-neutral-50); text-wrap: balance; }
 
+/* Container units size the display from the device frame, not the browser viewport, so Phone really previews a phone. */
+.dsv-hero-panel .dsv-display--dlg { font-size: clamp(var(--font-size-4xl), 11cqi, var(--font-size-display-lg)); }
+
+/* Radix ToggleGroup type="single" reports selection via aria-checked/data-state, not aria-pressed. */
+.dsv-segmented button[aria-checked="true"], .dsv-segmented button[data-state="on"] { background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-xs); }
+
 .dsv-hero-panel .dsv-lede { color: color-mix(in srgb, var(--color-neutral-50) 88%, transparent); text-wrap: pretty; }
 
-.dsv-hero-cta {
+/* Scoped to outrank the base solid button (which would paint accent over the hero's surface fill). */
+.dsv-hero-panel .dsv-hero-cta {
   background: var(--color-surface); color: var(--color-text);
   box-shadow: var(--glow-md); transition: box-shadow var(--motion-page), transform var(--motion-page);
 }
 
-.dsv-hero-cta:hover { box-shadow: var(--glow-lg); transform: translateY(calc(-1 * var(--motion-distance-xs))); }
+.dsv-hero-panel .dsv-hero-cta:hover:not(:disabled) {
+  background: var(--color-surface); color: var(--color-text);
+  box-shadow: var(--glow-lg); transform: translateY(calc(-1 * var(--motion-distance-xs)));
+}
 
-.dsv-hero-cta:active { transform: scale(var(--motion-scale-active)); }
+.dsv-hero-panel .dsv-hero-cta:active:not(:disabled) {
+  background: var(--color-surface); color: var(--color-text);
+  transform: scale(var(--motion-scale-active));
+}
 
 .dsv-hero-panel .dsv-hero-ghost {
   background: color-mix(in srgb, var(--color-neutral-50) 12%, transparent); border-color: color-mix(in srgb, var(--color-neutral-50) 50%, transparent); color: var(--color-neutral-50);

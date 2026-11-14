@@ -138,8 +138,9 @@ describe("Preview tab rail section nav only (issue #317)", () => {
     // Tokens rail has no PreviewSystems list — no system-name buttons there.
     expect(railButtonFor(panels[0], "Aurora")).toBeUndefined();
     expect(railButtonFor(panels[0], "ChatGPT")).toBeUndefined();
-    // Compare keeps its own multi-select chips, not this single-select list.
-    expect(panels[2].querySelectorAll(".cmp-chip")).toHaveLength(2);
+    // Compare keeps its own multi-select system chips, not this single-select list
+    // (the catalogue now lists every system in stable order, not only the picks).
+    expect(panels[2].querySelectorAll(".cmp-chip").length).toBeGreaterThanOrEqual(2);
     expect(railButtonFor(panels[2], "Aurora")).toBeUndefined();
   });
 });

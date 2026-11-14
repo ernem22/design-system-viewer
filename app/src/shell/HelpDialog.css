@@ -24,7 +24,8 @@
      dialog edge. */
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  /* clip, not hidden: the frame must never scroll (only the body does). */
+  overflow: clip;
   padding: 0;
   border: var(--border-width-thin) solid var(--color-border);
   border-radius: var(--radius-lg);

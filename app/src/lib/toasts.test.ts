@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, createElement } from 'react';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { useToasts, type PushToast, type Toast } from './toasts.ts';
+import {
+  useToasts,
+  type PushToast,
+  type Toast,
+  type ToastQueue,
+} from './toasts.ts';
 
 // useToasts is a hook, so the suite mounts a tiny probe component even though
 // vitest runs in the configured node environment — happy-dom (already a
@@ -11,13 +16,14 @@ import { useToasts, type PushToast, type Toast } from './toasts.ts';
 interface ToastProbe {
   toasts: Toast[];
   push: PushToast;
+  queue: ToastQueue;
 }
 
 let latest: ToastProbe | null = null;
 
 function Probe() {
-  const [toasts, push] = useToasts();
-  latest = { toasts, push };
+  const [toasts, push, queue] = useToasts();
+  latest = { toasts, push, queue };
   return createElement('div');
 }
 
@@ -181,6 +187,52 @@ describe('useToasts', () => {
     });
     expect(current().toasts).toHaveLength(1);
 
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(current().toasts).toEqual([]);
+  });
+
+  it('keeps an error toast until it is explicitly dismissed', () => {
+    act(() => {
+      current().push('Parse failed', 'err');
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(current().toasts).toHaveLength(1);
+
+    act(() => {
+      current().queue.dismiss(current().toasts[0].id);
+    });
+    expect(current().toasts).toEqual([]);
+  });
+
+  it('suspends and resumes a short-lived toast while it is paused', () => {
+    act(() => {
+      current().push('Saved');
+    });
+    const id = current().toasts[0].id;
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    act(() => {
+      current().queue.pause(id);
+    });
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(current().toasts).toHaveLength(1);
+
+    act(() => {
+      current().queue.resume(id);
+    });
+    act(() => {
+      vi.advanceTimersByTime(2599);
+    });
+    expect(current().toasts).toHaveLength(1);
     act(() => {
       vi.advanceTimersByTime(1);
     });

@@ -54,6 +54,10 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
   border: var(--border-width-thin) solid var(--color-border-subtle);
   border-radius: var(--radius-lg);
   overflow: clip;
+  /* Page inset: screens have no frame of their own in app, so without this
+     their content sits flush against the frame border like a crop rather
+     than a page. */
+  padding: var(--space-6);
 }
 .dsv-section > p { color: var(--color-text-muted); margin: 0 0 var(--space-6); }
 /* Anchor-scroll target for Rail's per-demo links: without this, clicking
@@ -94,6 +98,10 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
   transition: background var(--motion-hover), border-color var(--motion-hover), transform var(--motion-press);
 }
 .dsv-btn:active:not(:disabled) { transform: scale(var(--motion-scale-active)); }
+.dsv-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
 /* Disabled is a token state, not a faded live control: opacity fades the
    accent fill and its on-accent text together, so both drop under AA in the
    dark variant. Swap the pair for the disabled-surface tokens instead. */
@@ -141,7 +149,7 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
 .dsv-input::placeholder, .dsv-textarea::placeholder { color: var(--color-text-disabled); }
 .dsv-input:focus-visible, .dsv-textarea:focus-visible { border-color: var(--color-accent-border); }
 .dsv-input:disabled, .dsv-textarea:disabled { background: var(--color-surface-sunken); color: var(--color-text-disabled); cursor: not-allowed; }
-.dsv-input[aria-invalid="true"] { border-color: var(--color-input-border-error); }
+.dsv-input[aria-invalid="true"], .dsv-textarea[aria-invalid="true"] { border-color: var(--color-input-border-error); }
 .dsv-hint { font-size: var(--font-size-xs); color: var(--color-text-muted); }
 .dsv-hint--err { color: var(--color-danger-text); background: var(--color-danger-subtle); display: inline-block; padding: var(--space-0-5) var(--space-1); border-radius: var(--radius-sm); }
 
@@ -247,8 +255,22 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
   border: var(--border-width-thin) solid var(--color-border); border-radius: var(--radius-md);
   font: inherit; font-size: var(--font-size-sm); cursor: pointer;
 }
-.dsv-toggle:hover { background: var(--color-hover-overlay); }
-.dsv-toggle[data-state="on"] { background: var(--color-accent-subtle); color: var(--color-accent-text); border-color: var(--color-accent-border); }
+.dsv-toggle:hover:not([data-disabled]):not(:disabled) { background: var(--color-hover-overlay); }
+.dsv-toggle:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+/* The selected segment's accent border is adjacent to the next sibling's
+   border; lift it so the shared edge is not painted over. */
+.dsv-toggle[data-state="on"] { position: relative; z-index: 1; background: var(--color-accent-subtle); color: var(--color-accent-text); border-color: var(--color-accent-border); }
+.dsv-toggle:disabled,
+.dsv-toggle[data-disabled] {
+  opacity: 1;
+  cursor: not-allowed;
+  background: var(--color-surface-disabled);
+  color: var(--color-text-muted);
+  border-color: var(--color-border-disabled);
+}
 .dsv-toggle-group { display: inline-flex; }
 .dsv-toggle-group .dsv-toggle { border-radius: 0; margin-left: calc(-1 * var(--control-border-width)); }
 .dsv-toggle-group .dsv-toggle:first-child { border-radius: var(--control-radius) 0 0 var(--control-radius); margin-left: 0; }
@@ -370,7 +392,19 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
   box-shadow: var(--shadow-sm);
 }
 
-.dsv-banner .close { margin-left: auto; background: none; border: none; color: inherit; opacity: 0.8; cursor: pointer; padding: var(--space-1); }
+/* 24px minimum target (WCAG 2.5.8): the icon is 14px, so the padding alone
+   left the control at 22px. Center the icon in a 24px box instead. */
+.dsv-banner .close {
+  margin-left: auto; display: inline-flex; align-items: center; justify-content: center;
+  min-width: 24px; min-height: 24px; padding: 0;
+  background: none; border: none; color: inherit; opacity: 0.8; cursor: pointer;
+}
+/* The close control sits on a dense banner edge; an inset ring stays inside
+   the surface instead of spilling over the rounded corner. */
+.dsv-banner .close:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: calc(-1 * var(--focus-ring-width));
+}
 
 .dsv-banner--on-dark { background: var(--color-surface-inverse); color: var(--color-text-inverse); }
 /* Ghost buttons inherit the inverse text pairing on the light banner instead
@@ -482,6 +516,8 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
 .dsv-step {
   display: flex; align-items: center; gap: var(--space-2);
   font-size: var(--font-size-sm); color: var(--color-text-muted);
+  /* Labels keep their full text; only the connector bars shrink so a narrow
+     column fits every step instead of clipping the last one ("Confirm" → "Con"). */
   flex: none; white-space: nowrap;
 }
 
@@ -499,7 +535,7 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
 
 .dsv-step--active .dot { border-color: var(--color-accent); color: var(--color-accent-text); box-shadow: 0 0 0 3px var(--color-accent-subtle); }
 
-.dsv-step .bar { flex: none; width: var(--space-8); min-width: var(--space-4); height: 2px; border-radius: var(--radius-full); background: var(--color-divider); }
+.dsv-step .bar { flex: 0 0 var(--space-1-5); width: var(--space-1-5); min-width: 0; height: 2px; border-radius: var(--radius-full); background: var(--color-divider); }
 
 .dsv-step--done .bar { background: var(--color-accent-muted); }
 
@@ -529,6 +565,13 @@ h1, h2, h3, h4, h5, h6, dl, dd, pre { margin: 0; }
 .dsv-pagination button:active:not(:disabled) { background: var(--color-active-overlay); }
 
 .dsv-toggle:active, .dsv-segmented button:active { box-shadow: var(--shadow-inner); }
+
+.dsv-segmented button:focus-visible,
+.dsv-pagination button:focus-visible,
+.dsv-tag button:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
 
 .dsv-breadcrumb a { color: var(--color-text-link); text-decoration: none; }
 

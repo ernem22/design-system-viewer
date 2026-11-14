@@ -2,7 +2,7 @@ import { useState } from "react";
 import * as Form from "@radix-ui/react-form";
 import * as OneTimePasswordField from "@radix-ui/react-one-time-password-field";
 import * as PasswordToggleField from "@radix-ui/react-password-toggle-field";
-import { Button, Demo } from "../ui.tsx";
+import { Button, Demo, useCompareIdPrefix } from "../ui.tsx";
 import { Icon } from "../../lib/icons.tsx";
 import "./validation.css";
 
@@ -20,6 +20,7 @@ function OtpDemo() {
 
 export default function ValidationBody() {
   const [sent, setSent] = useState(0);
+  const id = useCompareIdPrefix();
 
   return (
     <>
@@ -74,10 +75,10 @@ export default function ValidationBody() {
 
       <Demo title="Password Toggle Field">
         <div className="dsv-field dsv-pwd-field">
-          <label className="dsv-label" htmlFor="v-pass">Password</label>
+          <label className="dsv-label" htmlFor={`${id}v-pass`}>Password</label>
           <PasswordToggleField.Root>
             <div className="dsv-pwd">
-              <PasswordToggleField.Input id="v-pass" className="dsv-input" autoComplete="current-password" placeholder="Enter password" />
+              <PasswordToggleField.Input id={`${id}v-pass`} className="dsv-input" autoComplete="current-password" placeholder="Enter password" />
               <PasswordToggleField.Toggle aria-label="Show/hide password">
                 <PasswordToggleField.Icon visible={<Icon name="eyeOff" size={15} />} hidden={<Icon name="eye" size={15} />} />
               </PasswordToggleField.Toggle>

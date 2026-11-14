@@ -25,24 +25,30 @@ export function CssPreview({ css, baseCss = "" }: { css: string; baseCss?: strin
 
   if (!preview) {
     return (
-      <div className="tok-dialog-preview" aria-live="polite">
-        <p className="tok-dialog-meta">Awaiting CSS block…</p>
+      <div className="tok-dialog-preview">
+        <p className="tok-dialog-meta" aria-live="polite">
+          Awaiting CSS block…
+        </p>
       </div>
     );
   }
   const { added, cov, lint } = preview;
   const missingGroups = cov.groups.filter((g) => g.missing.length);
   return (
-    <div className="tok-dialog-preview" aria-live="polite">
-      <b>{added}</b> tokens pasted · coverage{" "}
-      <b className={cov.missing ? "" : "ok"}>
-        {cov.present}/{cov.expected}
-      </b>{" "}
-      · {cov.missing ? <span className="warn">{cov.missing} missing</span> : <span className="ok">complete</span>}
-      {cov.extraCount > 0 && <span className="warn"> · {cov.extraCount} extra</span>}
-      {lint.length > 0 && <span className="warn"> · {lint.length} value warnings</span>}
+    <div className="tok-dialog-preview">
+      {/* Only the one-line summary announces: the details lists below change
+          on every keystroke and would otherwise re-announce the whole panel. */}
+      <p className="tok-dialog-meta" aria-live="polite">
+        <b>{added}</b> tokens pasted · coverage{" "}
+        <b className={cov.missing ? "" : "ok"}>
+          {cov.present}/{cov.expected}
+        </b>{" "}
+        · {cov.missing ? <span className="warn">{cov.missing} missing</span> : <span className="ok">complete</span>}
+        {cov.extraCount > 0 && <span className="warn"> · {cov.extraCount} extra</span>}
+        {lint.length > 0 && <span className="warn"> · {lint.length} value warnings</span>}
+      </p>
       {cov.extraCount > 0 && (
-        <details>
+        <details aria-live="off">
           <summary className="warn">extra — won’t render in Preview</summary>
           <div>
             Preview only reads the {cov.expected} schema names (see Schema view). Rename these to match, or
@@ -54,7 +60,7 @@ export function CssPreview({ css, baseCss = "" }: { css: string; baseCss?: strin
         </details>
       )}
       {lint.length > 0 && (
-        <details open>
+        <details aria-live="off">
           <summary className="warn">value warnings</summary>
           {lint.map((w) => (
             <div key={w.name}>
@@ -67,7 +73,7 @@ export function CssPreview({ css, baseCss = "" }: { css: string; baseCss?: strin
         </details>
       )}
       {missingGroups.length > 0 && (
-        <details>
+        <details aria-live="off">
           <summary>missing token list</summary>
           {missingGroups.map((g) => (
             <div key={g.id}>

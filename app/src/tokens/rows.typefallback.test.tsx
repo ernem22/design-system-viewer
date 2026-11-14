@@ -60,9 +60,6 @@ async function renderTypeRow() {
         tokens={[{ name: "--font-size-display-xl", value: "8rem" }]}
         selectedName={null}
         onPick={() => {}}
-        editingName={null}
-        onEdit={() => {}}
-        onSave={() => {}}
       />,
     );
   });

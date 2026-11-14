@@ -24,7 +24,12 @@ export default function PricingBody() {
         </h3>
         <label className="dsv-control-label" style={{ justifyContent: "center" }}>
           Monthly
-          <Switch.Root className="dsv-switch" checked={yearly} onCheckedChange={setYearly}>
+          <Switch.Root
+            className="dsv-switch"
+            aria-label="Yearly billing"
+            checked={yearly}
+            onCheckedChange={setYearly}
+          >
             <Switch.Thumb className="dsv-switch-thumb" />
           </Switch.Root>
           Yearly <span className="dsv-badge dsv-badge--success">2 months free</span>
@@ -57,7 +62,11 @@ export default function PricingBody() {
                 /mo
               </span>
             </div>
-            <Button variant={i === 1 ? "solid" : "outline"} style={{ width: "100%", marginBottom: "var(--space-3)" }}>
+            <Button
+              variant={i === 1 ? "solid" : "outline"}
+              aria-label={`Choose ${name}`}
+              style={{ width: "100%", marginBottom: "var(--space-3)" }}
+            >
               Choose
             </Button>
             <ul

@@ -23,19 +23,21 @@ export function CompareColumn({
   style,
   pct,
   option,
+  reference = false,
 }: {
   slug: string;
   name: string;
   style: CSSProperties;
   pct: number | null;
   option: ComparableOption;
+  reference?: boolean;
 }) {
   const [portalHost] = useState(() => document.createElement("div"));
   const { Render } = option;
   const body = (
     <CompareIdPrefixContext.Provider value={`${slug}-`}>
       <InCompareContext.Provider value={true}>
-        <div className="cmp-col-body">
+        <div className="cmp-col-body" role="group" aria-label={`${name} preview`} tabIndex={0}>
           <Render />
         </div>
       </InCompareContext.Provider>
@@ -53,8 +55,13 @@ export function CompareColumn({
       <h3 className="cmp-col-head">
         <span className="cmp-swatch" aria-hidden="true" style={{ background: "var(--color-accent)" }} />
         {name}
+        {reference && <span className="cmp-ref-marker">Reference</span>}
         {pct != null && pct < 100 && (
-          <span className="cmp-cov" title={`${pct}% of the ${REFERENCE_TOKEN_COUNT} schema tokens`}>
+          <span
+            className="cmp-cov"
+            title={`${pct}% of the ${REFERENCE_TOKEN_COUNT} schema tokens`}
+            aria-label={`${pct}% of ${REFERENCE_TOKEN_COUNT} schema tokens`}
+          >
             {pct}%
           </span>
         )}

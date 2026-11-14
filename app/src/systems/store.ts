@@ -413,20 +413,47 @@ export function useSystems() {
   };
 }
 
-/** Coverage is recomputed from the CSS, never read from the stored
-   snapshot: those go stale when the schema grows and report bogus numbers.
-   Keyed by slug + the whole CSS text, so *any* change to the text — including
-   a same-length edit in the middle — misses and a stale entry is never
-   served. Hashing the full string per call is acceptable because the only hot
-   caller, SystemSwitcher, memoizes its slug→pct map on the systems list, so
-   this is reached only when that list changes, not on every keystroke render. */
+/** Per-system token values from ONE place: `css` first, then `groups` over
+   the top token-by-token (groups win — the value App actually applies).
+   Reading `css` keeps a token authored only there visible; overlaying
+   `groups` keeps a divergence resolving to the applied value. Every reader
+   (Tokens rows, coverage, Compare columns, the diff) goes through this so
+   they cannot disagree. Call sites that need memoisation hold it per system
+   (a useMemo, or the coverage LRU); the store never mutates a system in
+   place. */
+export function systemTokenMap(system: DesignSystem | null | undefined): Map<string, string> {
+  const values = new Map<string, string>();
+  if (!system) return values;
+  try {
+    for (const t of parseTokens(system.css ?? "") as Token[]) values.set(t.name, t.value);
+  } catch {
+    /* unparsable css — groups still contribute below */
+  }
+  for (const group of system.groups ?? []) {
+    for (const t of group.tokens) values.set(t.name, t.value);
+  }
+  return values;
+}
+
+/** Coverage is recomputed from the system's tokens (css + groups), never read
+   from the stored snapshot: those go stale when the schema grows and report
+   bogus numbers. Keyed by slug + the whole CSS text + a groups fingerprint, so
+   *any* change to either source misses and a stale entry is never served.
+   Building the key per call is acceptable because the only hot caller,
+   SystemSwitcher, memoizes its slug→pct map on the systems list, so this is
+   reached only when that list changes, not on every keystroke render. */
 export const PCT_CACHE_MAX = 200;
 /** Bounded LRU (insertion order, re-inserted on hit). One overflow evicts
    the coldest entry instead of `clear()`ing every warm system at once. */
 const pctCache = new Map<string, number | null>();
 
 function pctCacheKey(system: DesignSystem): string {
-  return `${system.slug}\u0000${system.css ?? ""}`;
+  let groups = "";
+  for (const g of system.groups ?? []) {
+    groups += `${g.id}\u0001`;
+    for (const t of g.tokens) groups += `${t.name}\u0002${t.value}\u0003`;
+  }
+  return `${system.slug}\u0000${system.css ?? ""}\u0000${groups}`;
 }
 
 function pctCacheGet(key: string): number | null | undefined {
@@ -454,7 +481,7 @@ export function systemCoveragePercent(system: DesignSystem | null | undefined): 
   if (hit !== undefined) return hit;
   let pct: number | null = null;
   try {
-    const names = (parseTokens(system.css) as Token[]).map((t) => t.name);
+    const names = [...systemTokenMap(system).keys()];
     pct = coveragePercent(coverage(names) as DesignSystem["coverage"]);
   } catch {
     /* unparsable — no badge */
@@ -463,8 +490,9 @@ export function systemCoveragePercent(system: DesignSystem | null | undefined): 
   return pct;
 }
 
-/** Flat token list for a system — the base values. A stored `themes.dark`
-   block is never read: dark mode is retired and every panel shows light. */
+/** Flat token list for a system — the base values, resolved through the same
+   map as every other reader. A stored `themes.dark` block is never read: dark
+   mode is retired and every panel shows light. */
 export function resolveSystemTokens(system: DesignSystem | null): Token[] {
-  return system?.groups?.flatMap((g) => g.tokens) ?? [];
+  return [...systemTokenMap(system).entries()].map(([name, value]) => ({ name, value }));
 }

@@ -27,24 +27,24 @@ let host: HTMLDivElement | null = null;
 
 /** The real Tokens view model, fed a hand-built system — the toolbar only
     reads stable fields off it, so the hook's full pipeline is unnecessary. */
-function Probe() {
+function Probe({ onAddTokens = () => {} }: { onAddTokens?: () => void }) {
   const view = useTokensView(system, () => {});
   return (
     <TokenToolbar
       view={view}
       system={system}
-      onMerge={() => {}}
+      onAddTokens={onAddTokens}
     />
   );
 }
 
-async function renderToolbar(): Promise<void> {
+async function renderToolbar(onAddTokens?: () => void): Promise<void> {
   const { createRoot } = await import("react-dom/client");
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => {
-    root!.render(<Probe />);
+    root!.render(<Probe onAddTokens={onAddTokens} />);
   });
 }
 
@@ -120,6 +120,46 @@ describe("TokenToolbar view switch segmented control", () => {
     });
     expect(document.activeElement, "ArrowRight moves Gallery -> Schema").toBe(schema);
   });
+
+  it("wraps arrows inside the segmented control instead of jumping to Add tokens", async () => {
+    await renderToolbar();
+    const { gallery, schema } = viewItems();
+    const add = [...document.querySelectorAll<HTMLButtonElement>(".tok-toolbar button")].find(
+      (b) => b.textContent?.trim() === "Add tokens",
+    )!;
+    schema.focus();
+    act(() => {
+      schema.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    });
+    expect(document.activeElement, "ArrowRight from Schema wraps to Gallery").toBe(gallery);
+    expect(document.activeElement, "never jumps to Add tokens").not.toBe(add);
+    act(() => {
+      gallery.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    });
+    expect(document.activeElement, "ArrowLeft from Gallery wraps to Schema").toBe(schema);
+  });
+});
+
+describe("TokenToolbar filter clear", () => {
+  it("returns focus to the filter after clearing it", async () => {
+    await renderToolbar();
+    const input = document.querySelector<HTMLInputElement>("input.tok-filter")!;
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value",
+    )!.set!;
+    act(() => {
+      setter.call(input, "color");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const clear = document.querySelector<HTMLButtonElement>(".tok-filter-clear")!;
+    expect(clear, "custom clear button renders").not.toBeNull();
+    act(() => {
+      clear.click();
+    });
+    expect(document.activeElement, "focus stays in the filter").toBe(input);
+    expect(input.value).toBe("");
+  });
 });
 
 describe("TokenToolbar system actions moved to the system menu", () => {
@@ -130,5 +170,15 @@ describe("TokenToolbar system actions moved to the system menu", () => {
     );
     expect(labels, "no Delete button").not.toContain("Delete");
     expect(labels, "no Export button").not.toContain("Export");
+  });
+
+  it("opens the shared import sheet for the active system", async () => {
+    let opened = 0;
+    await renderToolbar(() => (opened += 1));
+    const add = [...document.querySelectorAll<HTMLButtonElement>(".tok-toolbar button")].find(
+      (b) => b.textContent?.trim() === "Add tokens",
+    )!;
+    await act(async () => add.click());
+    expect(opened).toBe(1);
   });
 });

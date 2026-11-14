@@ -21,6 +21,13 @@
 .dsv-cal-head { font-size: var(--font-size-xs); color: var(--color-text-muted); text-align: center; padding: var(--space-1) 0; }
 
 .dsv-stepper { display: inline-flex; align-items: center; border: var(--input-border-width) solid var(--color-border); border-radius: var(--input-radius); overflow: hidden; background: var(--color-surface); }
+/* The input inside has no border of its own and overflow:hidden clips its
+   outline, so the container carries the focus cue instead. */
+.dsv-stepper:focus-within {
+  border-color: var(--color-accent-border);
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
 
 .dsv-stepper button { width: var(--input-height-md); height: var(--input-height-md); background: none; border: none; font-size: var(--font-size-lg); cursor: pointer; color: var(--color-input-text); }
 
@@ -32,7 +39,9 @@
 
 .dsv-rating { display: inline-flex; gap: var(--space-0-5); }
 
-.dsv-rating button { background: none; border: none; cursor: pointer; color: var(--color-border-strong); padding: var(--space-0-5); border-radius: var(--radius-sm); transition: transform var(--motion-hover), color var(--motion-hover); }
+/* Empty stars are the control's boundary, not decoration: --color-border-strong
+   sits under 3:1 on the surface, so use the muted text token instead. */
+.dsv-rating button { background: none; border: none; cursor: pointer; color: var(--color-text-muted); padding: var(--space-0-5); border-radius: var(--radius-sm); transition: transform var(--motion-hover), color var(--motion-hover); }
 
 .dsv-rating button:hover { transform: scale(1.15); color: var(--color-warning); }
 

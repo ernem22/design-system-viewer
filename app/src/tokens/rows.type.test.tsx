@@ -47,9 +47,6 @@ async function renderTypeRow(): Promise<HTMLDivElement> {
         tokens={[{ name: "--font-size-display-xl", value: "clamp(4.5rem, 10vw, 8rem)" }]}
         selectedName={null}
         onPick={() => {}}
-        editingName={null}
-        onEdit={() => {}}
-        onSave={() => {}}
       />,
     );
   });

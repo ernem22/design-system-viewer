@@ -1,7 +1,7 @@
 import * as Select from "@radix-ui/react-select";
 import { useMemo } from "react";
 import { Icon } from "../lib/icons.tsx";
-import "./AddSystemDialog.css";
+import "./ImportSheet.css";
 import { systemCoveragePercent, type DesignSystem } from "./store.ts";
 import { REFERENCE_TOKEN_COUNT } from "../../../src/core/schema.js";
 

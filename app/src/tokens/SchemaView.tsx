@@ -1,7 +1,5 @@
 import { REFERENCE } from "../../../src/core/schema.js";
 import type { Token } from "../systems/store.ts";
-import { TokenEditControl } from "./InlineEditor.tsx";
-import "./InlineEditor.css";
 import { RefBadge } from "./rows.tsx";
 import { schemaAnchor, type TokensViewModel } from "./useTokensView.ts";
 import "./TokenGroup.css";
@@ -13,7 +11,7 @@ interface ReferenceGroup {
   tokens: string[];
 }
 
-/** Enter/Space on a schema row picks it; inner Update/Add controls keep native keys. */
+/** Enter/Space on a schema row picks it. */
 function schemaKeyDown(e: React.KeyboardEvent, onPick: () => void): void {
   if (e.key !== "Enter" && e.key !== " ") return;
   const target = e.target as HTMLElement | null;
@@ -24,22 +22,17 @@ function schemaKeyDown(e: React.KeyboardEvent, onPick: () => void): void {
 
 /**
  * Schema checklist (old schemaView): every REFERENCE group with ✓/✗ per
- * token + the "Outside Schema" section for extras. Row click selects +
- * copies; Update (or double-click) edits a present token inline, Add creates
- * a missing one — both through the same inline-editor popover.
+ * token + the "Outside Schema" section for extras. Every row click selects
+ * for the right-rail inspector (it never copies or edits in place): a present
+ * token opens the inspector read state, a missing one opens its "Not set" /
+ * Add-token state.
  */
 export function SchemaView({
   view,
   onPick,
-  editingName,
-  onEdit,
-  onSave,
 }: {
   view: TokensViewModel;
   onPick: (token: Token) => void;
-  editingName: string | null;
-  onEdit: (token: Token | null) => void;
-  onSave: (name: string, value: string) => void;
 }) {
   const { cov, valueMap, matchTok, selected } = view;
   const groups = REFERENCE as ReferenceGroup[];
@@ -67,7 +60,6 @@ export function SchemaView({
             <colgroup>
               <col className="tok-schema-col-name" />
               <col className="tok-schema-col-value" />
-              <col className="tok-schema-col-actions" />
             </colgroup>
             <tbody>
               {names.map((name) => {
@@ -80,9 +72,13 @@ export function SchemaView({
                     data-token={name}
                     aria-selected={selected?.name === name}
                     tabIndex={0}
-                    title={hit ? "click to copy — double-click or Update to edit" : "missing — Add to create it"}
+                    title={
+                      hit
+                        ? "click to inspect and edit in the sidebar"
+                        : "missing — click to add it in the sidebar"
+                    }
                     onClick={() => onPick(token)}
-                    onDoubleClick={() => onEdit(token)}
+                    onDoubleClick={() => onPick(token)}
                     onKeyDown={(e) => schemaKeyDown(e, () => onPick(token))}
                   >
                     <td className={hit ? "tok-yes" : "tok-no"}>
@@ -91,15 +87,6 @@ export function SchemaView({
                     <td>
                       {value ?? <span className="tok-missing-inline">— missing</span>}
                       {hit && <RefBadge value={value as string} />}
-                    </td>
-                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                      <TokenEditControl
-                        token={token}
-                        label={hit ? "Update" : "Add"}
-                        open={editingName === name}
-                        onOpenChange={(next) => onEdit(next ? token : null)}
-                        onSave={onSave}
-                      />
                     </td>
                   </tr>
                 );

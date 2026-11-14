@@ -15,12 +15,18 @@
 }
 
 .app-toast {
+  /* The stack itself stays click-through so it never blocks the canvas; each
+     toast opts back in so its close control and hover-pause are reachable. */
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-full);
   background: var(--color-surface-overlay);
   border: 1px solid var(--color-border);
   color: var(--color-text);
-  font-size: var(--font-size-sm);
+  font-size: var(--app-font-size-sm);
   box-shadow: var(--shadow-md);
   /* Long messages wrap and break inside the 90vw stack instead of
      overflowing the viewport (nowrap painted them off-screen). */
@@ -73,12 +79,43 @@
   }
 }
 
+.app-toast-msg {
+  min-width: 0;
+}
+
+/* Explicit dismiss for the persistent error tone. 24px square keeps the
+   target at the WCAG 2.5.8 floor without growing the pill. */
+.app-toast-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  margin-right: calc(-1 * var(--space-2));
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.app-toast-close:hover {
+  background: var(--color-hover-overlay);
+}
+
+.app-toast-close:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: 0;
+}
+
 .app-toast-warn {
   border-color: var(--color-warning);
-  color: var(--color-warning);
+  color: var(--color-warning-text);
 }
 
 .app-toast-err {
   border-color: var(--color-danger);
-  color: var(--color-danger);
+  color: var(--color-danger-text);
 }

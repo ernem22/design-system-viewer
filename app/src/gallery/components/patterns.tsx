@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { Button, Demo, usePortalContainer } from "../ui.tsx";
@@ -160,20 +160,30 @@ function ComboboxDemo() {
   );
 }
 
+const STEPPER_MIN = 0;
+const STEPPER_MAX = 99;
+
+function clampStep(n: number) {
+  return Math.min(STEPPER_MAX, Math.max(STEPPER_MIN, n));
+}
+
 function StepperDemo() {
   const [n, setN] = useState(2);
   return (
     <div className="dsv-stepper">
-      <button aria-label="Decrease" onClick={() => setN((v) => Math.max(0, v - 1))}>
+      <button aria-label="Decrease" onClick={() => setN((v) => clampStep(v - 1))}>
         −
       </button>
       <input
         value={n}
-        onChange={(e) => setN(Number(e.target.value) || 0)}
-        aria-label="Quantity"
+        onChange={(e) => {
+          const typed = Number(e.target.value);
+          setN(Number.isNaN(typed) ? STEPPER_MIN : clampStep(typed));
+        }}
+        aria-label={`Quantity (${STEPPER_MIN}–${STEPPER_MAX})`}
         inputMode="numeric"
       />
-      <button aria-label="Increase" onClick={() => setN((v) => v + 1)}>
+      <button aria-label="Increase" onClick={() => setN((v) => clampStep(v + 1))}>
         +
       </button>
     </div>
@@ -184,15 +194,18 @@ function RatingDemo() {
   const [v, setV] = useState(4);
   const [hov, setHov] = useState(0);
   return (
-    <div className="dsv-rating">
+    <div className="dsv-rating" role="radiogroup" aria-label="Rating">
       {[1, 2, 3, 4, 5].map((i) => (
         <button
           key={i}
+          type="button"
+          role="radio"
+          aria-checked={v === i}
           className={(hov || v) >= i ? "is-on" : ""}
           onClick={() => setV(i)}
           onMouseEnter={() => setHov(i)}
           onMouseLeave={() => setHov(0)}
-          aria-label={`${i} stars`}
+          aria-label={`${i} star${i === 1 ? "" : "s"}`}
         >
           <Icon name="star" size={20} />
         </button>
@@ -223,6 +236,25 @@ function CopyDemo() {
 function InlineEditDemo() {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState("Acme workspace");
+  // The value at edit-start, so Escape can drop the draft, and a flag that
+  // only restores focus on the edit -> view transition (not on first mount).
+  const beforeEdit = useRef(val);
+  const returnFocus = useRef(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!editing && returnFocus.current) {
+      returnFocus.current = false;
+      triggerRef.current?.focus({ preventScroll: true });
+    }
+  }, [editing]);
+
+  const finish = (save: boolean) => {
+    if (!save) setVal(beforeEdit.current);
+    returnFocus.current = true;
+    setEditing(false);
+  };
+
   return editing ? (
     <div className="dsv-inline">
       <input
@@ -230,9 +262,19 @@ function InlineEditDemo() {
         value={val}
         onChange={(e) => setVal(e.target.value)}
         autoFocus
+        aria-label="Workspace name"
         style={{ minWidth: 200 }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            finish(true);
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            finish(false);
+          }
+        }}
       />
-      <Button size="sm" onClick={() => setEditing(false)}>
+      <Button size="sm" onClick={() => finish(true)}>
         Save
       </Button>
     </div>
@@ -240,11 +282,15 @@ function InlineEditDemo() {
     <div className="dsv-inline">
       <strong style={{ fontSize: "var(--font-size-sm)" }}>{val}</strong>
       <Button
+        ref={triggerRef}
         variant="ghost"
         size="sm"
         className="dsv-icon-btn"
         aria-label="Edit name"
-        onClick={() => setEditing(true)}
+        onClick={() => {
+          beforeEdit.current = val;
+          setEditing(true);
+        }}
       >
         <Icon name="edit" size={14} />
       </Button>

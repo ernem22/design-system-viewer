@@ -72,7 +72,8 @@ function rolePx(role: string): number {
 const HEADINGS: Array<[selector: string, css: string, role: string]> = [
   [".dsv-section-head h2", galleryCss, "--heading-section"],
   [".tok-group > h2", tokenGroupCss, "--heading-section"],
-  [".app-welcome h2", welcomeCss, "--heading-section"],
+  // First-run chrome heading rides the floored --app-* type scale (T20).
+  [".app-welcome h2", welcomeCss, "--app-heading-section"],
   [".app-error-title", errorCss, "--heading-section"],
   [".dsv-block-head h3", galleryCss, "--heading-subsection"],
   [".dsv-modal h3", galleryCss, "--heading-subsection"],

@@ -177,12 +177,12 @@ describe("rail long names stay on one line (issue #286)", () => {
     expect(name).toMatch(/white-space:\s*nowrap/);
   });
 
-  it("titles Compare option buttons and Preview system rows with their full name", async () => {
+  it("titles Compare component radios and Preview system rows with their full name", async () => {
     const systems = [{ slug: "nw", name: LONG_NAME, css: "" }] as unknown as DesignSystem[];
     const compareEl = await renderInto(<CompareRail systems={systems} view={compareView()} />);
-    const option = compareEl.querySelector("button.app-rail-link");
+    const option = compareEl.querySelector(".cmp-radio-row");
     expect(option).toBeTruthy();
-    expect(option!.getAttribute("title")).toBe(option!.querySelector(".app-rail-label")?.textContent);
+    expect(option!.getAttribute("title")).toBe(option!.querySelector(".cmp-radio-label")?.textContent);
 
     const previewEl = await renderInto(
       <PreviewSystems systems={systems} activeSlug="nw" onSelect={() => {}} />,

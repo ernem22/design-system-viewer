@@ -1,5 +1,4 @@
-import { useMemo } from "react";
-import { coveragePercent } from "../systems/store.ts";
+import { useEffect, useMemo, useState } from "react";
 import { RefBadge } from "./rows.tsx";
 import { TokenEditForm } from "./InlineEditor.tsx";
 import "./InlineEditor.css";
@@ -60,9 +59,13 @@ const firstFamily = (value: string): string =>
  * a compact block) + a system Health summary + the clicked token's
  * inspector + lint summary. Nothing to inspect yet → coverage + health +
  * warnings only; once a token is picked the inspector keeps the top of the
- * panel and Health folds into a collapsed details under it. The inspector
- * hosts the edit form: saving goes through `onPatch` with the same
- * "`--x updated`" toast the gallery popover used to show.
+ * panel and Health folds into a collapsed details under it.
+ *
+ * The inspector is the app's only token editor. It opens in a read state
+ * (name/value + Copy + Edit); Edit reveals the value form with explicit
+ * Save/Cancel. A missing schema token shows "Not set" with an Add-token form
+ * (name read-only). Every write goes through the one `onPatch` callback and
+ * the one "`--x updated`" toast path.
  */
 export function TokensProps({
   view,
@@ -71,9 +74,33 @@ export function TokensProps({
   view: TokensViewModel;
   onPatch: (name: string, value: string) => void;
 }) {
-  const { cov, selected, warnings, tokens, valueMap, copyToken, editingName, onEdit, pushToast } =
+  const { cov, selected, selectedMissing, warnings, tokens, valueMap, copyToken, pushToast } =
     view;
-  const pct = coveragePercent(cov) ?? 0;
+  // Edit is a mode of the inspector, reset whenever the selection changes so
+  // a newly clicked row always lands in the read state.
+  const [editing, setEditing] = useState(false);
+  const selectedName = selected?.name ?? null;
+  useEffect(() => {
+    setEditing(false);
+  }, [selectedName]);
+
+  const saveToken = (name: string, value: string) => {
+    try {
+      onPatch(name, value);
+      pushToast(`${name} updated`, "ok");
+    } catch (e) {
+      pushToast(`Save failed: ${e instanceof Error ? e.message : String(e)}`, "err");
+    }
+  };
+  // Coverage is recomputed from CSS, and coveragePercent rounds. Rounding
+  // would read "100%" while tokens are still missing, so only claim a full
+  // ring/label when nothing is missing; otherwise floor the shown value.
+  const complete = cov.expected > 0 && cov.missing === 0;
+  const pct = complete
+    ? 100
+    : cov.expected > 0
+      ? Math.min(99, Math.floor((cov.present / cov.expected) * 100))
+      : 0;
   const tone = pct >= 80 ? "ok" : pct >= 50 ? "warn" : "bad";
 
   // Health inputs share the gallery's own sources: the resolved value map
@@ -188,37 +215,56 @@ export function TokensProps({
         {selected ? (
           <div className="tok-inspector">
             <code className="tok-inspector-name">{selected.name}</code>
-            <code className="tok-inspector-value">{selected.value}</code>
-            <div className="tok-inspector-meta">
-              {isRef(selected.value) ? (
-                <span>
-                  references another token <RefBadge value={selected.value} />
-                </span>
-              ) : (
-                <span>raw value</span>
-              )}
-            </div>
-            <button className="tok-btn" onClick={() => copyToken(selected)}>
-              Copy `--name: value;`
-            </button>
-            <TokenEditForm
-              key={selected.name}
-              token={selected}
-              autoFocus={editingName === selected.name}
-              onSave={(name, value) => {
-                try {
-                  onPatch(name, value);
-                  pushToast(`${name} updated`, "ok");
-                } catch (e) {
-                  pushToast(`Save failed: ${e instanceof Error ? e.message : String(e)}`, "err");
-                }
-                onEdit(null);
-              }}
-              onCancel={() => onEdit(null)}
-            />
+            {selectedMissing ? (
+              <>
+                <p className="tok-inspector-meta">Not set — this schema token has no value yet.</p>
+                <TokenEditForm
+                  key={`add:${selected.name}`}
+                  token={selected}
+                  mode="add"
+                  onSave={saveToken}
+                />
+              </>
+            ) : editing ? (
+              <>
+                <TokenEditForm
+                  key={`edit:${selected.name}`}
+                  token={selected}
+                  autoFocus
+                  onSave={saveToken}
+                  onCancel={() => setEditing(false)}
+                />
+                <div className="tok-inspector-actions">
+                  <button className="tok-btn" onClick={() => copyToken(selected)}>
+                    Copy `--name: value;`
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <code className="tok-inspector-value">{selected.value}</code>
+                <div className="tok-inspector-meta">
+                  {isRef(selected.value) ? (
+                    <span>
+                      references another token <RefBadge value={selected.value} />
+                    </span>
+                  ) : (
+                    <span>raw value</span>
+                  )}
+                </div>
+                <div className="tok-inspector-actions">
+                  <button className="tok-btn" onClick={() => copyToken(selected)}>
+                    Copy `--name: value;`
+                  </button>
+                  <button className="tok-btn tok-btn-primary" onClick={() => setEditing(true)}>
+                    Edit
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ) : (
-          <p className="tok-props-empty">Click a token in the gallery to inspect it here.</p>
+          <p className="tok-props-empty">Click a token in the gallery or schema to inspect it here.</p>
         )}
       </div>
 

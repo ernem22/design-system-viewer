@@ -8,13 +8,13 @@
 
 .app-welcome h2 {
   margin: 0 0 var(--space-2);
-  font-size: var(--heading-section);
+  font-size: var(--app-heading-section);
   color: var(--color-text);
 }
 
 .app-welcome p {
   margin: 0;
-  font-size: var(--font-size-sm);
+  font-size: var(--app-font-size-sm);
 }
 
 .app-welcome code {
@@ -39,13 +39,32 @@
   background: var(--color-surface);
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: var(--font-size-sm);
+  font-size: var(--app-font-size-sm);
   cursor: pointer;
+}
+
+.app-welcome-card:not(:disabled) {
+  transition: transform var(--app-duration-fast) var(--app-ease-out);
 }
 
 .app-welcome-card:hover {
   border-color: var(--color-accent);
   color: var(--color-text);
+}
+
+.app-welcome-card:not(:disabled):active {
+  transform: scale(var(--app-motion-scale-active));
+}
+
+.app-welcome-card:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-welcome-card:not(:disabled):active {
+    transform: none;
+  }
 }
 
 .app-welcome-card b {
@@ -65,7 +84,7 @@
   inset: 0;
   display: grid;
   place-items: center;
-  background: var(--color-hover-overlay);
+  background: color-mix(in srgb, var(--color-scrim) 60%, transparent);
   z-index: var(--z-overlay);
   pointer-events: none;
 }

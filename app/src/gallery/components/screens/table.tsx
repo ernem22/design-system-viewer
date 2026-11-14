@@ -1,7 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
-import { Button, Field, usePortalContainer } from "../../ui.tsx";
+import { Button, Field, useCompareIdPrefix, usePortalContainer } from "../../ui.tsx";
 import { Icon } from "../../../lib/icons.tsx";
 import "./screens.css";
 
@@ -21,8 +21,9 @@ const BADGE: Record<string, string> = { Paid: "success", Pending: "warning", Ove
 
 export default function TableBody() {
   const portalContainer = usePortalContainer();
+  const id = useCompareIdPrefix();
   return (
-    <div className="dsv-card" style={{ padding: 0, overflow: "hidden" }}>
+    <div className="dsv-card" style={{ padding: 0, overflow: "clip" }}>
       <div
         className="dsv-toolbar"
         style={{
@@ -63,11 +64,11 @@ export default function TableBody() {
                 <p>Enter customer and amount.</p>
               </Dialog.Description>
               <div className="dsv-stack">
-                <Field label="Customer" id="t-cust">
-                  <input id="t-cust" className="dsv-input" />
+                <Field label="Customer" id={`${id}t-cust`}>
+                  <input id={`${id}t-cust`} className="dsv-input" />
                 </Field>
-                <Field label="Amount" id="t-amt">
-                  <input id="t-amt" className="dsv-input" placeholder="₺" />
+                <Field label="Amount" id={`${id}t-amt`}>
+                  <input id={`${id}t-amt`} className="dsv-input" placeholder="₺" />
                 </Field>
               </div>
               <div className="dsv-modal-actions" style={{ marginTop: "var(--space-5)" }}>
@@ -87,7 +88,7 @@ export default function TableBody() {
           <thead>
             <tr>
               {["Invoice", "Customer", "Status", "Amount"].map((h) => (
-                <th key={h} scope="col">
+                <th key={h} scope="col" style={{ textAlign: h === "Amount" ? "right" : undefined }}>
                   {h}
                 </th>
               ))}
@@ -104,11 +105,18 @@ export default function TableBody() {
                 <td>
                   <span className={`dsv-badge dsv-badge--${BADGE[st]}`}>{st}</span>
                 </td>
-                <td>₺{intAmount.format(amt)}</td>
+                <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                  ₺{intAmount.format(amt)}
+                </td>
                 <td style={{ textAlign: "right" }}>
                   <DropdownMenu.Root>
                     <DropdownMenu.Trigger asChild>
-                      <Button variant="ghost" size="sm" className="dsv-icon-btn" aria-label="Actions">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="dsv-icon-btn"
+                        aria-label={`Actions for ${id}`}
+                      >
                         <Icon name="dots" size={14} />
                       </Button>
                     </DropdownMenu.Trigger>

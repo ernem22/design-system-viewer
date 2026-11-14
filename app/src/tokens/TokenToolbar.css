@@ -42,6 +42,17 @@
   color: var(--color-input-placeholder);
 }
 
+/* Only the custom × clears the filter; hide the native search cancel so the
+   two affordances never overlap (same as the rail search in shell.css). */
+.tok-filter::-webkit-search-cancel-button {
+  display: none;
+}
+
+.tok-filter:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
 .tok-filter-clear {
   position: absolute;
   right: var(--space-2);
@@ -52,6 +63,11 @@
   cursor: pointer;
   line-height: 1;
   padding: 0 var(--space-1);
+}
+
+.tok-filter-clear:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .tok-inline {
@@ -84,6 +100,11 @@
   border-color: var(--color-accent);
 }
 
+.tok-check:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
 .tok-check-indicator {
   display: flex;
   color: var(--color-on-accent);
@@ -114,6 +135,20 @@
 
 .tok-btn:hover {
   border-color: var(--color-border-strong);
+}
+
+.tok-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.tok-btn:disabled:hover {
+  border-color: var(--color-border);
+}
+
+.tok-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .tok-btn[data-state="on"] {
@@ -213,7 +248,7 @@
 .tok-dialog-overlay {
   position: fixed;
   inset: 0;
-  background: var(--color-hover-overlay);
+  background: var(--color-scrim);
   z-index: var(--z-overlay);
   /* Wheel/touch chains must stop at the modal, not scroll the page behind. */
   overscroll-behavior: contain;
@@ -228,13 +263,29 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface-overlay);
-  padding: var(--space-5);
+  /* Head / scrolling body / fixed foot. The frame clips (never scrolls), so
+     the title and the actions stay put while only the middle scrolls. */
+  padding: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   box-shadow: var(--shadow-md);
   z-index: var(--z-modal);
-  /* long previews (missing list, warnings) must scroll, not overflow */
   max-height: 90vh;
+  overflow: clip;
+  overscroll-behavior: contain;
+}
+
+.tok-dialog-head {
+  flex: none;
+  padding: var(--space-5) var(--space-5) 0;
+}
+
+.tok-dialog-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   overflow-y: auto;
-  /* The dialog is itself the scroll container: keep its own scroll chained. */
+  padding: var(--space-3) var(--space-5);
   overscroll-behavior: contain;
 }
 
@@ -244,6 +295,36 @@
   font-weight: var(--font-weight-semibold);
 }
 
+/* The close affordance sits outside the scrolling body, pinned to the
+   frame's top-right corner. */
+.tok-dialog-close {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: var(--space-7);
+  height: var(--space-7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tok-dialog-close:hover {
+  background: var(--color-hover-overlay);
+  color: var(--color-text);
+}
+
+.tok-dialog-close:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
 .tok-dialog-desc {
   margin: 0 0 var(--space-4);
   font-size: var(--font-size-sm);
@@ -251,14 +332,18 @@
 }
 
 .tok-dialog-actions {
+  flex: none;
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);
+  padding: var(--space-3) var(--space-5) var(--space-5);
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-overlay);
 }
 
-/* Shared Add-dialog language (AddSystemDialog + TokenDialog): wide layout,
-   name/css fields, live preview and row/error helpers. The .tok-dialog +
-   overlay/title/desc/actions primitives above stay the single base. */
+/* Shared dialog language: wide layout, name/css fields, live preview and
+   row/error helpers. The .tok-dialog + overlay/title/desc/actions primitives
+   above stay the single base; ImportSheet.css owns the sheet's proportions. */
 
 .tok-dialog-wide {
   width: min(560px, 94vw);
@@ -291,6 +376,12 @@
   resize: vertical;
 }
 
+.tok-input:focus-visible,
+.tok-textarea:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
 .tok-dialog-meta {
   margin: 0 0 var(--space-2);
   font-size: var(--font-size-xs);
@@ -316,11 +407,11 @@
 }
 
 .tok-dialog-preview .ok {
-  color: var(--color-success);
+  color: var(--color-success-text);
 }
 
 .tok-dialog-preview .warn {
-  color: var(--color-warning);
+  color: var(--color-warning-text);
 }
 
 .tok-dialog-preview details {
@@ -335,7 +426,7 @@
 .tok-dialog-preview code {
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
-  color: var(--color-warning);
+  color: var(--color-warning-text);
   margin-inline-end: var(--space-2);
 }
 
@@ -393,6 +484,11 @@
 .tok-seg-item[data-state="on"] {
   background: var(--color-accent-subtle);
   color: var(--color-text);
+}
+
+.tok-seg-item:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 /* Narrow viewport (issue #311): the toolbar wraps onto as many lines as

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { Button, Demo } from "../ui.tsx";
 import { Icon } from "../../lib/icons.tsx";
 import { VarVal } from "./varVal.tsx";
@@ -61,6 +62,19 @@ const MAINTENANCE_TIME = `${new Intl.DateTimeFormat(undefined, { hour: "2-digit"
 
 export default function StatusBody() {
   const [banner, setBanner] = useState(true);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const restoreRef = useRef<HTMLButtonElement>(null);
+  const wasBanner = useRef(banner);
+  // Dismissing unmounts the focused close button, so focus would fall to
+  // <body>. Move it to the control that can undo the dismissal, and back to
+  // the banner's close button when the banner is restored.
+  useEffect(() => {
+    if (wasBanner.current === banner) return;
+    wasBanner.current = banner;
+    if (banner) closeRef.current?.focus();
+    else restoreRef.current?.focus();
+  }, [banner]);
+
   return (
     <>
       <Demo title="Callout">
@@ -101,12 +115,17 @@ export default function StatusBody() {
         {banner ? (
           <div className="dsv-banner" style={{ maxWidth: 460, width: "100%" }}>
             <Icon name="bell" size={14} /> {MAINTENANCE_DAY} {MAINTENANCE_TIME} maintenance window.
-            <button className="close" aria-label="Close" onClick={() => setBanner(false)}>
+            <button
+              ref={closeRef}
+              className="close"
+              aria-label="Close"
+              onClick={() => setBanner(false)}
+            >
               <Icon name="x" size={14} />
             </button>
           </div>
         ) : (
-          <Button variant="ghost" size="sm" onClick={() => setBanner(true)}>
+          <Button ref={restoreRef} variant="ghost" size="sm" onClick={() => setBanner(true)}>
             Restore banner
           </Button>
         )}
@@ -114,7 +133,7 @@ export default function StatusBody() {
 
       <Demo title="Empty state">
         <div className="dsv-card" style={{ maxWidth: 460, width: "100%" }}>
-          <div className="dsv-empty">
+          <div className="dsv-empty" role="status">
             <span className="glyph">
               <Icon name="search" size={24} />
             </span>
@@ -128,7 +147,8 @@ export default function StatusBody() {
       </Demo>
 
       <Demo title="Skeleton">
-        <div className="dsv-card" style={{ width: 300 }}>
+        <div className="dsv-card" style={{ width: 300 }} aria-busy="true">
+          <VisuallyHidden.Root role="status">Loading…</VisuallyHidden.Root>
           <div className="dsv-inline" style={{ marginBottom: "var(--space-3)" }}>
             <div
               className="dsv-skeleton"
@@ -146,10 +166,15 @@ export default function StatusBody() {
       </Demo>
 
       <Demo title="Spinner">
-        <span className="dsv-spinner" />
-        <Button disabled>
-          <span className="dsv-spinner dsv-spinner--sm" /> Loading…
+        <span className="dsv-spinner" role="status">
+          <VisuallyHidden.Root>Loading…</VisuallyHidden.Root>
+        </span>
+        <Button disabled aria-busy="true">
+          <span className="dsv-spinner dsv-spinner--sm" aria-hidden="true" /> Loading…
         </Button>
+        {/* A disabled button's contents are not reliably announced, so the
+            busy state gets its own live region outside the control. */}
+        <VisuallyHidden.Root role="status">Loading, please wait</VisuallyHidden.Root>
       </Demo>
 
       <Demo title="Motion — instant toggle">

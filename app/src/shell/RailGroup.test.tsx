@@ -121,7 +121,7 @@ describe("shared rail group shell", () => {
     const systems = [{ slug: "aurora", name: "Aurora", css: "" }] as unknown as DesignSystem[];
     const compareEl = await renderInto(<CompareRail systems={systems} view={view} />);
     const labels = [...compareEl.querySelectorAll(".app-rail-group-label")].map((l) => l.textContent ?? "");
-    expect(labels.some((l) => l.includes("Systems"))).toBe(true);
+    expect(labels.some((l) => l.includes("All systems"))).toBe(true);
     expect(labels.some((l) => l.includes("Basics"))).toBe(true);
     expect(compareEl.querySelector(".app-rail-group-chevron")).toBeTruthy();
     expect(compareEl.querySelector(".app-rail-count")).toBeTruthy();

@@ -5,7 +5,7 @@
 // App-owned patchToken plumbing); everything content-level lives here next
 // to the <Demo> header that hosts the trigger.
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, RefObject } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { tokensForDemo } from "../lib/tokenUsage.ts";
 import {
@@ -123,12 +123,18 @@ function ValueEditor({
   name,
   value,
   onSetValueEdit,
+  returnFocusTo,
 }: {
   name: string;
   value: string;
   onSetValueEdit: (name: string, value: string) => void;
+  returnFocusTo?: RefObject<HTMLButtonElement | null>;
 }) {
   const [draft, setDraft] = useState(value);
+  // Escape must cancel, but it blurs the field to leave the editor — and blur
+  // is also how Enter/blur saves. This flag tells the blur handler that the
+  // upcoming blur is an Escape cancel, so it never writes.
+  const cancelNextBlur = useRef(false);
   // A change from anywhere (this editor's own commit included) refreshes the
   // draft, so a reopened or externally-changed value never shows stale text.
   useEffect(() => {
@@ -159,15 +165,23 @@ function ValueEditor({
         spellCheck={false}
         placeholder="CSS value…"
         aria-label={`${name} value`}
-        onBlur={() => commit(draft)}
+        onBlur={() => {
+          if (cancelNextBlur.current) {
+            cancelNextBlur.current = false;
+            return;
+          }
+          commit(draft);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
             e.currentTarget.blur();
           } else if (e.key === "Escape") {
             e.preventDefault();
+            cancelNextBlur.current = true;
             setDraft(value);
             e.currentTarget.blur();
+            returnFocusTo?.current?.focus({ preventScroll: true });
           }
         }}
       />
@@ -186,6 +200,7 @@ function TokenRow({
 }) {
   const { swaps, valueEdits } = useInspector();
   const [mode, setMode] = useState<"swap" | "edit" | null>(null); // null | "swap" | "edit"
+  const editTriggerRef = useRef<HTMLButtonElement>(null);
   const swappedTo = swaps[scopeId]?.[name];
   const isValueEdited = name in valueEdits;
   // Swap-first (legacy valueInDemo): a swapped token reads the source's
@@ -241,6 +256,7 @@ function TokenRow({
           </button>
           <button
             type="button"
+            ref={editTriggerRef}
             className={mode === "edit" ? "is-active" : ""}
             onClick={() => setMode(mode === "edit" ? null : "edit")}
           >
@@ -258,7 +274,14 @@ function TokenRow({
           }}
         />
       )}
-      {mode === "edit" && <ValueEditor name={name} value={valueOf(name)} onSetValueEdit={setValueEdit} />}
+      {mode === "edit" && (
+        <ValueEditor
+          name={name}
+          value={valueOf(name)}
+          onSetValueEdit={setValueEdit}
+          returnFocusTo={editTriggerRef}
+        />
+      )}
     </div>
   );
 }
@@ -562,6 +585,7 @@ export function SectionScopeTrigger({
       type="button"
       className={`dsv-token-drawer-trigger${hasEdits ? " has-edits" : ""}${isActive ? " is-active" : ""}`}
       title={`${tokens.length} tokens used here — click to inspect or edit`}
+      aria-label={`${tokens.length} tokens used here — inspect`}
       aria-pressed={isActive}
       onClick={(event) => openScope({ id, title, tokens }, event.currentTarget)}
     >

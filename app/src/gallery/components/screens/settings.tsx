@@ -38,7 +38,11 @@ export default function SettingsBody() {
   const [density, setDensity] = useState("comfortable");
   const [notif, setNotif] = useState({ email: true, push: true, digest: false });
   const [theme, setTheme] = useState("system");
+  const [autoSave, setAutoSave] = useState(true);
+  const [language, setLanguage] = useState("tr");
+  const [motion, setMotion] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleted, setDeleted] = useState(false);
   return (
     <div style={{ maxWidth: 560, margin: "0 auto" }}>
       <div className="dsv-card">
@@ -57,13 +61,18 @@ export default function SettingsBody() {
           <Tabs.Content className="dsv-tabs-content" value="general">
             <div className="dsv-stack" style={{ color: "var(--color-text)" }}>
               <SettingRow title="Auto save" desc="Save instantly">
-                <Switch.Root className="dsv-switch" defaultChecked aria-label="Auto save">
+                <Switch.Root
+                  className="dsv-switch"
+                  aria-label="Auto save"
+                  checked={autoSave}
+                  onCheckedChange={setAutoSave}
+                >
                   <Switch.Thumb className="dsv-switch-thumb" />
                 </Switch.Root>
               </SettingRow>
               <Separator.Root className="dsv-sep" />
               <SettingRow title="Language" desc="Interface language">
-                <Select.Root defaultValue="tr">
+                <Select.Root value={language} onValueChange={setLanguage}>
                   <Select.Trigger className="dsv-select-trigger" aria-label="Language">
                     <Select.Value />
                     <Select.Icon>
@@ -88,7 +97,12 @@ export default function SettingsBody() {
               </SettingRow>
               <Separator.Root className="dsv-sep" />
               <SettingRow title="Density" desc="Line spacing">
-                <RadioGroup.Root className="dsv-inline" value={density} onValueChange={setDensity}>
+                <RadioGroup.Root
+                  className="dsv-inline"
+                  aria-label="Density"
+                  value={density}
+                  onValueChange={setDensity}
+                >
                   {["compact", "comfortable"].map((v) => (
                     <label key={v} className="dsv-control-label">
                       <RadioGroup.Item className="dsv-radio" value={v}>
@@ -110,9 +124,18 @@ export default function SettingsBody() {
               </SettingRow>
               <Separator.Root className="dsv-sep" />
               <SettingRow title="Delete workspace" desc="Permanent, cannot be undone">
-                {confirmingDelete ? (
+                {deleted ? (
+                  <span className="dsv-badge dsv-badge--danger">Workspace deleted</span>
+                ) : confirmingDelete ? (
                   <span className="dsv-inline" style={{ gap: "var(--space-2)" }}>
-                    <Button variant="danger" size="sm" onClick={() => setConfirmingDelete(false)}>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => {
+                        setConfirmingDelete(false);
+                        setDeleted(true);
+                      }}
+                    >
                       Confirm delete
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => setConfirmingDelete(false)}>
@@ -125,17 +148,6 @@ export default function SettingsBody() {
                   </Button>
                 )}
               </SettingRow>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: "var(--space-3)",
-                marginTop: "var(--space-6)",
-              }}
-            >
-              <Button variant="ghost">Reset</Button>
-              <Button>Save</Button>
             </div>
           </Tabs.Content>
           <Tabs.Content className="dsv-tabs-content" value="notif">
@@ -182,7 +194,12 @@ export default function SettingsBody() {
           <Tabs.Content className="dsv-tabs-content" value="appear">
             <div className="dsv-stack" style={{ color: "var(--color-text)" }}>
               <SettingRow title="Theme" desc="Follows the system's dark variant">
-                <RadioGroup.Root className="dsv-inline" value={theme} onValueChange={setTheme}>
+                <RadioGroup.Root
+                  className="dsv-inline"
+                  aria-label="Theme"
+                  value={theme}
+                  onValueChange={setTheme}
+                >
                   {["light", "dark", "system"].map((v) => (
                     <label key={v} className="dsv-control-label">
                       <RadioGroup.Item className="dsv-radio" value={v}>
@@ -195,7 +212,12 @@ export default function SettingsBody() {
               </SettingRow>
               <Separator.Root className="dsv-sep" />
               <SettingRow title="Motion" desc="Reduce animations">
-                <Switch.Root className="dsv-switch" aria-label="Motion">
+                <Switch.Root
+                  className="dsv-switch"
+                  aria-label="Motion"
+                  checked={motion}
+                  onCheckedChange={setMotion}
+                >
                   <Switch.Thumb className="dsv-switch-thumb" />
                 </Switch.Root>
               </SettingRow>

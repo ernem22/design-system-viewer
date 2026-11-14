@@ -38,3 +38,12 @@
 
 .dsv-toolbar { display: flex; align-items: center; gap: var(--space-1); background: var(--color-surface); padding: var(--space-1); border: var(--border-width-thin) solid var(--color-border-subtle); border-radius: var(--radius-md); }
 .dsv-toolbar-sep { width: var(--border-width-thin); align-self: stretch; background: var(--color-divider); margin: var(--space-1) var(--space-1); }
+
+/* Shared token focus ring for nav triggers/links and tabs. Toolbar buttons
+   reuse .dsv-toggle, which carries the ring in gallery.css. */
+.dsv-nav-trigger:focus-visible,
+.dsv-nav-link:focus-visible,
+.dsv-tabs-trigger:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}

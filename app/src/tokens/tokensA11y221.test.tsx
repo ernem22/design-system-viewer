@@ -25,7 +25,6 @@ const read = (rel: string) =>
 
 const token: Token = { name: "--space-1", value: "0.25rem" };
 const colorToken: Token = { name: "--color-accent", value: "#4f46e5" };
-const noop = () => {};
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
@@ -58,9 +57,6 @@ function keydown(el: Element, key: string): void {
 const rowCallbacks = (onPick: (t: Token) => void) => ({
   selectedName: "--space-1",
   onPick,
-  editingName: null as string | null,
-  onEdit: noop,
-  onSave: noop,
 });
 
 describe("issue #221 RED: pickable rows are keyboard-operable with a valid role/state", () => {
@@ -97,9 +93,6 @@ describe("issue #221 RED: pickable rows are keyboard-operable with a valid role/
         tokens={[colorToken]}
         selectedName={colorToken.name}
         onPick={onPick}
-        editingName={null}
-        onEdit={noop}
-        onSave={noop}
       />,
     );
     const swatch = el.querySelector<HTMLElement>(`[data-token='${colorToken.name}']`)!;
@@ -112,21 +105,26 @@ describe("issue #221 RED: pickable rows are keyboard-operable with a valid role/
   });
 });
 
-function SchemaHarness({ system, push }: { system: DesignSystem; push: PushToast }) {
+function SchemaHarness({
+  system,
+  push,
+  onPick,
+}: {
+  system: DesignSystem;
+  push: PushToast;
+  onPick?: (token: Token) => void;
+}) {
   const view = useTokensView(system, push);
   return (
     <SchemaView
       view={view}
-      onPick={view.copyToken}
-      editingName={view.editingName}
-      onEdit={view.onEdit}
-      onSave={() => {}}
+      onPick={onPick ?? view.selectToken}
     />
   );
 }
 
 describe("issue #221 RED: schema rows are keyboard-operable inside a grid", () => {
-  it("focuses a schema row, picks it with Enter, and keeps aria-selected valid", async () => {
+  it("focuses a schema row and selects it with Enter, without copying", async () => {
     const system = {
       slug: "demo",
       name: "Demo",
@@ -137,15 +135,18 @@ describe("issue #221 RED: schema rows are keyboard-operable inside a grid", () =
       value: { writeText },
       configurable: true,
     });
-    const el = await mount(<SchemaHarness system={system} push={vi.fn()} />);
+    const onPick = vi.fn();
+    const el = await mount(<SchemaHarness system={system} push={vi.fn()} onPick={onPick} />);
     const row = el.querySelector<HTMLElement>("[data-token='--color-accent']")!;
     expect(row, "schema row renders").not.toBeNull();
     expect(row.tabIndex, "schema row is Tab-reachable").toBeGreaterThanOrEqual(0);
     expect(row.closest("table")?.getAttribute("role"), "schema table is a grid").toBe("grid");
     keydown(row, "Enter");
-    expect(writeText, "Enter copies the schema token").toHaveBeenCalledWith(
-      "--color-accent: #4f46e5;",
-    );
+    expect(onPick, "Enter selects the schema token").toHaveBeenCalledWith({
+      name: "--color-accent",
+      value: "#4f46e5",
+    });
+    expect(writeText, "Enter must not copy").not.toHaveBeenCalled();
   });
 });
 

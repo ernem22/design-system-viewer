@@ -6,14 +6,25 @@ import { Icon } from "../../../lib/icons.tsx";
 import { Avat } from "./screenBits.tsx";
 import "./screens.css";
 
-// Grouped locale count — tr-TR grouping keeps the shown "1.284" shape.
+// One locale for the whole screen: tr-TR groups thousands with "." and marks
+// decimals with ",", so "1.284" and "48,2k" now read as the same system.
 const intCount = new Intl.NumberFormat("tr-TR");
+const decCount = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 });
 
-const STATS: [string, string, string, string][] = [
-  ["Revenue", "₺48.2k", "up", "▲ 12%"],
-  ["Users", intCount.format(1284), "up", "▲ 4%"],
-  ["Error rate", "0.4%", "down", "▼ 0.1%"],
-  ["Uptime", "99.98%", "up", "▲ 0.02%"],
+interface Stat {
+  label: string;
+  value: string;
+  dir: "up" | "down";
+  change: string;
+  tone: "positive" | "negative";
+}
+
+const STATS: Stat[] = [
+  { label: "Revenue", value: `₺${decCount.format(48.2)}k`, dir: "up", change: `${intCount.format(12)}%`, tone: "positive" },
+  { label: "Users", value: intCount.format(1284), dir: "up", change: `${intCount.format(4)}%`, tone: "positive" },
+  // A falling error rate is a positive result; direction and sentiment differ.
+  { label: "Error rate", value: `${decCount.format(0.4)}%`, dir: "down", change: `${decCount.format(0.1)}%`, tone: "positive" },
+  { label: "Uptime", value: `${decCount.format(99.98)}%`, dir: "up", change: `${decCount.format(0.02)}%`, tone: "positive" },
 ];
 
 export default function DashboardBody() {
@@ -43,11 +54,13 @@ export default function DashboardBody() {
           gap: "var(--space-4)",
         }}
       >
-        {STATS.map(([k, v, dir, d]) => (
-          <div key={k} className="dsv-stat">
-            <div className="k">{k}</div>
-            <div className="v">{v}</div>
-            <div className={`d ${dir}`}>{d}</div>
+        {STATS.map(({ label, value, dir, change, tone }) => (
+          <div key={label} className="dsv-stat">
+            <div className="k">{label}</div>
+            <div className="v">{value}</div>
+            <div className={`d ${tone}`}>
+              {dir === "up" ? "▲" : "▼"} {change}
+            </div>
           </div>
         ))}
       </div>
@@ -64,9 +77,15 @@ export default function DashboardBody() {
           aria-label="Monthly goal progress"
           style={{ width: "100%" }}
         >
-          <Progress.Indicator className="dsv-progress-indicator" style={{ width: "66%" }} />
+          <Progress.Indicator className="dsv-progress-indicator" style={{ transform: "scaleX(0.66)" }} />
         </Progress.Root>
         <Separator.Root className="dsv-sep" />
+        <div
+          className="dsv-muted"
+          style={{ fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-medium)", marginBottom: "var(--space-2)" }}
+        >
+          Recent activity
+        </div>
         <div className="dsv-inline" style={{ justifyContent: "space-between", fontSize: "var(--font-size-xs)" }}>
           <span className="dsv-muted">Deploy succeeded · 2m ago</span>
           <span className="dsv-badge dsv-badge--success">Live</span>
@@ -75,7 +94,13 @@ export default function DashboardBody() {
           <span className="dsv-muted">Quota warning · 3h ago</span>
           <span className="dsv-badge dsv-badge--warning">Pending</span>
         </div>
-        <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-4)" }}>
+        <div
+          className="dsv-muted"
+          style={{ fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-medium)", margin: "var(--space-4) 0 var(--space-2)" }}
+        >
+          Contributors
+        </div>
+        <div style={{ display: "flex", gap: "var(--space-2)" }}>
           {["Ada Lovelace", "Grace Hopper", "Alan Turing", "Katherine Johnson"].map((name) => (
             <HoverCard.Root key={name} openDelay={120}>
               <HoverCard.Trigger asChild>

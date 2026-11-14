@@ -76,9 +76,6 @@ async function renderGroup(
         showMissing={false}
         selectedName={null}
         onPick={opts?.onPick ?? (() => {})}
-        editingName={null}
-        onEdit={() => {}}
-        onSave={() => {}}
       />,
     );
   });
@@ -120,6 +117,11 @@ describe("color scale ramp (issue #308 RED)", () => {
     act(() => {
       cell.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
+    // Picking is select-only and idempotent: one click selects exactly once.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    expect(onPick).toHaveBeenCalledTimes(1);
     expect(onPick).toHaveBeenCalledWith({ name: "--color-brand-500", value: "#c26a51" });
   });
 

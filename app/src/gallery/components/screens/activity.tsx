@@ -13,7 +13,8 @@ const ITEMS: [string, string, string, string, string][] = [
 const FILTERS = ["All", "Deploys", "Members", "Billing"];
 
 function nodeStyle(tone: string): CSSProperties | undefined {
-  if (tone === "success") return undefined;
+  if (tone === "success")
+    return { background: "var(--color-success-subtle)", borderColor: "var(--color-success)" };
   if (tone === "danger")
     return { background: "var(--color-danger-subtle)", borderColor: "var(--color-danger)" };
   if (tone === "warning")
@@ -25,6 +26,7 @@ export default function ActivityBody() {
   const [f, setF] = useState("All");
   return (
     <div style={{ maxWidth: 560, margin: "0 auto" }}>
+      <h3 style={{ margin: "0 0 var(--space-4)", fontSize: "var(--font-size-lg)" }}>Activity</h3>
       <div className="dsv-segmented" style={{ marginBottom: "var(--space-4)" }}>
         {FILTERS.map((x) => (
           <button key={x} aria-pressed={f === x} onClick={() => setF(x)}>
@@ -45,12 +47,6 @@ export default function ActivityBody() {
           </li>
         ))}
       </ul>
-      <p className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>
-        Filter: {f} ·{" "}
-        <a className="dsv-link" href="#screen-activity">
-          view all
-        </a>
-      </p>
     </div>
   );
 }

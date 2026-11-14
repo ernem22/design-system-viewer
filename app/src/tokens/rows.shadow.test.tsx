@@ -1,9 +1,12 @@
 // @vitest-environment happy-dom
 // Issue #310: Shadow and glow specimens are invisible — 40px dark squares on
 // a dark page. RED on the parent: ShadowRow renders the specimen with inline
-// boxShadow var(--shadow-md), inside a stage, with a group-level stage toggle
-// whose accessible name contains "light". The parent has no stage or toggle,
-// so the last two assertions fail there.
+// boxShadow var(--shadow-md), inside a stage, with a group-level stage toggle.
+// The parent has no stage or toggle, so the last two assertions fail there.
+//
+// T22 update: the toggle's old "Light" label lied — it applied
+// --color-surface-inverse, which is dark in the light theme. The control is
+// now named "Inverse"; this test previously pinned the wrong label.
 import { afterEach, describe, expect, it } from "vitest";
 import { act } from "react";
 import type { Root } from "react-dom/client";
@@ -23,9 +26,6 @@ async function renderShadow(): Promise<HTMLDivElement> {
         tokens={[{ name: "--shadow-md", value: "0 4px 6px" }]}
         selectedName={null}
         onPick={() => {}}
-        editingName={null}
-        onEdit={() => {}}
-        onSave={() => {}}
       />,
     );
   });
@@ -40,7 +40,7 @@ afterEach(() => {
 });
 
 describe("ShadowRow stage (issue #310)", () => {
-  it("renders the live token, a stage, and a light-stage toggle", async () => {
+  it("renders the live token, a stage, and an inverse-stage toggle", async () => {
     const el = await renderShadow();
     // Parent uses .tok-shadowbox; the fix uses .tok-shadowcard. Accept either
     // so the boxShadow assertion passes on both and the RED fails on the
@@ -49,9 +49,9 @@ describe("ShadowRow stage (issue #310)", () => {
     expect(specimen.style.boxShadow).toBe("var(--shadow-md)");
     expect(el.querySelector(".tok-shadowstage"), "stage element exists").not.toBeNull();
     const toggle =
-      [...el.querySelectorAll<HTMLElement>("button")].find((b) => /light/i.test(b.textContent ?? "")) ?? null;
+      [...el.querySelectorAll<HTMLElement>("button")].find((b) => /inverse/i.test(b.textContent ?? "")) ?? null;
     expect(toggle, "stage toggle exists").not.toBeNull();
-    expect(toggle?.textContent ?? "", "toggle name contains light").toMatch(/light/i);
+    expect(toggle?.textContent ?? "", "toggle name contains inverse").toMatch(/inverse/i);
   });
 
   it("shares one toggle across the whole group, not one per row", async () => {
@@ -69,13 +69,10 @@ describe("ShadowRow stage (issue #310)", () => {
           ]}
           selectedName={null}
           onPick={() => {}}
-          editingName={null}
-          onEdit={() => {}}
-          onSave={() => {}}
         />,
       );
     });
-    const buttons = [...multi.querySelectorAll("button")].filter((b) => /light|page/i.test(b.textContent ?? ""));
+    const buttons = [...multi.querySelectorAll("button")].filter((b) => /inverse|page/i.test(b.textContent ?? ""));
     expect(buttons, "one group-level toggle").toHaveLength(2);
     expect(multi.querySelectorAll(".tok-shadowstage")).toHaveLength(3);
     const stages = () => [...multi.querySelectorAll<HTMLElement>(".tok-shadowstage")];
@@ -84,14 +81,14 @@ describe("ShadowRow stage (issue #310)", () => {
       "page",
       "page",
     ]);
-    const light = buttons.find((b) => /light/i.test(b.textContent ?? ""))!;
+    const inverse = buttons.find((b) => /inverse/i.test(b.textContent ?? ""))!;
     act(() => {
-      light.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      inverse.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(stages().map((s) => s.dataset.stage), "one toggle flips every stage").toEqual([
-      "light",
-      "light",
-      "light",
+      "inverse",
+      "inverse",
+      "inverse",
     ]);
     act(() => multiRoot.unmount());
     multi.remove();

@@ -9,7 +9,7 @@
  * `toFixed(2)` instead of `Intl.NumberFormat`. Companion assertions pin the
  * rest of the issue's findings (roving toolbar keys, overscroll/touch-action,
  * aria-hidden warning glyph, tabular-nums, textarea name/placeholder,
- * CssSourceBar autocomplete + live busy state, curly apostrophe).
+ * import-sheet source autocomplete + live busy state, curly apostrophe).
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -17,9 +17,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { act } from "react";
 import type { Root } from "react-dom/client";
 import { TokenToolbar } from "./TokenToolbar.tsx";
-import { TokenDialog } from "./TokenDialog.tsx";
-import { CssSourceBar } from "./CssSourceBar.tsx";
-import { TokenEditControl } from "./InlineEditor.tsx";
+import { ImportSheet } from "../systems/ImportSheet.tsx";
+import { TokenEditForm } from "./InlineEditor.tsx";
 import { TokensView } from "./TokensView.tsx";
 import { CssPreview } from "./CssPreview.tsx";
 import { useTokensView } from "./useTokensView.ts";
@@ -70,7 +69,7 @@ function ToolbarProbe() {
     <TokenToolbar
       view={view}
       system={system}
-      onMerge={noop}
+      onAddTokens={noop}
     />
   );
 }
@@ -78,7 +77,23 @@ function ToolbarProbe() {
 function WarnProbe() {
   const view = useTokensView(warnSystem, noop);
   return (
-    <TokensView system={warnSystem} view={view} onMerge={noop} onPatch={noop} />
+    <TokensView system={warnSystem} view={view} onAddTokens={noop} />
+  );
+}
+
+function ImportProbe({ scoped = true }: { scoped?: boolean }) {
+  return (
+    <ImportSheet
+      open
+      scopeSystem={scoped ? system : null}
+      systems={[system]}
+      onOpenChange={noop}
+      onAdd={noop}
+      onMerge={noop}
+      onReplace={noop}
+      onToast={noop}
+      onSaved={noop}
+    />
   );
 }
 
@@ -99,27 +114,27 @@ describe("issue #224 RED: input names, dialog description, number format", () =>
   });
 
   it("names the stylesheet URL input with autocomplete off and no spellcheck", async () => {
-    const el = await mount(<CssSourceBar onLoad={noop} onToast={noop} />);
-    const input = el.querySelector<HTMLInputElement>("input.tok-source-url")!;
+    await mount(<ImportProbe />);
+    const fromUrl = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (b) => b.textContent?.trim() === "From URL",
+    )!;
+    await act(async () => fromUrl.click());
+    const input = document.querySelector<HTMLInputElement>("input.tok-input[type='url']")!;
     expect(input, "url input renders").not.toBeNull();
     expect(input.getAttribute("name"), "url input name").toBeTruthy();
     expect(input.getAttribute("autocomplete"), "url input autocomplete").toBeTruthy();
     expect(input.getAttribute("spellcheck"), "url input spellcheck").toBe("false");
   });
 
-  it("links the Add-Tokens dialog to its rendered description", async () => {
-    await mount(<TokenDialog system={system} onMerge={noop} onToast={noop} />);
-    const trigger = [...document.querySelectorAll("button")].find(
-      (b) => b.textContent?.trim() === "Add tokens",
-    )!;
-    await act(async () => trigger.click());
+  it("links the Add-Tokens sheet to its rendered description", async () => {
+    await mount(<ImportProbe />);
     const content = document.querySelector('[role="dialog"].tok-dialog');
     expect(content, "dialog content renders").not.toBeNull();
     const describedBy = content!.getAttribute("aria-describedby");
     expect(describedBy, "dialog aria-describedby").toBeTruthy();
     const desc = describedBy ? document.getElementById(describedBy) : null;
     expect(desc, "describedby target exists").not.toBeNull();
-    expect(desc!.textContent).toMatch(/Nothing is overwritten/);
+    expect(desc!.textContent).toMatch(/nothing is saved/i);
   });
 
   it("formats contrast ratios with Intl.NumberFormat, not toFixed", () => {
@@ -181,29 +196,27 @@ describe("issue #224 companion findings", () => {
   });
 
   it("names the Add-Tokens textarea and ends its placeholder with an ellipsis", async () => {
-    await mount(<TokenDialog system={system} onMerge={noop} onToast={noop} />);
-    const trigger = [...document.querySelectorAll("button")].find(
-      (b) => b.textContent?.trim() === "Add tokens",
-    )!;
-    await act(async () => trigger.click());
-    const area = document.querySelector<HTMLTextAreaElement>("textarea.tok-textarea")!;
+    await mount(<ImportProbe />);
+    const area = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="CSS text"]')!;
     expect(area, "textarea renders").not.toBeNull();
     expect(area.getAttribute("name"), "textarea name").toBeTruthy();
     expect(area.getAttribute("placeholder"), "placeholder ellipsis").toMatch(/…$/);
   });
 
-  it("names the inline editor input", async () => {
-    await mount(
-      <TokenEditControl token={token} open={true} onOpenChange={noop} onSave={noop} />,
-    );
+  it("names the inspector editor input", async () => {
+    await mount(<TokenEditForm token={token} onSave={noop} />);
     const input = document.querySelector<HTMLInputElement>("input.tok-pop-input");
-    expect(input, "inline editor input renders").not.toBeNull();
-    expect(input!.getAttribute("name"), "inline editor input name").toBeTruthy();
+    expect(input, "inspector editor input renders").not.toBeNull();
+    expect(input!.getAttribute("name"), "inspector editor input name").toBeTruthy();
   });
 
   it("announces the Fetch busy swap", async () => {
-    const el = await mount(<CssSourceBar onLoad={noop} onToast={noop} />);
-    const fetch = [...el.querySelectorAll("button")].find(
+    await mount(<ImportProbe />);
+    const fromUrl = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (b) => b.textContent?.trim() === "From URL",
+    )!;
+    await act(async () => fromUrl.click());
+    const fetch = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
       (b) => b.textContent?.trim() === "Fetch",
     )!;
     expect(

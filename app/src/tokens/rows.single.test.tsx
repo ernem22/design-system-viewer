@@ -8,10 +8,10 @@
 // structurally: every group renders `.tok-row`, never a table, with the same
 // three cells (name/value/demo).
 //
-// Issue #307: the gallery no longer edits in place — the per-row Update
-// button and its grid track are gone, and editing happens in the Token
-// inspector. A group renders zero Update buttons; double-click selects the
-// token and asks the inspector to focus (via onEdit).
+// Issue #307 / gallery-schema unification: the gallery never edits in place —
+// the per-row Update button and its grid track are gone, and editing happens
+// only in the right-rail Token inspector. Click and double-click both select;
+// no inline editor mounts from a row.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import type { Root } from "react-dom/client";
@@ -35,9 +35,6 @@ async function renderGroup(visible: VisibleGroup): Promise<HTMLDivElement> {
         showMissing={false}
         selectedName={null}
         onPick={() => {}}
-        editingName={null}
-        onEdit={() => {}}
-        onSave={() => {}}
       />,
     );
   });
@@ -105,14 +102,13 @@ describe("gallery has no per-row edit buttons (issue #307 RED)", () => {
     }
   });
 
-  it("double-click selects the token and asks the inspector to focus it", async () => {
+  it("double-click only selects the token (no inline editor exists)", async () => {
     const { createRoot } = await import("react-dom/client");
     const host = document.createElement("div");
     document.body.appendChild(host);
     const root = createRoot(host);
     roots.push(root);
     const onPick = vi.fn();
-    const onEdit = vi.fn();
     await act(async () => {
       root.render(
         <TokenGroup
@@ -120,9 +116,6 @@ describe("gallery has no per-row edit buttons (issue #307 RED)", () => {
           showMissing={false}
           selectedName={null}
           onPick={onPick}
-          editingName={null}
-          onEdit={onEdit}
-          onSave={() => {}}
         />,
       );
     });
@@ -131,18 +124,16 @@ describe("gallery has no per-row edit buttons (issue #307 RED)", () => {
       row.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
     });
     expect(onPick, "double-click selects the token").toHaveBeenCalledWith(demoGroup.tokens[0]);
-    expect(onEdit, "double-click targets the inspector focus").toHaveBeenCalledWith(
-      demoGroup.tokens[0],
-    );
+    expect(host.querySelector(".tok-edit-form"), "no inline editor opens").toBeNull();
   });
 
-  it("points the row title at the new behaviour", async () => {
+  it("points the row title at the select-only behaviour", async () => {
     const el = await renderGroup(demoGroup);
     const row = el.querySelector(".tok-row")!;
-    expect(row.getAttribute("title")).toBe("click to copy — double-click to edit");
+    expect(row.getAttribute("title")).toBe("click to inspect in the sidebar");
     const swatches = await renderGroup(colorGroup);
     expect(swatches.querySelector(".tok-swatch")!.getAttribute("title")).toBe(
-      "click to copy — double-click to edit",
+      "click to inspect in the sidebar",
     );
   });
 });

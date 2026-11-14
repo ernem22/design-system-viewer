@@ -12,21 +12,34 @@
    lets the column grid below query its own row width for the even 2+2 split. */
 .cmp-wrap { display: flex; flex-direction: column; min-height: 100%; container-type: inline-size; }
 
-.cmp-toolbar {
-  position: sticky; top: 0; z-index: 5;
-  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
-  padding: var(--space-3) var(--space-5);
-  background: color-mix(in srgb, var(--color-surface) 86%, transparent);
-  -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2);
+/* Not sticky: the diff table's <thead> is the one sticky element in the
+   content scroller. The header names the active comparison and reads at a
+   heavier weight than the diff summary bar, the filters and the table. */
+.cmp-header {
+  display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap;
+  padding: var(--space-5) var(--space-5) var(--space-3);
   border-bottom: var(--border-width-thin) solid var(--color-divider);
 }
-.cmp-hint { font-size: var(--font-size-xs); margin-left: auto; white-space: nowrap; font-family: var(--font-mono); color: var(--color-text-muted); }
+.cmp-title {
+  margin: 0;
+  font-size: var(--heading-section); font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight); letter-spacing: var(--letter-spacing-tight);
+  color: var(--color-text);
+}
+.cmp-title-name { color: var(--color-accent-text); }
+.cmp-meta { display: flex; align-items: baseline; gap: var(--space-3); margin-left: auto; flex-wrap: wrap; }
+.cmp-meta-ref { font-size: var(--font-size-sm); color: var(--color-text-muted); white-space: nowrap; }
+.cmp-meta-ref strong { color: var(--color-text); font-weight: var(--font-weight-medium); }
+.cmp-meta-count {
+  font-family: var(--font-mono); font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums; color: var(--color-text-muted); white-space: nowrap;
+}
 
 /* mode toggle — pill with a lifted active thumb */
 .cmp-seg {
   display: inline-flex; background: var(--color-surface-sunken);
   border: var(--border-width-thin) solid var(--color-border-subtle);
-  border-radius: var(--radius-full); padding: 3px; gap: 2px;
+  border-radius: var(--radius-full); padding: var(--space-0-5); gap: var(--space-0-5);
 }
 .cmp-seg button {
   appearance: none; border: 0; background: none; font: inherit; font-size: var(--font-size-sm);
@@ -36,25 +49,29 @@
 }
 .cmp-seg button:hover:not([data-state="on"]) { color: var(--color-text); }
 .cmp-seg button[data-state="on"] { background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-sm); }
+.cmp-seg button:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
 
-/* Issue #322: fixed `repeat(var(--cmp-n), ...)` tracks needed 4x240px plus
-   gaps in an 882px content column, cutting the fourth column behind a
-   scrollbar-less `overflow-x: auto`. Tracks wrap instead (`auto-fit`), so
-   the grid never scrolls horizontally; `min(100%, 240px)` keeps one column
-   per row from overflowing when fewer than two 240px columns fit. */
+/* Comparison strategy: one fixed per-column viewport (see .cmp-col-body),
+   not a page-level second scroller and not a 240px squeeze. The track floor
+   is wide enough for a real form/panel (340px); below two of them the grid
+   falls back to one readable column instead of compressing demos. Tracks
+   wrap (`auto-fit`) so the grid itself never scrolls horizontally. */
 .cmp-cols {
   flex: 1; display: grid; gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
   padding: var(--space-5); align-items: start;
 }
 
 /* 4 systems where only 3 fit would auto-fit as 3+1; re-track to an even 2+2
-   instead. Bounds are counts of the 240px column minimum plus the gap and
-   padding tokens — no new literals. Below the 2-fit bound the base rule (and
-   the narrow-screen rule below) already drop to one column per row. */
-@container (max-width: calc(4 * 240px + 3 * var(--space-4) + 2 * var(--space-5))) and (min-width: calc(2 * 240px + var(--space-4) + 2 * var(--space-5))) {
+   instead. Bounds are counts of the 340px column minimum plus the gap and
+   padding tokens. Below the 2-fit bound the base rule already drops to one
+   column per row; ≤900px forces that one-column layout explicitly. */
+@container (max-width: calc(4 * 340px + 3 * var(--space-4) + 2 * var(--space-5))) and (min-width: calc(2 * 340px + var(--space-4) + 2 * var(--space-5))) {
   .cmp-cols[data-count="4"] {
-    grid-template-columns: repeat(2, minmax(min(100%, 240px), 1fr));
+    grid-template-columns: repeat(2, minmax(min(100%, 340px), 1fr));
   }
 }
 
@@ -62,7 +79,7 @@
   min-width: 0;
   background: var(--color-bg); color: var(--color-text);
   border: var(--border-width-thin) solid var(--color-border-subtle);
-  border-radius: var(--radius-lg); overflow: hidden;
+  border-radius: var(--radius-lg); overflow: clip;
 }
 .cmp-col-head {
   /* A .cmp-col re-scopes every --font-size-* inline, so the head names its own
@@ -76,22 +93,70 @@
   border-bottom: var(--border-width-thin) solid var(--color-divider);
 }
 .cmp-swatch { width: var(--size-icon-sm); height: var(--size-icon-sm); border-radius: var(--radius-sm); border: var(--border-width-thin) solid var(--color-border-strong); flex: none; }
+.cmp-ref-marker {
+  font-size: var(--font-size-xs); font-weight: var(--font-weight-regular);
+  color: var(--color-accent-text); text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
 .cmp-cov { margin-left: auto; font-size: var(--font-size-xs); font-weight: var(--font-weight-regular); color: var(--color-warning-text); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-.cmp-col-body { padding: var(--space-4); }
+/* Large demos (whole screens/forms) get a fixed comparison viewport: the
+   column body scrolls in place instead of stretching the page or squeezing
+   the demo. This is a per-column content scroll, not a second page scroller —
+   `.app-main` still owns the page's scroll. Token-only bounds keep the frame
+   tall enough for a form and short enough to compare two columns side by
+   side without scrolling the page. */
+.cmp-col-body {
+  padding: var(--space-4);
+  height: clamp(var(--space-64), 55vh, calc(var(--space-96) * 2));
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.cmp-col-body:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: calc(var(--focus-ring-offset) * -1);
+}
 .cmp-stack { display: flex; flex-direction: column; gap: var(--space-3); }
 
-@media (max-width: 720px) {
+/* ≤900px matches the shell's drawer breakpoint: the rail/props float above
+   the content, so the columns stack full width instead of competing with a
+   compressed two-up layout. */
+@media (max-width: 900px) {
   .cmp-cols { grid-template-columns: 1fr; padding: var(--space-4); }
-  .cmp-toolbar { padding: var(--space-2) var(--space-3); }
-  .cmp-hint { margin-left: 0; }
+  .cmp-header { padding: var(--space-4) var(--space-3) var(--space-2); }
+  .cmp-meta { margin-left: 0; }
   .cmp-diff { padding: var(--space-3); }
   .cmp-diff-bar { flex-wrap: wrap; gap: var(--space-2); }
+  .cmp-col-body { height: clamp(var(--space-48), 50vh, calc(var(--space-96) * 2)); }
 }
 
 /* ── token diff table ── */
-.cmp-diff { flex: 1; padding: var(--space-5); overflow-x: auto; }
-.cmp-diff-bar { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-3); font-size: var(--font-size-sm); }
-.cmp-diff-bar b { color: var(--color-text); }
+/* No overflow here: a scroll container would become the thead's sticky
+   reference. Wide tables overflow into `.app-main`, which is the single
+   (vertical and horizontal) scroll region on this tab, so the header sticks
+   against the content scroller and the name column pins to its left edge. */
+.cmp-diff { flex: 1; padding: var(--space-5); }
+/* The summary reads as a distinct object above the table: its own surface,
+   border and per-stat colour/weight, so it is never mistaken for a table row
+   or for the filter control beside it. */
+.cmp-diff-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: var(--border-width-thin) solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+}
+.cmp-diff-stats { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-1) var(--space-2); color: var(--color-text-muted); }
+.cmp-stat { display: inline-flex; align-items: baseline; gap: var(--space-1); white-space: nowrap; }
+.cmp-stat b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: var(--font-weight-semibold); color: var(--color-text); }
+.cmp-stat-diff b { color: var(--color-warning-text); }
+.cmp-stat-diff { color: var(--color-text-secondary); font-weight: var(--font-weight-medium); }
+.cmp-stat-missing b { color: var(--color-text-secondary); }
+.cmp-stat-same b { color: var(--color-text-muted); }
+.cmp-stat-sep { color: var(--color-border-strong); }
 .cmp-diff-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
 /* Scoped to thead: the category rows are th[scope="rowgroup"] in tbody and
    must not inherit the sticky column-header treatment. */
@@ -100,9 +165,13 @@
   scroll-margin-top: var(--space-4);
   background: var(--color-surface); color: var(--color-text-muted);
   font-size: var(--font-size-xs); font-weight: var(--font-weight-medium);
-  padding: var(--space-2) var(--space-3); border-bottom: var(--border-width-thin) solid var(--color-border-subtle);
+  padding: var(--space-2) var(--space-3); border-bottom: var(--border-width-thin) solid var(--color-border-strong);
+  box-shadow: 0 1px 0 var(--color-border-subtle);
 }
 .cmp-diff-table td { padding: var(--space-2) var(--space-3); border-bottom: var(--border-width-thin) solid var(--color-border-subtle); vertical-align: top; font-variant-numeric: tabular-nums; }
+/* Hover is an overlay above any row/cell tint, so it never hides the
+   changed/missing cue it is hovering. */
+.cmp-diff-table tbody tr:hover td { box-shadow: inset 0 0 0 9999px var(--color-hover-overlay); }
 /* Issue #279: one containment unit per category (DiffTable renders one tbody
    per category). Rows stay in the DOM, so find-in-page keeps working; the
    320px placeholder sits near the measured mean category height (~324px). */
@@ -128,19 +197,47 @@
 .cmp-diff-name { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-text-secondary); white-space: nowrap; }
 tr.is-diff .cmp-diff-name { color: var(--color-text); }
 /* Issue #323: mark the value that actually differs from the reference column
-   (first system). `is-diff` stays a faint row tint; `is-changed` is the
-   stronger per-cell warning that used to be absent. */
-tr.is-diff td { background: color-mix(in srgb, var(--color-warning) 8%, transparent); }
+   (first system). `is-diff` stays a faint row tint; `is-changed` carries the
+   stronger cue — warning tint *and* warning-coloured semibold text — so the
+   difference survives a greyscale or low-contrast view. */
+tr.is-diff td { background: color-mix(in srgb, var(--color-warning) 6%, transparent); }
 .cmp-diff-val.is-changed { background: var(--color-warning-subtle); }
+.cmp-diff-val.is-changed code { color: var(--color-warning-text); font-weight: var(--font-weight-semibold); }
 .cmp-diff-val.is-missing { background: var(--color-surface-sunken); }
+.cmp-diff-val.is-missing .cmp-diff-missing { color: var(--color-text-secondary); font-weight: var(--font-weight-medium); }
 .cmp-diff-cell { display: inline-flex; align-items: center; gap: var(--space-2); }
 .cmp-diff-cell code { font-size: var(--font-size-xs); }
 .cmp-diff-chip { width: var(--size-icon-sm); height: var(--size-icon-sm); border-radius: var(--radius-sm); border: var(--border-width-thin) solid var(--color-border-strong); flex: none; }
 .cmp-diff-missing { color: var(--color-text-disabled); }
+/* The reference is the first column; its header says so, and a row the
+   reference lacks is labelled instead of marking the other systems changed. */
+.cmp-diff-ref {
+  margin-left: var(--space-2); font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular); color: var(--color-accent-text);
+  text-transform: uppercase; letter-spacing: var(--letter-spacing-wide);
+}
+.cmp-diff-not-ref {
+  margin-left: var(--space-2); font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular); color: var(--color-warning-text);
+}
 
-/* ── rail: vertical system-picker chips ── */
-/* SectionSearch now lives in the rail frame and stretches to its width. */
-.cmp-rail-search { margin-bottom: var(--space-2); }
+/* ── rail: mode switch, filters, system chips, component radios ── */
+/* One mode switch, in the rail header rather than the content toolbar. Two
+   equal tracks with a tight type step and small inline padding keep both
+   labels whole inside the 208px rail instead of overflowing their pill. */
+.cmp-rail-mode { margin-bottom: var(--space-3); }
+.cmp-rail-mode .cmp-seg {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%; gap: var(--space-0-5);
+}
+.cmp-rail-mode .cmp-seg button {
+  min-width: 0; text-align: center; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  font-size: var(--font-size-xs);
+  padding-block: var(--space-1-5);
+  padding-inline: var(--space-1);
+}
+
 .cmp-rail-empty { margin: var(--space-2) var(--space-2) 0; font-size: var(--font-size-sm); color: var(--color-text-muted); }
 /* Issue #324: hint + filter live inside the Systems group, above the chip
    list. Tokens only — no literal sizes. */
@@ -163,10 +260,18 @@ tr.is-diff td { background: color-mix(in srgb, var(--color-warning) 8%, transpar
 }
 
 .cmp-rail-systems { display: flex; flex-direction: column; gap: var(--space-1); }
+/* The selected set is the one place that shows pick order and the reference.
+   Chips wrap into a compact block instead of repeating a full catalogue row
+   per pick; the hint always gets its own line. */
+.cmp-rail-selected { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.cmp-rail-selected .cmp-rail-hint { flex-basis: 100%; }
+.cmp-rail-selected .cmp-chip { max-width: 100%; }
+.cmp-rail-picker { display: flex; flex-direction: column; gap: var(--space-1); margin-top: var(--space-3); }
+.cmp-rail-reason { margin: 0; font-size: var(--font-size-sm); color: var(--color-text-muted); }
 .cmp-chip {
   position: relative;
   display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer;
-  font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); min-height: 34px;
+  font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); min-height: var(--size-control-sm);
   min-width: 0; white-space: nowrap;
   padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
   border: var(--border-width-thin) solid var(--color-border-subtle); border-radius: var(--radius-md);
@@ -175,9 +280,9 @@ tr.is-diff td { background: color-mix(in srgb, var(--color-warning) 8%, transpar
 .cmp-chip:hover { border-color: var(--color-border-strong); color: var(--color-text); }
 .cmp-chip.on { background: var(--color-accent-subtle); border-color: var(--color-accent-border); color: var(--color-accent-text); }
 .cmp-chip:has(.dsv-check:focus-visible) { outline: var(--focus-ring-width) solid var(--color-focus-ring); outline-offset: var(--focus-ring-offset); }
-.cmp-dot { width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--color-border-strong); flex: none; }
+.cmp-dot { width: var(--space-2); height: var(--space-2); border-radius: var(--radius-full); background: var(--color-border-strong); flex: none; }
 .cmp-chip.on .cmp-dot { background: var(--color-accent); }
-.cmp-pct { margin-left: auto; flex: none; white-space: nowrap; font-family: var(--font-mono); font-size: var(--font-size-xs); font-variant-numeric: tabular-nums; color: var(--color-warning-text); background: var(--color-warning-subtle); border: 1px solid var(--color-warning-border); border-radius: var(--radius-full); padding: 1px var(--space-2); }
+.cmp-pct { margin-left: auto; flex: none; white-space: nowrap; font-family: var(--font-mono); font-size: var(--font-size-xs); font-variant-numeric: tabular-nums; color: var(--color-warning-text); background: var(--color-warning-subtle); border: var(--border-width-thin) solid var(--color-warning-border); border-radius: var(--radius-full); padding: var(--space-px) var(--space-2); }
 /* System names stay on one line (issue #286): the name truncates while the
    % badge keeps its own right-aligned column. No literal sizes here. */
 .cmp-chip-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -185,28 +290,45 @@ tr.is-diff td { background: color-mix(in srgb, var(--color-warning) 8%, transpar
 .cmp-chip[data-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 .cmp-chip[data-disabled="true"]:hover { border-color: var(--color-border-subtle); color: var(--color-text-secondary); }
 
-/* Component picker rows are <button>s reusing the rail's link look — reset
-   native button chrome, and mark the pick without Rail's sliding indicator. */
-button.app-rail-link {
-  appearance: none; width: 100%; border: 0; background: none;
-  font-family: inherit; text-align: left; cursor: pointer;
+.cmp-rail-filter input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
-button.app-rail-link[aria-current="true"] { background: var(--color-accent-subtle); }
+.cmp-rail-filter[data-disabled="true"] label { opacity: 0.6; }
 
-/* ── props panel ── */
+/* Component picker rows are single-select radios, not navigation links. */
+.cmp-radio-row {
+  display: flex; align-items: center; gap: var(--space-2);
+  min-height: var(--size-control-sm);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm); color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.cmp-radio-row:hover { background: var(--color-hover-overlay); color: var(--color-text); }
+.cmp-radio-row:has(input:checked) {
+  background: var(--color-accent-subtle); color: var(--color-accent-text);
+  font-weight: var(--font-weight-medium);
+}
+.cmp-radio-row input {
+  appearance: auto; flex: none; margin: 0;
+  accent-color: var(--color-accent); cursor: inherit;
+}
+.cmp-radio-row input:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+.cmp-radio-row[data-disabled="true"],
+.cmp-radio-row:has(input:disabled) { opacity: 0.5; cursor: not-allowed; }
+.cmp-radio-row:has(input:disabled):hover { background: none; color: var(--color-text-secondary); }
+.cmp-radio-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── props panel: a read-only reference summary, not a selection list ── */
 .cmp-props { padding: var(--space-4); }
 .cmp-props-block + .cmp-props-block { margin-top: var(--space-4); }
 .cmp-props-block h3 { margin: 0 0 var(--space-2); font-size: var(--heading-label); font-weight: var(--font-weight-semibold); text-transform: uppercase; letter-spacing: var(--letter-spacing-wide); color: var(--color-text-muted); }
-.cmp-props-list { display: flex; flex-direction: column; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
-.cmp-props-list li { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm); }
-.cmp-props-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cmp-props-pct { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--color-warning-text); }
-.cmp-props-remove {
-  appearance: none; flex: none; display: grid; place-items: center;
-  width: var(--size-icon-lg); height: var(--size-icon-lg);
-  padding: 0; border: none; border-radius: var(--radius-sm);
-  background: none; color: var(--color-text-muted); cursor: pointer;
-}
-.cmp-props-remove:hover { background: var(--color-hover-overlay); color: var(--color-text); }
-.cmp-props-remove:focus-visible { outline: var(--focus-ring-width) solid var(--color-focus-ring); outline-offset: var(--focus-ring-offset); }
+.cmp-props-reference { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.cmp-props-ref-name { margin: 0; flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: var(--font-size-base); font-weight: var(--font-weight-semibold); color: var(--color-text); }
+.cmp-props-pct { flex: none; font-family: var(--font-mono); font-size: var(--font-size-xs); font-variant-numeric: tabular-nums; color: var(--color-warning-text); background: var(--color-warning-subtle); border: var(--border-width-thin) solid var(--color-warning-border); border-radius: var(--radius-full); padding: var(--space-px) var(--space-2); }
+.cmp-props-note { flex-basis: 100%; margin: var(--space-1) 0 0; font-size: var(--font-size-xs); line-height: var(--line-height-snug); color: var(--color-text-muted); }
 .cmp-props-empty { margin: 0; font-size: var(--font-size-sm); color: var(--color-text-muted); }

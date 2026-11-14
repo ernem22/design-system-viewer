@@ -5,7 +5,7 @@ import type { Root } from "react-dom/client";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Toasts } from "./Toasts.tsx";
-import type { Toast } from "../lib/toasts.ts";
+import type { Toast, ToastQueue } from "../lib/toasts.ts";
 
 // Raw stylesheet text: the warn tone's class must exist as a rule, not only as
 // a className the renderer emits (issue #34 finding 1 — a warn toast rendered
@@ -22,13 +22,19 @@ const toastsCss = readFileSync(resolve(process.cwd(), "src/shell/Toasts.css"), "
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 
-async function render(toasts: Toast[]): Promise<HTMLDivElement> {
+const noopQueue: ToastQueue = {
+  pause: () => {},
+  resume: () => {},
+  dismiss: () => {},
+};
+
+async function render(toasts: Toast[], queue: ToastQueue = noopQueue): Promise<HTMLDivElement> {
   const { createRoot } = await import("react-dom/client");
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => {
-    root!.render(<Toasts toasts={toasts} />);
+    root!.render(<Toasts toasts={toasts} queue={queue} />);
   });
   return host;
 }
@@ -52,10 +58,22 @@ describe("Toasts", () => {
     expect(region!.children).toHaveLength(0);
   });
 
-  it("announces politely so a toast is not read as an alert", async () => {
-    const region = (await render([])).querySelector(".app-toasts")!;
-    expect(region.getAttribute("role")).toBe("status");
-    expect(region.getAttribute("aria-live")).toBe("polite");
+  it("scopes the live region to each toast instead of the whole stack", async () => {
+    const el = await render([
+      toast(1, "System saved", "ok"),
+      toast(2, "Parse failed", "err"),
+    ]);
+    const stack = el.querySelector(".app-toasts")!;
+    // A single stack-level polite region re-read every visible toast whenever
+    // a new one arrived; each toast now owns its semantics.
+    expect(stack.getAttribute("role")).toBeNull();
+    expect(stack.getAttribute("aria-live")).toBeNull();
+
+    const [ok, err] = [...el.querySelectorAll(".app-toast")];
+    expect(ok.getAttribute("role")).toBe("status");
+    expect(ok.getAttribute("aria-live")).toBe("polite");
+    expect(err.getAttribute("role")).toBe("alert");
+    expect(err.getAttribute("aria-live")).toBe("assertive");
   });
 
   it("renders one node per queued toast, in queue order", async () => {
@@ -82,11 +100,39 @@ describe("Toasts", () => {
     expect(items[2].className).toContain("app-toast-err");
   });
 
-  it("defines the warn tone's skin with the warning token, like the err skin", () => {
+  it("uses the AA text tokens on the warn and err skins", () => {
     // A class the renderer emits but the stylesheet never defines is a silent
     // downgrade to the neutral base skin — the exact bug the Reviewer named.
-    expect(toastsCss).toMatch(/\.app-toast-warn\s*\{[^}]*--color-warning/);
-    expect(toastsCss).toMatch(/\.app-toast-err\s*\{[^}]*--color-danger/);
+    // The base warning/danger hues fail 4.5:1 on the overlay surface, so the
+    // text uses the -text ramp while the border keeps the tone hue.
+    expect(toastsCss).toMatch(/\.app-toast-warn\s*\{[^}]*--color-warning-text/);
+    expect(toastsCss).toMatch(/\.app-toast-err\s*\{[^}]*--color-danger-text/);
+  });
+
+  it("gives a persistent error toast an explicit dismiss control", async () => {
+    let dismissed = -1;
+    const el = await render([toast(7, "Parse failed", "err")], {
+      pause: () => {},
+      resume: () => {},
+      dismiss: (id) => {
+        dismissed = id;
+      },
+    });
+    const close = el.querySelector<HTMLButtonElement>(".app-toast-close");
+    expect(close, "error toast has a close button").not.toBeNull();
+    expect(close!.getAttribute("aria-label")).toBe("Dismiss");
+    await act(async () => {
+      close!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(dismissed).toBe(7);
+  });
+
+  it("does not put a close control on the short-lived tones", async () => {
+    const el = await render([
+      toast(1, "Saved", "ok"),
+      toast(2, "Check URL", "warn"),
+    ]);
+    expect(el.querySelector(".app-toast-close")).toBeNull();
   });
 
   it("keeps two same-message toasts as two distinct nodes", async () => {
@@ -110,13 +156,13 @@ describe("Toasts", () => {
     document.body.appendChild(host);
     root = createRoot(host);
     await act(async () => {
-      root!.render(<Toasts toasts={[toast(1, "Link copied", "ok")]} />);
+      root!.render(<Toasts toasts={[toast(1, "Link copied", "ok")]} queue={noopQueue} />);
     });
     const before = host.querySelector(".app-toast");
     expect(before).not.toBeNull();
     expect(before!.getAttribute("data-leaving")).toBeNull();
     await act(async () => {
-      root!.render(<Toasts toasts={[]} />);
+      root!.render(<Toasts toasts={[]} queue={noopQueue} />);
     });
     const leaving = host.querySelector(".app-toast");
     expect(leaving, "leaving toast stays mounted for the exit fade").not.toBeNull();

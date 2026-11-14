@@ -28,7 +28,9 @@ export default function KanbanBody() {
                   className="dsv-inline"
                   style={{ marginTop: "var(--space-2)", justifyContent: "space-between" }}
                 >
-                  <span className="dsv-tag">{col === "Done" ? "done" : "dev"}</span>
+                  <span className={`dsv-tag dsv-tag--${col === "Done" ? "success" : "info"}`}>
+                    {col === "Done" ? "done" : "dev"}
+                  </span>
                   <Avat name={assignee} size="xs" />
                 </div>
               </div>

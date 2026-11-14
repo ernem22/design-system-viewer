@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { lintTokens, parseTokens } from "../../../src/core/parse.js";
 import { categorize } from "../../../src/core/taxonomy.js";
 import { coverage } from "../../../src/core/schema.js";
+import { systemTokenMap } from "../systems/store.ts";
 import type { DesignSystem, Token, TokenGroup, TokenGroupKind } from "../systems/store.ts";
 import type { RailGroups, RailLink } from "../lib/railTypes.ts";
 import type { PushToast } from "../lib/toasts.ts";
@@ -76,22 +77,13 @@ export interface VisibleGroup {
 }
 
 /**
- * Single source of truth for a system's token values, shared by the Tokens
- * tab and the Preview inspector. Resolved per token in the order App feeds
- * `:root`: `css` first (the authored source), then `groups` over the top
- * token-by-token (groups win, so a groups/css divergence resolves to the value
- * actually applied). Reading `css` per token instead of wholesale keeps a
- * token authored only in `css` visible rather than dropping it. Pure and
- * read-only: no override is dropped and the store is never mutated by
- * rendering.
+ * Backwards-compatible alias for `systemTokenMap` — the single source of truth
+ * for a system's token values (shared by the Tokens tab, Preview, coverage,
+ * Compare columns and the diff). Kept so existing imports/call sites do not
+ * fork the merge order.
  */
 export function tokenValueMap(system: DesignSystem | null): Map<string, string> {
-  const values = new Map<string, string>();
-  for (const t of parseTokens(system?.css ?? "") as Token[]) values.set(t.name, t.value);
-  for (const group of system?.groups ?? []) {
-    for (const t of group.tokens) values.set(t.name, t.value);
-  }
-  return values;
+  return systemTokenMap(system);
 }
 
 /** Turkish-locale match — the old viewer used plain toLowerCase, the
@@ -99,9 +91,9 @@ export function tokenValueMap(system: DesignSystem | null): Map<string, string> 
 const trLower = (s: string) => s.toLocaleLowerCase("tr");
 
 /**
- * Tokens tab view model. Filter/showMissing/schemaMode/selected/editingName
- * are view-local (nothing here persists — the old viewer kept them in module
- * state too); systems data itself lives in systems/store.ts.
+ * Tokens tab view model. Filter/showMissing/schemaMode/selected are view-local
+ * (nothing here persists — the old viewer kept them in module state too);
+ * systems data itself lives in systems/store.ts.
  */
 export function useTokensView(system: DesignSystem | null, pushToast: PushToast) {
   // Seeded from ?f= / ?tv= so a copied Tokens link reopens with the same
@@ -112,9 +104,6 @@ export function useTokensView(system: DesignSystem | null, pushToast: PushToast)
   const [showMissing, setShowMissing] = useState(true);
   const [schemaMode, setSchemaMode] = useState(() => readViewUrl().tv === "schema");
   const [selectedName, setSelectedName] = useState<string | null>(null);
-  // Token whose inline editor popover is open (single-open; only one
-  // TokenEditControl renders open at a time).
-  const [editingName, setEditingName] = useState<string | null>(null);
 
   // Switching systems resets the view, like the old selectSystem did — but
   // the first arrival (async store load, or a mount already holding one)
@@ -129,7 +118,6 @@ export function useTokensView(system: DesignSystem | null, pushToast: PushToast)
     setFilter("");
     setSchemaMode(false);
     setSelectedName(null);
-    setEditingName(null);
   }, [slug]);
 
   const css = system?.css ?? "";
@@ -226,11 +214,14 @@ export function useTokensView(system: DesignSystem | null, pushToast: PushToast)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schemaMode, cov, visibleGroups, q]);
 
+  // A schema token with no value still selects: the inspector owns the
+  // "Not set" / Add-token state, so selection must not vanish for a missing
+  // name (the gallery only lists present tokens; Schema lists both).
   const selected: Token | null = useMemo(() => {
     if (!selectedName) return null;
-    const value = valueMap.get(selectedName);
-    return value === undefined ? null : { name: selectedName, value };
+    return { name: selectedName, value: valueMap.get(selectedName) ?? "" };
   }, [selectedName, valueMap]);
+  const selectedMissing = selected !== null && !valueMap.has(selected.name);
 
   // Stable identities: TokenGroup/rows.tsx renderers are memo()'d so 432+
   // token systems don't repaint every keystroke — a callback recreated each
@@ -255,12 +246,11 @@ export function useTokensView(system: DesignSystem | null, pushToast: PushToast)
     [pushToast],
   );
 
-  /** Inline-editor target: Update button or double-click opens the token's
-     Popover, closing it (or opening another) clears the target. Stable
-     identity so the memo()'d row renderers don't repaint every keystroke. */
-  const onEdit = useCallback((token: Token | null) => {
-    setEditingName(token?.name ?? null);
-  }, []);
+  /** Rows: select-only. Clicking a token (gallery or schema) inspects it in
+     the right rail; it never copies or opens an inline editor. Copy lives on
+     the props-rail Copy button, which still calls copyToken. Stable identity
+     so the memo()'d row renderers don't repaint every keystroke. */
+  const selectToken = useCallback((token: Token) => setSelectedName(token.name), []);
 
   return {
     filter,
@@ -280,11 +270,11 @@ export function useTokensView(system: DesignSystem | null, pushToast: PushToast)
     shownCount,
     railGroups,
     selected,
+    selectedMissing,
     setSelectedName,
-    editingName,
-    onEdit,
     pushToast,
     copyToken,
+    selectToken,
   };
 }
 

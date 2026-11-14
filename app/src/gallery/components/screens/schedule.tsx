@@ -2,7 +2,18 @@ import { Button } from "../../ui.tsx";
 import { Icon } from "../../../lib/icons.tsx";
 import "./screens.css";
 
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+// June 2026 starts on a Monday, so the specimen week runs 1–5.
+const WEEK_START = new Date(2026, 5, 1);
+
+const weekdayStamp = new Intl.DateTimeFormat("en-US", { weekday: "short" });
+
+const DAYS = Array.from({ length: 5 }, (_, i) => {
+  const date = new Date(WEEK_START);
+  date.setDate(WEEK_START.getDate() + i);
+  return { key: weekdayStamp.format(date), date: date.getDate() };
+});
+
+const TODAY = 2; // Wednesday of the shown specimen week.
 
 // Real month date through Intl — keeps the shown "June 2026" stamp.
 const monthStamp = new Intl.DateTimeFormat("en-US", {
@@ -48,17 +59,39 @@ export default function ScheduleBody() {
           gap: "var(--space-3)",
         }}
       >
-        {DAYS.map((d) => (
-          <div key={d} className="dsv-card" style={{ padding: "var(--space-3)", minWidth: 0 }}>
-            <div className="dsv-muted" style={{ fontSize: "var(--font-size-xs)", marginBottom: "var(--space-2)" }}>
-              {d}
+        {DAYS.map((d, i) => (
+          <div
+            key={d.key}
+            className="dsv-card"
+            style={{
+              padding: "var(--space-3)",
+              minWidth: 0,
+              borderColor: i === TODAY ? "var(--color-accent)" : undefined,
+            }}
+            aria-current={i === TODAY ? "date" : undefined}
+          >
+            <div
+              className="dsv-inline"
+              style={{ justifyContent: "space-between", marginBottom: "var(--space-2)" }}
+            >
+              <span className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>
+                <strong style={{ color: "var(--color-text)", fontWeight: "var(--font-weight-semibold)" }}>
+                  {d.key}
+                </strong>{" "}
+                {d.date}
+              </span>
+              {i === TODAY && (
+                <span className="dsv-badge dsv-badge--info" style={{ fontSize: "var(--font-size-xs)" }}>
+                  Today
+                </span>
+              )}
             </div>
-            {(EVENTS[d] || []).map(([t, label, tone]) => (
+            {(EVENTS[d.key] || []).map(([t, label, tone]) => (
               <div key={label} className={`dsv-badge dsv-badge--${tone}`} style={{ display: "flex", marginBottom: "var(--space-1)" }}>
                 {t} · {label}
               </div>
             ))}
-            {!(EVENTS[d] || []).length && (
+            {!(EVENTS[d.key] || []).length && (
               <span className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>
                 —
               </span>

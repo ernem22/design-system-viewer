@@ -14,11 +14,11 @@ export default function ProfileBody() {
     <div style={{ maxWidth: 620, margin: "0 auto" }}>
       <div className="dsv-card">
         <div className="dsv-inline" style={{ gap: "var(--space-4)", marginBottom: "var(--space-5)" }}>
-          <Avat name="Ada Lovelace" size="xl" />
+          <Avat name="Ada Lovelace" size="xl" decorative />
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: "var(--font-size-lg)", fontWeight: "var(--font-weight-semibold)" }}>
+            <h3 style={{ margin: 0, fontSize: "var(--font-size-lg)", fontWeight: "var(--font-weight-semibold)" }}>
               Ada Lovelace
-            </div>
+            </h3>
             <div className="dsv-muted" style={{ fontSize: "var(--font-size-sm)" }}>
               @ada · Joined March 2024
             </div>
@@ -46,15 +46,16 @@ export default function ProfileBody() {
           </dd>
         </dl>
         <Separator.Root className="dsv-sep" />
-        <div
+        <h4
           style={{
+            margin: 0,
             fontSize: "var(--font-size-sm)",
             fontWeight: "var(--font-weight-medium)",
             marginBottom: "var(--space-3)",
           }}
         >
           Recent activity
-        </div>
+        </h4>
         <ul className="dsv-timeline">
           {ACTIVITY.map(([b, w]) => (
             <li key={b}>

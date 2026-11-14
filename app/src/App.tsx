@@ -21,8 +21,8 @@ import type { DesignSystem } from "./systems/store.ts";
 import { usePanels } from "./lib/panelStorage.ts";
 import SystemSwitcher from "./systems/SystemSwitcher.tsx";
 import { SystemMenu } from "./systems/SystemMenu.tsx";
-import { AddSystemDialog } from "./systems/AddSystemDialog.tsx";
-import "./systems/AddSystemDialog.css";
+import { ImportSheet } from "./systems/ImportSheet.tsx";
+import "./systems/ImportSheet.css";
 import Rail from "./shell/Rail.tsx";
 import { COMPONENT_ENTRIES } from "./gallery/components/index.ts";
 import { buildRailGroups } from "./gallery/registry.ts";
@@ -63,7 +63,7 @@ function App() {
     patchToken,
     removeSystem,
   } = useSystems();
-  const [toasts, pushToast] = useToasts();
+  const [toasts, pushToast, toastQueue] = useToasts();
   // Shared-system offer from a `?s=` link (issue #337): the decoded payload
   // waits here until the recipient clicks — nothing is saved without a click.
   // `sessionSystem` is the Open choice: the shared system applied as the
@@ -225,12 +225,21 @@ function App() {
   // the writer below keeps the URL in sync while the Preview tab is active.
   const [query, setQuery] = useState(() => readViewUrl().q ?? "");
 
-  const [addOpen, setAddOpen] = useState(false);
-  const [addCss, setAddCss] = useState("");
+  // One import surface, two entry points: the topbar "+" opens it for a new
+  // system, the Tokens "Add tokens" opens it scoped to the active system.
+  const [importOpen, setImportOpen] = useState(false);
+  const [importInitialCss, setImportInitialCss] = useState("");
+  const [importScope, setImportScope] = useState<DesignSystem | null>(null);
   const openAdd = useCallback((css = "") => {
-    setAddCss(css);
-    setAddOpen(true);
+    setImportInitialCss(css);
+    setImportScope(null);
+    setImportOpen(true);
   }, []);
+  const openAddTokens = useCallback(() => {
+    setImportInitialCss("");
+    setImportScope(active);
+    setImportOpen(true);
+  }, [active]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const searching = query.trim().length > 0;
@@ -268,12 +277,6 @@ function App() {
   // Slug-bound mutation callbacks — useCallback (not inline closures) so the
   // memo()'d token rows downstream keep stable onSave/onMerge identities
   // across unrelated App re-renders (e.g. filter keystrokes).
-  const handleMerge = useCallback(
-    (css: string) => {
-      if (active) mergeCss(active.slug, css);
-    },
-    [active, mergeCss],
-  );
   const handlePatch = useCallback(
     (name: string, value: string) => {
       if (active) patchToken(active.slug, name, value);
@@ -318,6 +321,13 @@ function App() {
   // merges the exported CSS.
   const importCss = useCallback(
     (css: string) => {
+      // While the Add dialog is open, a page drop must not write behind the
+      // modal (merge into the active system) or re-seed/reset the dialog's
+      // steps: the dialog is the only place a write can be staged.
+      if (importOpen) {
+        pushToast("Import is open — finish or cancel it first", "warn");
+        return;
+      }
       if (!active) {
         openAdd(css);
         return;
@@ -329,7 +339,7 @@ function App() {
         pushToast(e instanceof Error ? e.message : String(e), "err");
       }
     },
-    [active, mergeCss, openAdd, pushToast],
+    [active, importOpen, mergeCss, openAdd, pushToast],
   );
   const importFile = useCallback(
     (file: File | null) => {
@@ -340,6 +350,10 @@ function App() {
       if (isJsonFile(file)) {
         file.text().then(
           (text) => {
+            if (importOpen) {
+              pushToast("Import is open — finish or cancel it first", "warn");
+              return;
+            }
             if (!active) {
               // Raw JSON: the dialog detects and parses it on open, keeping
               // the exported name for the collision flow.
@@ -360,7 +374,7 @@ function App() {
         pushToast(e instanceof Error ? e.message : String(e), "warn"),
       );
     },
-    [active, importCss, openAdd, pushToast],
+    [active, importOpen, importCss, openAdd, pushToast],
   );
   const dragging = useCssFileDrop(importFile);
 
@@ -384,12 +398,16 @@ function App() {
   }, [active]);
 
   // Selecting a component's token badge with the panel closed would look
-  // like a dead click — selecting always reveals the panel (legacy).
+  // like a dead click — selecting always reveals the panel (legacy). On a
+  // narrow viewport `openScope` opens the overlay dialog instead (it shares
+  // the shell's 900px threshold), so revealing the props drawer too would
+  // stack two overlays for the same scope — skip it there.
   const inspector = useInspector();
   const inspectedId = inspector.selected?.id;
+  const inspectorInDialog = inspector.mobileOpen;
   useEffect(() => {
-    if (inspectedId) revealProps();
-  }, [inspectedId, revealProps]);
+    if (inspectedId && !inspectorInDialog) revealProps();
+  }, [inspectedId, inspectorInDialog, revealProps]);
   const overrideCount = countOverrides(inspector);
 
   // Selecting a token in the Tokens tab must reach its inspector (issue #315):
@@ -518,8 +536,7 @@ function App() {
             <TokensView
               system={active}
               view={tokensView}
-              onMerge={handleMerge}
-              onPatch={handlePatch}
+              onAddTokens={openAddTokens}
             />
           ) : (
             emptyState
@@ -591,7 +608,7 @@ function App() {
       content: (
         <>
           {tab === "compare" && sharedBanner}
-          <CompareView view={compareView} />
+          <CompareView view={compareView} loading={loading} />
         </>
       ),
       rail: <CompareRail systems={systems} view={compareView} />,
@@ -601,24 +618,22 @@ function App() {
 
   return (
     <>
-      <ErrorBoundary pushToast={pushToast}>
+      <ErrorBoundary>
         <Shell
-          brand={
-            <>
-              {/* Wrapper exists only so narrow-drawer focus can return here on
-                  close (the toggle itself is a Radix Toggle with no ref slot). */}
-              <span className="app-rail-toggle-slot" ref={railToggleRef}>
-                <IconToggleButton
-                  pressed={railOpen}
-                  onPressedChange={toggleRail}
-                  icon={<Icon name="panelLeft" size={15} />}
-                  labelWhenOn="Hide sidebar"
-                  labelWhenOff="Show sidebar"
-                />
-              </span>
-              <Brand />
-            </>
+          leadingNav={
+            /* Wrapper exists only so narrow-drawer focus can return here on
+               close (the toggle itself is a Radix Toggle with no ref slot). */
+            <span className="app-rail-toggle-slot" ref={railToggleRef}>
+              <IconToggleButton
+                pressed={railOpen}
+                onPressedChange={toggleRail}
+                icon={<Icon name="panelLeft" size={15} />}
+                labelWhenOn="Hide sidebar"
+                labelWhenOff="Show sidebar"
+              />
+            </span>
           }
+          brand={<Brand />}
           systemSwitcher={
             <>
               <SystemSwitcher
@@ -676,10 +691,11 @@ function App() {
           onTabChange={setTab}
         />
       </ErrorBoundary>
-      <AddSystemDialog
-        open={addOpen}
-        initialCss={addCss}
-        onOpenChange={setAddOpen}
+      <ImportSheet
+        open={importOpen}
+        initialCss={importInitialCss}
+        scopeSystem={importScope}
+        onOpenChange={setImportOpen}
         onAdd={addSystem}
         onMerge={mergeCss}
         onReplace={replaceSystem}
@@ -699,7 +715,7 @@ function App() {
         }}
       />
       {dragging && <DropOverlay />}
-      <Toasts toasts={toasts} />
+      <Toasts toasts={toasts} queue={toastQueue} />
     </>
   );
 }

@@ -16,23 +16,19 @@ export function RefBadge({ value }: { value: string }) {
 export interface RowCallbacks {
   selectedName: string | null;
   onPick: (token: Token) => void;
-  /** Name of the token the inspector should focus (double-click sets it via
-     onEdit; TokensProps reads it — the gallery itself edits nothing). */
-  editingName: string | null;
-  onEdit: (token: Token | null) => void;
-  onSave: (name: string, value: string) => void;
 }
 
 export interface RendererProps extends RowCallbacks {
   tokens: Token[];
+  /** Accessible name for this group's listbox (the group heading label). */
+  label?: string;
 }
 
 const varOf = (name: string) => `var(${name})`;
 
 /**
  * Keyboard activator for pickable rows and swatches: Enter or Space picks
- * the token. Events from the inner Update button or form fields keep their
- * native behaviour.
+ * the token. Events from interactive children keep their native behaviour.
  */
 function pickKeyDown(e: React.KeyboardEvent, onPick: () => void): void {
   if (e.key !== "Enter" && e.key !== " ") return;
@@ -46,18 +42,18 @@ function pickKeyDown(e: React.KeyboardEvent, onPick: () => void): void {
  * The one token row. Name, value and demo sit in fixed grid columns so they
  * line up between every group; the optional `demo` is the only thing that
  * varies by kind — flat groups (no visual preview) pass nothing and keep
- * the same columns, instead of a second table renderer. Click = copy +
- * inspect; double-click = select + focus the inspector's edit form.
+ * the same columns, instead of a second table renderer. Click (or a
+ * double-click) selects the token for the right-rail inspector; the gallery
+ * never edits in place.
  */
 export const TokenRow = memo(function TokenRow({
   token,
   demo,
   selectedName,
   onPick,
-  onEdit,
 }: { token: Token; demo?: React.ReactNode } & Pick<
   RowCallbacks,
-  "selectedName" | "onPick" | "onEdit"
+  "selectedName" | "onPick"
 >) {
   return (
     <div
@@ -66,12 +62,9 @@ export const TokenRow = memo(function TokenRow({
       role="option"
       aria-selected={token.name === selectedName}
       tabIndex={0}
-      title="click to copy — double-click to edit"
+      title="click to inspect in the sidebar"
       onClick={() => onPick(token)}
-      onDoubleClick={() => {
-        onPick(token);
-        onEdit(token);
-      }}
+      onDoubleClick={() => onPick(token)}
       onKeyDown={(e) => pickKeyDown(e, () => onPick(token))}
     >
       <b className="tok-row-name">{token.name}</b>
@@ -86,9 +79,10 @@ export const TokenRow = memo(function TokenRow({
 
 /** Row list for the one row component; `render` supplies the kind's demo. */
 const TokenRows = memo(function TokenRows(props: RendererProps & { render?: (t: Token) => React.ReactNode }) {
-  const { tokens, render, selectedName, onPick, onEdit } = props;
+  const { tokens, render, selectedName, onPick, label } = props;
   return (
-    <div className="tok-rows" role="listbox" aria-label="Tokens">
+    // Rows stay Tab-reachable (issue #221): deliberate — no roving focus here.
+    <div className="tok-rows" role="listbox" aria-label={label ?? "Tokens"}>
       {tokens.map((t) => (
         <TokenRow
           key={t.name}
@@ -96,19 +90,18 @@ const TokenRows = memo(function TokenRows(props: RendererProps & { render?: (t: 
           demo={render?.(t)}
           selectedName={selectedName}
           onPick={onPick}
-          onEdit={onEdit}
         />
       ))}
     </div>
   );
 });
 
-/** Swatch grid for color kinds (old colorGrid). Click = copy + inspect;
-    double-click = select + focus the inspector's edit form. */
+/** Swatch grid for color kinds (old colorGrid). Click selects for the
+    inspector; it never copies or edits in place. */
 export const ColorGrid = memo(function ColorGrid(props: RendererProps) {
-  const { tokens, selectedName, onPick, onEdit } = props;
+  const { tokens, selectedName, onPick, label } = props;
   return (
-    <div className="tok-swatches" role="listbox" aria-label="Tokens">
+    <div className="tok-swatches" role="listbox" aria-label={label ?? "Tokens"}>
       {tokens.map((t) => (
         <div
           key={t.name}
@@ -117,12 +110,9 @@ export const ColorGrid = memo(function ColorGrid(props: RendererProps) {
           role="option"
           aria-selected={t.name === selectedName}
           tabIndex={0}
-          title="click to copy — double-click to edit"
+          title="click to inspect in the sidebar"
           onClick={() => onPick(t)}
-          onDoubleClick={() => {
-            onPick(t);
-            onEdit(t);
-          }}
+          onDoubleClick={() => onPick(t)}
           onKeyDown={(e) => pickKeyDown(e, () => onPick(t))}
         >
           <div className="tok-chip" style={{ "--val": varOf(t.name) } as CSSProperties} />
@@ -201,12 +191,11 @@ const rampRatioFormat = new Intl.NumberFormat("en-US", {
  * WCAG ratio against --color-bg. Ratios resolve through a hidden probe plus
  * getComputedStyle — never by re-parsing raw strings — so var() references
  * resolve exactly as the browser renders them (the ContrastSection pattern).
- * Picking matches the swatch: click = copy + inspect, double-click = select +
- * focus the inspector's edit form. Tokens outside the scale (if any) keep the
- * swatch grid below the strip.
+ * Picking matches the swatch: click selects for the inspector. Tokens outside
+ * the scale (if any) keep the swatch grid below the strip.
  */
 export const ColorRamp = memo(function ColorRamp(props: RendererProps) {
-  const { tokens, selectedName, onPick, onEdit } = props;
+  const { tokens, selectedName, onPick, label } = props;
   const ramp = useMemo(() => scaleSteps(tokens) ?? NO_RAMP, [tokens]);
   const inRamp = useMemo(() => new Set(ramp.map((s) => s.token.name)), [ramp]);
   const rest = useMemo(() => tokens.filter((t) => !inRamp.has(t.name)), [tokens, inRamp]);
@@ -244,7 +233,7 @@ export const ColorRamp = memo(function ColorRamp(props: RendererProps) {
   return (
     <div className="tok-scale">
       <div className="tok-ramp-scroll">
-        <div ref={stripRef} className="tok-ramp" role="listbox" aria-label="Tokens">
+        <div ref={stripRef} className="tok-ramp" role="listbox" aria-label={label ?? "Tokens"}>
           {ramp.map(({ token, step }) => {
             const ratio = ratios[token.name];
             const text = ratio == null ? "—" : rampRatioFormat.format(ratio);
@@ -257,12 +246,9 @@ export const ColorRamp = memo(function ColorRamp(props: RendererProps) {
                 role="option"
                 aria-selected={token.name === selectedName}
                 tabIndex={0}
-                title="click to copy — double-click to edit"
+                title="click to inspect in the sidebar"
                 onClick={() => onPick(token)}
-                onDoubleClick={() => {
-                  onPick(token);
-                  onEdit(token);
-                }}
+                onDoubleClick={() => onPick(token)}
                 onKeyDown={(e) => pickKeyDown(e, () => onPick(token))}
               >
                 <div
@@ -289,14 +275,7 @@ export const ColorRamp = memo(function ColorRamp(props: RendererProps) {
         </div>
       </div>
       {rest.length > 0 && (
-        <ColorGrid
-          tokens={rest}
-          selectedName={selectedName}
-          onPick={onPick}
-          editingName={props.editingName}
-          onEdit={onEdit}
-          onSave={props.onSave}
-        />
+        <ColorGrid tokens={rest} label={label} selectedName={selectedName} onPick={onPick} />
       )}
     </div>
   );
@@ -307,28 +286,28 @@ export const RadiusRow = memo(function RadiusRow(props: RendererProps) {
 });
 
 export const ShadowRow = memo(function ShadowRow(props: RendererProps) {
-  const { tokens, selectedName, onPick, editingName, onEdit, onSave } = props;
+  const { tokens, selectedName, onPick, label } = props;
   // One toggle for the whole group (issue #310): every row's stage shares
-  // this state, so xs/md/2xl can be compared on the same ground. Defaults to
-  // the page ground; "light" flips every stage to --color-surface-inverse.
-  const [stage, setStage] = useState<"page" | "light">("page");
+  // this state, so xs/md/2xl can be compared on the same ground. The inverse
+  // option drops every stage onto --color-surface-inverse (a dark ground in
+  // the light theme), which is what actually makes a light shadow readable.
+  const [stage, setStage] = useState<"page" | "inverse">("page");
   return (
     <div className="tok-shadowgroup">
       <div className="tok-shadowtoggle" role="group" aria-label="Shadow stage background">
+        <span className="tok-shadowcaption">Shadow ground</span>
         <button type="button" aria-pressed={stage === "page"} onClick={() => setStage("page")}>
           Page
         </button>
-        <button type="button" aria-pressed={stage === "light"} onClick={() => setStage("light")}>
-          Light
+        <button type="button" aria-pressed={stage === "inverse"} onClick={() => setStage("inverse")}>
+          Inverse
         </button>
       </div>
       <TokenRows
         tokens={tokens}
+        label={label}
         selectedName={selectedName}
         onPick={onPick}
-        editingName={editingName}
-        onEdit={onEdit}
-        onSave={onSave}
         render={(t) => (
           <div className="tok-shadowstage" data-stage={stage}>
             <div className="tok-shadowcard" style={{ boxShadow: varOf(t.name) }} />
@@ -382,21 +361,19 @@ const SHORT_SPECIMEN = "Ag";
 /**
  * One font-size row (issue #309): the value cell stacks the raw value (kept
  * whole as `title`, since the column truncates clamp()/vw values) over the
- * resolved px size, and the demo cell holds the measured specimen. Click =
- * copy + inspect; double-click = select + focus the inspector's edit form —
- * the same contract as TokenRow, which cannot carry this row because only its
- * demo slot varies and here the value cell varies too.
+ * resolved px size, and the demo cell holds the measured specimen. Click
+ * selects for the inspector — the same contract as TokenRow, which cannot
+ * carry this row because only its demo slot varies and here the value cell
+ * varies too.
  */
 const TypeTokenRow = memo(function TypeTokenRow({
   token,
   selectedName,
   onPick,
-  onEdit,
 }: {
   token: Token;
   selectedName: string | null;
   onPick: (token: Token) => void;
-  onEdit: (token: Token | null) => void;
 }) {
   const specimenRef = useRef<HTMLDivElement>(null);
   // Hidden sizer that always holds the full sentence at the token's size, so
@@ -432,8 +409,17 @@ const TypeTokenRow = memo(function TypeTokenRow({
     };
     measure();
     window.addEventListener("resize", onResize);
+    // Re-measure when the demo cell itself changes width — opening/closing the
+    // props rail reflows the content column, and a tab mounted while hidden
+    // (clientWidth 0) must resolve once it becomes visible.
+    const observer =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => onResize())
+        : null;
+    observer?.observe(specimen);
     return () => {
       window.removeEventListener("resize", onResize);
+      observer?.disconnect();
       cancelAnimationFrame(raf);
     };
   }, [token.name, token.value]);
@@ -445,12 +431,9 @@ const TypeTokenRow = memo(function TypeTokenRow({
       role="option"
       aria-selected={token.name === selectedName}
       tabIndex={0}
-      title="click to copy — double-click to edit"
+      title="click to inspect in the sidebar"
       onClick={() => onPick(token)}
-      onDoubleClick={() => {
-        onPick(token);
-        onEdit(token);
-      }}
+      onDoubleClick={() => onPick(token)}
       onKeyDown={(e) => pickKeyDown(e, () => onPick(token))}
     >
       <b className="tok-row-name">{token.name}</b>
@@ -489,17 +472,11 @@ const TypeTokenRow = memo(function TypeTokenRow({
 });
 
 export const TypeRow = memo(function TypeRow(props: RendererProps) {
-  const { tokens, selectedName, onPick, onEdit } = props;
+  const { tokens, selectedName, onPick, label } = props;
   return (
-    <div className="tok-rows" role="listbox" aria-label="Tokens">
+    <div className="tok-rows" role="listbox" aria-label={label ?? "Tokens"}>
       {tokens.map((t) => (
-        <TypeTokenRow
-          key={t.name}
-          token={t}
-          selectedName={selectedName}
-          onPick={onPick}
-          onEdit={onEdit}
-        />
+        <TypeTokenRow key={t.name} token={t} selectedName={selectedName} onPick={onPick} />
       ))}
     </div>
   );

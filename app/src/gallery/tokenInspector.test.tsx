@@ -10,7 +10,7 @@ import {
   selectScope,
   setMobileOpen,
 } from "../lib/tokenOverrides.ts";
-import { AddSystemDialog } from "../systems/AddSystemDialog.tsx";
+import { ImportSheet } from "../systems/ImportSheet.tsx";
 import { SectionScopeTrigger } from "./tokenInspector.tsx";
 import { PreviewProps, PreviewScopeDialog } from "../preview/PreviewProps.tsx";
 
@@ -57,7 +57,7 @@ function Docked({ active = true }: { active?: boolean } = {}) {
 function Stacked({ onClosed }: { onClosed: () => void }) {
   const [open, setOpen] = useState(true);
   return (
-    <AddSystemDialog
+    <ImportSheet
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
@@ -166,14 +166,14 @@ describe("docked inspector Escape dismissal (#119)", () => {
       badge.click();
     });
     expect(getInspectorState().selected).not.toBeNull();
-    expect(document.querySelector(".app-import-dialog")).not.toBeNull();
+    expect(document.querySelector(".app-import-sheet")).not.toBeNull();
 
     await escape();
 
     // The Add System dialog consumes Escape (Radix preventDefaults it); the
     // docked inspector must not also close.
     expect(stackedClosed).toBe(true);
-    expect(document.querySelector(".app-import-dialog")).toBeNull();
+    expect(document.querySelector(".app-import-sheet")).toBeNull();
     expect(getInspectorState().selected).not.toBeNull();
   });
 

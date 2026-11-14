@@ -6,7 +6,7 @@ import * as Slider from "@radix-ui/react-slider";
 import * as Switch from "@radix-ui/react-switch";
 import * as Toggle from "@radix-ui/react-toggle";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
-import { Button, Demo, Field, usePortalContainer } from "../ui.tsx";
+import { Button, Demo, Field, useCompareIdPrefix, usePortalContainer } from "../ui.tsx";
 import { Icon } from "../../lib/icons.tsx";
 import "./forms.css";
 
@@ -31,7 +31,9 @@ export default function FormsBody() {
   const [switchOn, setSwitchOn] = useState(true);
   const [slider, setSlider] = useState([40]);
   const [range, setRange] = useState([25, 75]);
+  const [domain, setDomain] = useState("acme-design-system");
   const portalContainer = usePortalContainer();
+  const id = useCompareIdPrefix();
 
   return (
     <>
@@ -67,52 +69,62 @@ export default function FormsBody() {
       </Demo>
 
       <Demo title="Input / Textarea">
-        <Field label="Email" id="f-email" hint="Use work address">
-          <input id="f-email" className="dsv-input" type="email" placeholder="ada@example.com" autoComplete="email" spellCheck={false} />
+        <Field label="Email" id={`${id}f-email`} hint="Use work address">
+          <input id={`${id}f-email`} className="dsv-input" type="email" placeholder="ada@example.com" autoComplete="email" spellCheck={false} />
         </Field>
-        <Field label="Password" id="f-pass" error="At least 8 characters">
-          <input id="f-pass" className="dsv-input" type="password" aria-invalid="true" defaultValue="123" autoComplete="current-password" />
+        <Field label="Password" id={`${id}f-pass`} error="At least 8 characters">
+          <input id={`${id}f-pass`} className="dsv-input" type="password" aria-invalid="true" defaultValue="123" autoComplete="current-password" />
         </Field>
-        <Field label="Note" id="f-note">
-          <textarea id="f-note" className="dsv-textarea" placeholder="Short description…" />
+        <Field label="Note" id={`${id}f-note`}>
+          <textarea id={`${id}f-note`} className="dsv-textarea" placeholder="Short description…" />
         </Field>
-        <Field label="Disabled" id="f-dis">
-          <input id="f-dis" className="dsv-input" disabled defaultValue="read-only" />
+        <Field label="Disabled" id={`${id}f-dis`}>
+          <input id={`${id}f-dis`} className="dsv-input" disabled defaultValue="read-only" />
         </Field>
       </Demo>
       <Demo title="Input — adornments & counter">
-        <Field label="Amount" id="f-amt">
+        <Field label="Amount" id={`${id}f-amt`}>
           <div className="dsv-input-wrap dsv-input-wrap--prefix">
             <span className="dsv-adorn dsv-adorn--prefix">₺</span>
-            <input id="f-amt" className="dsv-input" inputMode="decimal" placeholder="0.00" />
+            <input id={`${id}f-amt`} className="dsv-input" inputMode="decimal" placeholder="0.00" />
           </div>
         </Field>
-        <Field label="Search" id="f-search">
+        <Field label="Search" id={`${id}f-search`}>
           <div className="dsv-input-wrap dsv-input-wrap--prefix">
             <span className="dsv-adorn dsv-adorn--prefix">
               <Icon name="search" size={14} />
             </span>
-            <input id="f-search" className="dsv-input" placeholder="Search…" />
+            <input id={`${id}f-search`} className="dsv-input" placeholder="Search…" />
           </div>
         </Field>
-        <Field label="Domain" id="f-dom" hint="18 / 30">
+        <Field label="Domain" id={`${id}f-dom`}>
           <div className="dsv-input-wrap dsv-input-wrap--suffix">
-            <input id="f-dom" className="dsv-input" defaultValue="acme-design-system" maxLength={30} spellCheck={false} autoComplete="off" />
-            <span className="dsv-adorn dsv-adorn--suffix dsv-counter">18/30</span>
+            <input
+              id={`${id}f-dom`}
+              className="dsv-input"
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+              maxLength={30}
+              spellCheck={false}
+              autoComplete="off"
+            />
+            <span className="dsv-adorn dsv-adorn--suffix dsv-counter" aria-hidden="true">
+              {domain.length}/30
+            </span>
           </div>
         </Field>
       </Demo>
       <Demo title="Input — inset & success">
-        <Field label="Inset (sunken well)" id="f-inset">
-          <input id="f-inset" className="dsv-input dsv-input--inset" placeholder="Inset variant" />
+        <Field label="Inset (sunken well)" id={`${id}f-inset`}>
+          <input id={`${id}f-inset`} className="dsv-input dsv-input--inset" placeholder="Inset variant" />
         </Field>
-        <Field label="Username" id="f-ok" hint="Available">
-          <input id="f-ok" className="dsv-input dsv-input--success" defaultValue="ada_lovelace" aria-invalid="false" />
+        <Field label="Username" id={`${id}f-ok`} hint="Available">
+          <input id={`${id}f-ok`} className="dsv-input dsv-input--success" defaultValue="ada_lovelace" aria-invalid="false" />
         </Field>
       </Demo>
       <Demo title="Input — themed tokens">
-        <Field label="Themed" id="f-themed" hint="bg / border / focus / placeholder tokens">
-          <input id="f-themed" className="dsv-input dsv-input--themed" placeholder="Type here…" />
+        <Field label="Themed" id={`${id}f-themed`} hint="bg / border / focus / placeholder tokens">
+          <input id={`${id}f-themed`} className="dsv-input dsv-input--themed" placeholder="Type here…" />
         </Field>
       </Demo>
       <Demo title="Disabled treatment">
@@ -158,7 +170,7 @@ export default function FormsBody() {
       </Demo>
 
       <Demo title="Radio Group">
-        <RadioGroup.Root className="dsv-stack" value={radio} onValueChange={setRadio}>
+        <RadioGroup.Root className="dsv-stack" value={radio} onValueChange={setRadio} aria-label="Plan">
           {RADIO_VALUES.map((v) => (
             <label key={v} className="dsv-control-label">
               <RadioGroup.Item className="dsv-radio" value={v}>
@@ -190,15 +202,15 @@ export default function FormsBody() {
           <Slider.Track className="dsv-slider-track">
             <Slider.Range className="dsv-slider-range" />
           </Slider.Track>
-          <Slider.Thumb className="dsv-slider-thumb" aria-label="Value" />
+          <Slider.Thumb className="dsv-slider-thumb" aria-label="Volume" aria-valuetext={`${slider[0]}%`} />
         </Slider.Root>
         <span className="dsv-mono dsv-muted">{slider[0]}</span>
         <Slider.Root className="dsv-slider" value={range} onValueChange={setRange} max={100} step={1}>
           <Slider.Track className="dsv-slider-track">
             <Slider.Range className="dsv-slider-range" />
           </Slider.Track>
-          <Slider.Thumb className="dsv-slider-thumb" aria-label="Low" />
-          <Slider.Thumb className="dsv-slider-thumb" aria-label="High" />
+          <Slider.Thumb className="dsv-slider-thumb" aria-label="Minimum" aria-valuetext={`${range[0]}%`} />
+          <Slider.Thumb className="dsv-slider-thumb" aria-label="Maximum" aria-valuetext={`${range[1]}%`} />
         </Slider.Root>
         <span className="dsv-mono dsv-muted">{range.join("–")}</span>
       </Demo>

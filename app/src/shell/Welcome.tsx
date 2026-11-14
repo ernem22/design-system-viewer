@@ -19,7 +19,7 @@ export function Welcome({ onPaste, onUpload }: { onPaste: () => void; onUpload: 
         <button type="button" className="app-welcome-card" onClick={onUpload}>
           <Icon name="file" size={22} />
           <b>Upload a file</b>
-          <span>Pick a .css file, or drop one anywhere</span>
+          <span>Pick a .css or .json file, or drop one anywhere</span>
         </button>
       </div>
       <p className="app-welcome-hint">Nothing is uploaded — systems stay in this browser.</p>
@@ -31,7 +31,7 @@ export function Welcome({ onPaste, onUpload }: { onPaste: () => void; onUpload: 
 export function DropOverlay() {
   return (
     <div className="app-drop" aria-hidden="true">
-      <div className="app-drop-box">Drop a .css file to import it</div>
+      <div className="app-drop-box">Drop a .css or .json file to import it</div>
     </div>
   );
 }

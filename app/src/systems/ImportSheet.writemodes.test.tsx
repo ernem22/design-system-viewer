@@ -2,13 +2,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { act } from "react";
 import type { Root } from "react-dom/client";
-import { AddSystemDialog } from "./AddSystemDialog.tsx";
+import { ImportSheet } from "./ImportSheet.tsx";
 import type { DesignSystem, SourceProvenance } from "./store.ts";
-
-// Issue #125: the import's three write modes, slug-collision resolution and
-// source capture. The dialog is the surface: it must let the user choose how a
-// colliding name is resolved (never an exception), pick a merge/clone target,
-// read the merge review counts, and pass the import source to the write.
 
 function sys(slug: string, name: string, css: string): DesignSystem {
   return {
@@ -21,9 +16,7 @@ function sys(slug: string, name: string, css: string): DesignSystem {
   };
 }
 
-const SYSTEMS: DesignSystem[] = [
-  sys("aurora", "Aurora", "--color-bg: #ffffff;\n--color-text: #000000;"),
-];
+const SYSTEMS: DesignSystem[] = [sys("aurora", "Aurora", "--color-bg: #ffffff;\n--color-text: #000000;")];
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
@@ -32,14 +25,14 @@ let merged: Array<{ slug: string; css: string; source?: SourceProvenance }> = []
 let replaced: Array<{ slug: string; name: string; css: string; source?: SourceProvenance }> = [];
 let closed = 0;
 
-async function renderDialog(): Promise<void> {
+async function renderSheet(): Promise<void> {
   const { createRoot } = await import("react-dom/client");
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => {
     root!.render(
-      <AddSystemDialog
+      <ImportSheet
         open
         systems={SYSTEMS}
         onOpenChange={() => (closed += 1)}
@@ -78,19 +71,12 @@ function buttonIn(scope: ParentNode, label: string): HTMLButtonElement | undefin
 
 const button = (label: string) => buttonIn(document, label);
 const mode = (label: string) =>
-  [...document.querySelectorAll<HTMLButtonElement>(".app-import-mode button")].find(
+  [...document.querySelectorAll<HTMLButtonElement>(".app-import-modebtn")].find(
     (b) => b.textContent?.trim() === label,
   );
 
 async function click(el: HTMLElement | undefined): Promise<void> {
   await act(async () => el!.click());
-}
-
-/** The stepper shell (#213) holds identity and the write on step 3: the
-    source text is set on step 1, everything else happens on step 3. */
-async function goToSave(): Promise<void> {
-  await click(button("Continue"));
-  await click(button("Continue"));
 }
 
 afterEach(() => {
@@ -104,11 +90,10 @@ afterEach(() => {
   closed = 0;
 });
 
-describe("AddSystemDialog write modes", () => {
-  it("merges into a chosen system and reports added / overridden / unchanged", async () => {
-    await renderDialog();
+describe("ImportSheet write modes", () => {
+  it("merges into a chosen system and reviews added / overridden / unchanged", async () => {
+    await renderSheet();
     await act(async () => setValue(textPane()!, "--color-bg: #111111;\n--color-accent: #ff0000;"));
-    await goToSave();
     await click(mode("Merge into"));
     const select = document.querySelector<HTMLSelectElement>('select[aria-label="System to merge into"]')!;
     await act(async () => setValue(select, "aurora"));
@@ -116,34 +101,53 @@ describe("AddSystemDialog write modes", () => {
     expect(review()?.textContent).toContain("Added 1");
     expect(review()?.textContent).toContain("Overridden 1");
     expect(review()?.textContent).toContain("Unchanged 0");
+    expect(review()?.textContent).toContain("Removed 0");
 
     await click(button("Merge system"));
     expect(merged).toHaveLength(1);
     expect(merged[0].slug).toBe("aurora");
     expect(merged[0].css).toContain("--color-accent: #ff0000;");
+    expect(closed).toBe(1);
   });
 
-  it("clones a chosen system, seeding the new system from its tokens", async () => {
-    await renderDialog();
-    await act(async () => setValue(textPane()!, "--color-accent: #ff0000;"));
-    await goToSave();
+  it("hides the name field and shows merge errors even with a target chosen", async () => {
+    await renderSheet();
+    await act(async () => setValue(textPane()!, "--not-a-schema-token: #111111;"));
+    await click(mode("Merge into"));
+    const select = document.querySelector<HTMLSelectElement>('select[aria-label="System to merge into"]')!;
+    await act(async () => setValue(select, "aurora"));
+
+    expect(nameField()).toBeNull();
+    await click(button("Merge system"));
+    expect(merged).toHaveLength(0);
+    expect(document.querySelector(".app-import-error")?.textContent).toMatch(/nothing to save/i);
+  });
+
+  it("clones a chosen system by seeding the visible buffer", async () => {
+    await renderSheet();
     await click(mode("Clone from"));
     const select = document.querySelector<HTMLSelectElement>('select[aria-label="System to clone from"]')!;
     await act(async () => setValue(select, "aurora"));
+    expect(textPane()!.value).toContain("--color-bg: #ffffff;");
+
+    const filter = document.querySelector<HTMLInputElement>('input[aria-label="Filter tokens by name"]')!;
+    await act(async () => setValue(filter, "--color-accent"));
+    const row = document.querySelector<HTMLInputElement>('input[aria-label="--color-accent"]')!;
+    await act(async () => setValue(row, "#ff0000"));
     await act(async () => setValue(nameField()!, "Aurora copy"));
 
     await click(button("Clone system"));
     expect(added).toHaveLength(1);
     expect(added[0].name).toBe("Aurora copy");
-    // Seeded from the clone source and overlaid with the imported block.
     expect(added[0].css).toContain("--color-bg: #ffffff;");
     expect(added[0].css).toContain("--color-accent: #ff0000;");
+    expect(added[0].css.match(/--color-bg:/g)).toHaveLength(1);
+    expect(added[0].source).toMatchObject({ kind: "clone" });
   });
 
   it("records the import source on a plain new-system write", async () => {
-    await renderDialog();
+    await renderSheet();
     await act(async () => setValue(textPane()!, "--color-bg: #123456;"));
-    await goToSave();
     await act(async () => setValue(nameField()!, "Probe"));
     await click(button("Save system"));
 
@@ -153,11 +157,10 @@ describe("AddSystemDialog write modes", () => {
   });
 });
 
-describe("AddSystemDialog slug-collision resolution", () => {
+describe("ImportSheet slug-collision resolution", () => {
   async function collide(): Promise<void> {
-    await renderDialog();
+    await renderSheet();
     await act(async () => setValue(textPane()!, "--color-bg: #111111;"));
-    await goToSave();
     await act(async () => setValue(nameField()!, "Aurora"));
     await click(button("Save system"));
   }
@@ -173,7 +176,6 @@ describe("AddSystemDialog slug-collision resolution", () => {
     expect(buttonIn(panel!, "Merge")).toBeDefined();
     expect(buttonIn(panel!, "Replace")).toBeDefined();
     expect(buttonIn(panel!, "Cancel")).toBeDefined();
-    // The dialog stays open — the choice is the user's, not an error state.
     expect(closed).toBe(0);
   });
 
@@ -193,12 +195,26 @@ describe("AddSystemDialog slug-collision resolution", () => {
     expect(closed).toBe(1);
   });
 
-  it("replaces the colliding system when Replace is chosen", async () => {
+  it("requires a second confirmation before replacing", async () => {
     await collide();
     await click(buttonIn(collisionPanel()!, "Replace"));
+    expect(collisionPanel()!.textContent).toMatch(/cannot be undone/i);
+    expect(replaced).toHaveLength(0);
+    expect(closed).toBe(0);
+
+    await click(buttonIn(collisionPanel()!, "Replace permanently"));
     expect(replaced).toHaveLength(1);
     expect(replaced[0].slug).toBe("aurora");
     expect(closed).toBe(1);
+  });
+
+  it("keeps the existing system when the replace confirmation is dismissed", async () => {
+    await collide();
+    await click(buttonIn(collisionPanel()!, "Replace"));
+    await click(buttonIn(collisionPanel()!, "Keep existing"));
+    expect(replaced).toHaveLength(0);
+    expect(collisionPanel()!.textContent).toMatch(/already exists/i);
+    expect(closed).toBe(0);
   });
 
   it("dismisses the collision prompt on Cancel without writing", async () => {

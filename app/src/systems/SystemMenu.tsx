@@ -1,7 +1,7 @@
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Icon } from "../lib/icons.tsx";
 import type { DesignSystem } from "./store.ts";
 import "./SystemMenu.css";
@@ -35,6 +35,12 @@ export function SystemMenu({
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [draft, setDraft] = useState("");
+  // Stable ref callback: React runs it only when the input mounts (dialog
+  // opens), not on every commit. A fresh inline callback re-selected the text
+  // on each keystroke's re-render, so the next key replaced the whole name.
+  const selectOnMount = useCallback((el: HTMLInputElement | null) => {
+    el?.select();
+  }, []);
   if (!system) return null;
   const trimmed = draft.trim();
   const saveRename = () => {
@@ -51,7 +57,7 @@ export function SystemMenu({
           aria-label="System actions"
           title="System actions"
         >
-          <Icon name="dots" size={15} />
+          <Icon name="settings" size={15} />
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content className="sys-menu" sideOffset={6} align="start">
@@ -106,10 +112,7 @@ export function SystemMenu({
                   className="sys-input"
                   value={draft}
                   autoComplete="off"
-                  aria-label="System name"
-                  ref={(el) => {
-                    el?.select?.();
-                  }}
+                  ref={selectOnMount}
                   onChange={(e) => setDraft(e.target.value)}
                 />
               </label>

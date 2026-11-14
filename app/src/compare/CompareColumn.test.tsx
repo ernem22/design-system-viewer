@@ -5,8 +5,10 @@ import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import type { Root } from "react-dom/client";
 import { CompareColumn } from "./CompareColumn.tsx";
+import { useCompareView } from "./useCompareView.ts";
+import type { DesignSystem } from "../systems/store.ts";
 import { usePortalContainer } from "../gallery/ui.tsx";
-import { BASIC_OPTIONS } from "./registry.tsx";
+import { BASIC_OPTIONS, COMPONENT_OPTIONS, SCREEN_OPTIONS } from "./registry.tsx";
 import type { ComparableOption } from "./registry.tsx";
 
 // Issue #39: the compare-only Basics renderers (Inputs: c-e/c-p/c-n/c-d,
@@ -22,6 +24,12 @@ let host: HTMLDivElement | null = null;
 function option(id: string): ComparableOption {
   const found = BASIC_OPTIONS.find((o) => o.id === id);
   if (!found) throw new Error(`no comparable option with id ${id}`);
+  return found;
+}
+
+function galleryOption(id: string): ComparableOption {
+  const found = [...COMPONENT_OPTIONS, ...SCREEN_OPTIONS].find((o) => o.id === id);
+  if (!found) throw new Error(`no comparable gallery option with id ${id}`);
   return found;
 }
 
@@ -51,6 +59,7 @@ afterEach(() => {
   root = null;
   host?.remove();
   host = null;
+  document.documentElement.style.removeProperty("--color-bg");
 });
 
 function idsIn(el: Element): string[] {
@@ -61,8 +70,9 @@ describe("CompareColumn id namespacing", () => {
   it("keeps Inputs ids unique across two mounted columns", async () => {
     const el = await renderColumns(option("input"), ["aurora", "chatgpt"]);
     const ids = idsIn(el);
-    expect(ids).toHaveLength(8);
-    expect(new Set(ids).size).toBe(8);
+    // 4 controls + hint/error message ids (Field now associates them) per column.
+    expect(ids).toHaveLength(10);
+    expect(new Set(ids).size).toBe(10);
     expect(ids).toEqual(
       expect.arrayContaining(["aurora-c-e", "aurora-c-p", "aurora-c-n", "aurora-c-d", "chatgpt-c-e"]),
     );
@@ -134,6 +144,41 @@ function LivePortalProbe() {
   return container ? createPortal(<span className="cmp-live-portal">live</span>, container) : null;
 }
 
+// Issue #40 follow-up: gallery section Bodies render once per Compare column.
+// Their hardcoded form ids (f-email, l-email, …) must be namespaced too, or
+// every `<label htmlFor>` in columns 2+ resolves to column 1's control.
+describe("CompareColumn gallery section id namespacing", () => {
+  it("namespaces Forms ids and resolves each label within its own column", async () => {
+    const el = await renderColumns(galleryOption("gallery-forms"), ["aurora", "chatgpt"]);
+    const ids = idsIn(el);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toEqual(expect.arrayContaining(["aurora-f-email", "chatgpt-f-email"]));
+
+    const cols = [...el.querySelectorAll(".cmp-col")];
+    expect(cols).toHaveLength(2);
+    for (const col of cols) {
+      const label = col.querySelector("label.dsv-label[for]")!;
+      const input = document.getElementById(label.getAttribute("for")!)!;
+      expect(col.contains(input)).toBe(true);
+      expect(input.tagName).toBe("INPUT");
+    }
+    expect(cols[0].querySelector("input")!.id).toBe("aurora-f-email");
+    expect(cols[1].querySelector("input")!.id).toBe("chatgpt-f-email");
+  });
+
+  it("namespaces the Login screen ids per column", async () => {
+    const el = await renderColumns(galleryOption("gallery-screen-login"), ["aurora", "chatgpt"]);
+    const ids = idsIn(el);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toEqual(expect.arrayContaining(["aurora-l-email", "chatgpt-l-email"]));
+
+    for (const col of el.querySelectorAll(".cmp-col")) {
+      const label = col.querySelector("label.dsv-label[for]")!;
+      expect(col.contains(document.getElementById(label.getAttribute("for")!))).toBe(true);
+    }
+  });
+});
+
 describe("CompareColumn portal container scope", () => {
   beforeEach(() => {
     capturedContainer = undefined;
@@ -169,6 +214,84 @@ describe("CompareColumn portal container scope", () => {
     const portalled = el.querySelector(".cmp-live-portal") as HTMLElement;
     expect(portalled).not.toBeNull();
     expect(column.contains(portalled)).toBe(true);
+  });
+});
+
+// A compared system that omits a schema token must not read the ACTIVE
+// system's value from document.documentElement: the column scopes every
+// omitted schema name to `initial` (guaranteed-invalid).
+describe("CompareColumn does not inherit the active system's missing tokens", () => {
+  it("scopes an omitted schema token to initial instead of the page value", async () => {
+    document.documentElement.style.setProperty("--color-bg", "#123456");
+    const system: DesignSystem = {
+      slug: "partial",
+      name: "Partial",
+      css: "--color-accent: #ff0000;",
+      groups: [
+        {
+          id: "color",
+          label: "Color",
+          kind: "color",
+          tokens: [{ name: "--color-accent", value: "#ff0000" }],
+        },
+      ],
+      createdAt: "",
+      updatedAt: "",
+    };
+
+    function Harness() {
+      const view = useCompareView([system]);
+      return (
+        <>
+          {view.cols.map((s) => (
+            <CompareColumn
+              key={s.slug}
+              slug={s.slug}
+              name={s.name}
+              style={view.styleFor.get(s.slug) ?? {}}
+              pct={null}
+              option={option("button")}
+            />
+          ))}
+        </>
+      );
+    }
+
+    const { createRoot } = await import("react-dom/client");
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root!.render(<Harness />);
+    });
+
+    const column = host.querySelector(".cmp-col") as HTMLElement;
+    expect(column.style.getPropertyValue("--color-bg")).toBe("initial");
+    expect(column.style.getPropertyValue("--color-bg")).not.toBe("#123456");
+    expect(column.style.getPropertyValue("--color-accent")).toBe("#ff0000");
+    expect(getComputedStyle(column).getPropertyValue("--color-bg")).not.toBe("#123456");
+  });
+});
+
+// The first column is the reference the diff compares against; its head says
+// so, and only that column carries the marker.
+describe("CompareColumn reference marker", () => {
+  it("marks only the reference column", async () => {
+    const opt = option("button");
+    const { createRoot } = await import("react-dom/client");
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root!.render(
+        <>
+          <CompareColumn slug="a" name="A" style={{}} pct={null} option={opt} reference />
+          <CompareColumn slug="b" name="B" style={{}} pct={null} option={opt} />
+        </>,
+      );
+    });
+    expect(host.querySelectorAll(".cmp-ref-marker")).toHaveLength(1);
+    expect(host.querySelector(".cmp-col .cmp-ref-marker")?.textContent).toBe("Reference");
   });
 });
 

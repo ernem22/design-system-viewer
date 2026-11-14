@@ -88,10 +88,17 @@ export function readViewUrl(search?: string): ViewUrlState {
   const tab: UrlTab | null =
     readTab(params.get("tab")) ?? (params.get("mode") === "compare" ? "compare" : null);
   const sys = params.get("sys");
-  const cmp = (params.get("cmp") ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  // Dedupe at the source (first occurrence wins): a hand-edited link like
+  // ?cmp=a,a,b must not count the same system twice. The column cap is the
+  // caller's concern — this module does not know how many columns a view has.
+  const cmp = [
+    ...new Set(
+      (params.get("cmp") ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
+  ];
   const q = params.get("q");
   const f = params.get("f");
   const tv = params.get("tv");

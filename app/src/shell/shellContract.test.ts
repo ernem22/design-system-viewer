@@ -66,6 +66,21 @@ describe("shell layout contract", () => {
     expect(rows).toContain("var(--app-topbar-height)");
     expect(rows).not.toMatch(/\d+px/);
   });
+
+  it("owns the rail width as one token and reuses it for the leading nav cell", () => {
+    const shell = declarationsFor(".app-shell").join("\n");
+    expect(shell).toMatch(/--app-rail-width:\s*208px/);
+    for (const selector of [".app-rail-clip", ".app-rail-inner"]) {
+      expect(declarationsFor(selector).join("\n"), selector).toContain(
+        "var(--app-rail-width)",
+      );
+    }
+    const nav = declarationsFor(".app-topbar-nav").join("\n");
+    expect(nav).toContain("var(--app-rail-width)");
+    expect(nav, "leading nav cell uses the rail token, not a literal").not.toMatch(
+      /width:\s*\d+px/,
+    );
+  });
 });
 
 // Issue #90: at 390px the fixed shell can be narrower than the topbar's

@@ -1,29 +1,27 @@
 import * as Checkbox from "@radix-ui/react-checkbox";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
-import type { KeyboardEvent } from "react";
+import { useRef, type KeyboardEvent } from "react";
 import { Icon } from "../lib/icons.tsx";
 import type { DesignSystem } from "../systems/store.ts";
-import { TokenDialog } from "./TokenDialog.tsx";
-import "./TokenDialog.css";
 import type { TokensViewModel } from "./useTokensView.ts";
 import "./TokenToolbar.css";
 
 /**
  * Tokens toolbar (old .toolbar, minus the coverage ring — that lives in the
  * right rail now): filter + clear/Esc, Show missing (gallery only), the
- * Gallery/Schema segmented view switch and Add tokens (Radix dialog with
- * live coverage preview). Whole-system actions (Export, Delete, Rename,
- * Duplicate) live in the system menu beside the topbar switcher (issue
+ * Gallery/Schema segmented view switch and Add tokens (which opens the shared
+ * import sheet scoped to this system). Whole-system actions (Export, Delete,
+ * Rename, Duplicate) live in the system menu beside the topbar switcher (issue
  * #313), not here.
  */
 export function TokenToolbar({
   view,
   system,
-  onMerge,
+  onAddTokens,
 }: {
   view: TokensViewModel;
   system: DesignSystem;
-  onMerge: (css: string) => void;
+  onAddTokens: () => void;
 }) {
   const {
     filter,
@@ -33,6 +31,7 @@ export function TokenToolbar({
     schemaMode,
     setSchemaMode,
   } = view;
+  const filterRef = useRef<HTMLInputElement>(null);
 
   // Roving arrow-key navigation for the toolbar buttons (WAI-APG toolbar
   // pattern): Left/Right/Home/End move focus between the toolbar's buttons.
@@ -52,6 +51,31 @@ export function TokenToolbar({
         target.isContentEditable)
     )
       return;
+
+    // The Gallery/Schema segmented switch owns its arrows and wraps within
+    // itself. Handle that before the toolbar roving so ArrowRight from Schema
+    // goes back to Gallery instead of jumping out to "Add tokens".
+    const switchRoot = target?.closest(".tok-view-switch");
+    if (switchRoot) {
+      const items = [...switchRoot.querySelectorAll<HTMLElement>("button:not([disabled])")];
+      const at = items.indexOf(target as HTMLElement);
+      if (at === -1) return;
+      e.preventDefault();
+      const next =
+        e.key === "ArrowRight"
+          ? items[(at + 1) % items.length]
+          : e.key === "ArrowLeft"
+            ? items[(at - 1 + items.length) % items.length]
+            : e.key === "Home"
+              ? items[0]
+              : items[items.length - 1];
+      next?.focus();
+      return;
+    }
+
+    // Any other child composite that already handled the arrow keeps it; do
+    // not steal focus back into the toolbar.
+    if (e.defaultPrevented) return;
     const bar = e.currentTarget as HTMLElement;
     const items = [...bar.querySelectorAll<HTMLElement>("button:not([disabled])")];
     const at = items.indexOf(target as HTMLElement);
@@ -79,6 +103,7 @@ export function TokenToolbar({
         <span className="tok-filter-wrap">
           <Icon name="search" size={14} className="tok-search-ico" />
           <input
+            ref={filterRef}
             type="search"
             className="tok-filter"
             name="filter"
@@ -98,16 +123,21 @@ export function TokenToolbar({
               }
             }}
           />
-          {filter && (
-            <button
-              className="tok-filter-clear"
-              aria-label="Clear filter"
-              title="Clear filter (Esc)"
-              onClick={() => setFilter("")}
-            >
-              ×
-            </button>
-          )}
+        {filter && (
+          <button
+            className="tok-filter-clear"
+            aria-label="Clear filter"
+            title="Clear filter (Esc)"
+            onClick={() => {
+              setFilter("");
+              // Clearing drops the button that had focus; keep the caret in
+              // the filter so typing can continue (the SectionSearch pattern).
+              filterRef.current?.focus();
+            }}
+          >
+            ×
+          </button>
+        )}
         </span>
         {!schemaMode && (
           <label className="tok-inline">
@@ -129,8 +159,9 @@ export function TokenToolbar({
             the active one reads selected — the old single Toggle renamed
             itself ("Schema" here, "Gallery" there) and read as an action
             button. Drives the same schemaMode/setSchemaMode, so ?tv=schema
-            keeps working. Its items are plain buttons, so the toolbar's
-            roving arrow-key navigation crosses them untouched. */}
+            keeps working. The switch is its own roving radio group: it wraps
+            ArrowLeft/ArrowRight inside itself and calls preventDefault, which
+            the toolbar's roving handler defers to. */}
         <ToggleGroup.Root
           type="single"
           aria-label="View"
@@ -150,7 +181,14 @@ export function TokenToolbar({
             Schema
           </ToggleGroup.Item>
         </ToggleGroup.Root>
-        <TokenDialog system={system} onMerge={onMerge} onToast={view.pushToast} />
+        <button
+          type="button"
+          className="tok-btn"
+          title={`Add tokens to ${system.name}`}
+          onClick={onAddTokens}
+        >
+          Add tokens
+        </button>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { Toast } from "../lib/toasts.ts";
+import type { Toast, ToastQueue } from "../lib/toasts.ts";
+import { Icon } from "../lib/icons.tsx";
 import "./Toasts.css";
 
 // The exit fade is --app-duration-fast (100ms); the node stays mounted just
@@ -8,7 +9,7 @@ import "./Toasts.css";
 // it never jumps.
 const EXIT_MS = 120;
 
-export function Toasts({ toasts }: { toasts: Toast[] }) {
+export function Toasts({ toasts, queue }: { toasts: Toast[]; queue: ToastQueue }) {
   // Toasts the queue dropped but the exit fade has not finished. A dropped id
   // is moved here DURING render (before commit), so the leaving toast is the
   // SAME DOM node the live toast was (same key, never unmounted): its opacity
@@ -60,15 +61,44 @@ export function Toasts({ toasts }: { toasts: Toast[] }) {
       .filter((t) => !liveIds.has(t.id))
       .map((t) => ({ ...t, leaving: true })),
   ];
+
+  // Errors persist, so only the short-lived tones need their timer suspended.
+  const pauseLive = () => {
+    for (const t of toasts) if (t.tone !== "err") queue.pause(t.id);
+  };
+  const resumeLive = () => {
+    for (const t of toasts) if (t.tone !== "err") queue.resume(t.id);
+  };
+
   return (
-    <div className="app-toasts" role="status" aria-live="polite">
+    <div className="app-toasts">
       {items.map((t) => (
         <div
           key={t.id}
           className={`app-toast app-toast-${t.tone}`}
           data-leaving={t.leaving || undefined}
+          // Every toast owns its live region: a polite stack wrapper would
+          // re-read every visible message whenever a new one arrived. Errors
+          // are assertive; ok/warn stay polite.
+          role={t.tone === "err" ? "alert" : "status"}
+          aria-live={t.tone === "err" ? "assertive" : "polite"}
+          aria-atomic="true"
+          onMouseEnter={pauseLive}
+          onMouseLeave={resumeLive}
+          onFocus={pauseLive}
+          onBlur={resumeLive}
         >
-          {t.msg}
+          <span className="app-toast-msg">{t.msg}</span>
+          {t.tone === "err" && !t.leaving && (
+            <button
+              type="button"
+              className="app-toast-close"
+              aria-label="Dismiss"
+              onClick={() => queue.dismiss(t.id)}
+            >
+              <Icon name="x" size={14} />
+            </button>
+          )}
         </div>
       ))}
     </div>

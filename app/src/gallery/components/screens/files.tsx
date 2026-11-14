@@ -31,17 +31,15 @@ export default function FilesBody() {
       >
         <Progress.Indicator className="dsv-progress-indicator" style={{ width: "61%" }} />
       </Progress.Root>
-      <div className="dsv-card" style={{ padding: 0, overflow: "hidden" }}>
+      <div
+        className="dsv-muted"
+        style={{ fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-medium)", marginBottom: "var(--space-2)" }}
+      >
+        Recent uploads
+      </div>
+      <div className="dsv-card" style={{ padding: 0, overflow: "clip" }}>
         {FILES.map(([name, size, who, pct]) => (
-          <div
-            key={name}
-            className="dsv-inline"
-            style={{
-              padding: "var(--space-3) var(--space-4)",
-              borderBottom: "var(--border-width-thin) solid var(--color-border-subtle)",
-              gap: "var(--space-3)",
-            }}
-          >
+          <div key={name} className="dsv-file-row">
             <Icon name="file" size={16} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div
@@ -56,13 +54,21 @@ export default function FilesBody() {
                 {name}
               </div>
               <div className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>
-                {size} · {who} · {pct === 100 ? "done" : `${pct}%`}
+                {size} · {who}
               </div>
             </div>
             {pct === 100 ? (
               <span className="dsv-badge dsv-badge--success">Synced</span>
             ) : (
-              <span className="dsv-spinner dsv-spinner--sm" />
+              <span className="dsv-inline" style={{ gap: "var(--space-2)", flex: "none" }}>
+                <span className="dsv-spinner dsv-spinner--sm" />
+                <span
+                  className="dsv-muted"
+                  style={{ fontSize: "var(--font-size-xs)", fontVariantNumeric: "tabular-nums" }}
+                >
+                  {pct}%
+                </span>
+              </span>
             )}
           </div>
         ))}

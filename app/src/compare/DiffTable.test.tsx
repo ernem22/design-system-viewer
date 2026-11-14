@@ -143,6 +143,60 @@ describe("DiffTable formatting-only differences (issue #281)", () => {
   });
 });
 
+// A single shared map (css then groups) is what every reader uses, and the
+// first column is the explicit reference for every comparison.
+describe("DiffTable shared map + reference", () => {
+  const ref = () => sys("a", [group("S", { "--a": "1px" })]);
+  const other = () => sys("b", [group("S", { "--a": "2px", "--b": "2px" })]);
+  const third = () => sys("c", [group("S", { "--a": "1px" })]);
+
+  async function showAll(el: Element) {
+    await act(async () => {
+      const all = [...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === "All");
+      all!.click();
+    });
+  }
+
+  function cells(el: Element, name: string): HTMLTableCellElement[] {
+    return [...rowFor(el, name).querySelectorAll("td")] as HTMLTableCellElement[];
+  }
+
+  it("uses the shared map so a css-only token appears in the diff", async () => {
+    const el = await render([
+      { ...sys("a", []), css: ":root { --only-css: 1px; }" },
+      { ...sys("b", []), css: ":root { --only-css: 2px; }" },
+    ]);
+    // Default Different filter: the row must be reachable from the css source.
+    expect(cells(el, "--only-css")[2].classList.contains("is-changed")).toBe(true);
+  });
+
+  it("does not mark other systems changed when the reference lacks the token", async () => {
+    const el = await render([ref(), other()]);
+    await showAll(el);
+    const b = cells(el, "--b");
+    // td[1] is the reference (missing); td[2] is system b, which has it.
+    expect(b[1].classList.contains("is-missing")).toBe(true);
+    expect(b[2].classList.contains("is-changed")).toBe(false);
+    expect(b[2].classList.contains("is-missing")).toBe(false);
+    expect(rowFor(el, "--b").textContent).toContain("not in reference");
+  });
+
+  it("marks only the cells that differ from the reference", async () => {
+    const el = await render([ref(), other(), third()]);
+    const a = cells(el, "--a");
+    expect(a[1].classList.contains("is-changed")).toBe(false); // reference
+    expect(a[2].classList.contains("is-changed")).toBe(true); // 2px vs 1px
+    expect(a[3].classList.contains("is-changed")).toBe(false); // 1px equals ref
+  });
+
+  it("marks the first column as the reference in the header", async () => {
+    const el = await render([ref(), other()]);
+    const heads = [...el.querySelectorAll(".cmp-diff-table thead th")];
+    expect(heads[1].textContent).toContain("Reference");
+    expect(heads[2].textContent).not.toContain("Reference");
+  });
+});
+
 describe("DiffTable category union", () => {
   it("shows every label a token lives under, grouped by the first", async () => {
     const el = await render([

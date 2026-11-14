@@ -105,8 +105,6 @@ function stubView(overrides: Record<string, unknown> = {}): TokensViewModel {
     tokens: [],
     valueMap: new Map<string, string>(),
     copyToken: () => {},
-    editingName: null,
-    onEdit: () => {},
     pushToast: () => {},
     ...overrides,
   } as unknown as TokensViewModel;

@@ -14,24 +14,19 @@ export default function ReportBody() {
         Q2 · Design systems report
       </div>
       <h3
-        className="dsv-display dsv-display--3xl"
-        style={{ margin: "var(--space-3) 0", fontFamily: "var(--font-serif)" }}
+        className="dsv-display dsv-display--serif"
+        style={{ margin: "var(--space-3) 0", fontSize: "var(--font-size-3xl)" }}
       >
         Coverage is up, drift is down
       </h3>
-      <p
-        className="dsv-prose"
-        style={{ fontFamily: "var(--font-serif)", fontSize: "var(--font-size-base)" }}
-      >
+      <p className="dsv-prose" style={{ fontSize: "var(--font-size-base)" }}>
         Token adoption rose from 61% to 84% this quarter. The preview now exercises every scale —
         color, type, spacing, radius, shadow and motion — so drift surfaces before it ships.
       </p>
       <blockquote className="dsv-quote">
         “One link per view changed how we review.”<cite>— design ops</cite>
       </blockquote>
-      <p className="dsv-prose" style={{ fontFamily: "var(--font-serif)" }}>
-        Next: dark-variant review and print styles for invoices.
-      </p>
+      <p className="dsv-prose">Next: print styles for invoices.</p>
     </div>
   );
 }

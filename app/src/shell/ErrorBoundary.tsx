@@ -1,10 +1,8 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import type { PushToast } from "../lib/toasts.ts";
 import "./ErrorBoundary.css";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
-  pushToast?: PushToast;
 }
 
 interface ErrorBoundaryState {
@@ -14,8 +12,13 @@ interface ErrorBoundaryState {
 
 /**
  * Chrome-level safety net around Shell. Catches render errors anywhere in
- * the Shell tree so one bad section can't blank the whole app — Toasts and
- * AddSystemDialog stay outside (in App.tsx) so the error toast still renders.
+ * the Shell tree so one bad section can't blank the whole app.
+ *
+ * Recovery must not re-render the same deterministic throw, so the fallback
+ * offers a plain reload and a reset that clears the persisted selection (the
+ * active system and the URL's tab/section state) before reloading. The
+ * fallback surface is painted from viewer-private --app-error-* literals: the
+ * inspected system's tokens may be what crashed the shell in the first place.
  */
 export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false, error: null };
@@ -25,32 +28,65 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    // Log both the error and the React component stack for debugging.
+    // Console only — the fallback copy stays user-safe and leaks no internals.
     console.error(error);
     console.error(info.componentStack);
-    this.props.pushToast?.("Something went wrong", "err");
   }
 
-  private handleRetry = (): void => {
-    this.setState({ hasError: false, error: null });
+  private cardRef = (el: HTMLDivElement | null): void => {
+    el?.focus();
+  };
+
+  private handleReload = (): void => {
+    window.location.reload();
+  };
+
+  private handleReset = (): void => {
+    try {
+      localStorage.removeItem("dsv.app.active");
+    } catch {
+      /* storage unreachable — the reload still starts from a clean URL */
+    }
+    try {
+      window.history.replaceState(null, "", window.location.pathname);
+    } catch {
+      /* non-http contexts (file://) — reload below still clears in-memory state */
+    }
+    window.location.reload();
   };
 
   render(): ReactNode {
     if (!this.state.hasError) return this.props.children;
 
     return (
-      <div className="app-error" role="alert">
-        <div className="app-error-card">
-          <h2 className="app-error-title">Something went wrong</h2>
-          <p className="app-error-message">
-            A section failed to render. Try again, or reload the page if the problem persists.
+      <div className="app-error">
+        <div
+          className="app-error-card"
+          role="alert"
+          aria-labelledby="app-error-title"
+          aria-describedby="app-error-desc"
+          tabIndex={-1}
+          ref={this.cardRef}
+        >
+          <h2 id="app-error-title" className="app-error-title">
+            Something went wrong
+          </h2>
+          <p id="app-error-desc" className="app-error-message">
+            This view stopped unexpectedly. Reload the page, or reset to a safe view if the
+            problem keeps happening.
           </p>
-          {this.state.error && (
-            <pre className="app-error-details">{this.state.error.message}</pre>
-          )}
-          <button type="button" className="dsv-btn dsv-btn--solid" onClick={this.handleRetry}>
-            Try again
-          </button>
+          <div className="app-error-actions">
+            <button
+              type="button"
+              className="app-error-btn app-error-btn--primary"
+              onClick={this.handleReload}
+            >
+              Reload
+            </button>
+            <button type="button" className="app-error-btn" onClick={this.handleReset}>
+              Reset to a safe view
+            </button>
+          </div>
         </div>
       </div>
     );

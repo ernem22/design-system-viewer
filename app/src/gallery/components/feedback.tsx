@@ -39,9 +39,14 @@ export default function FeedbackBody() {
     <>
       <Demo title="Progress">
         <Progress.Root className="dsv-progress" value={progress} aria-label="Upload progress" aria-valuetext={`${progress}%`}>
-          {/* width is the one genuinely dynamic value here — everything else
-             in this gallery is a static class reading design-system tokens */}
-          <Progress.Indicator className="dsv-progress-indicator" style={{ width: `${progress}%` }} />
+          {/* scaleX is the one genuinely dynamic value here — everything else
+             in this gallery is a static class reading design-system tokens.
+             Transforming the full-width bar keeps the animation on the
+             compositor instead of relaying out every frame. */}
+          <Progress.Indicator
+            className="dsv-progress-indicator"
+            style={{ transform: `scaleX(${progress / 100})` }}
+          />
         </Progress.Root>
         <Button size="sm" variant="ghost" onClick={() => setProgress((v) => (v >= 100 ? 0 : v + 20))}>
           +20

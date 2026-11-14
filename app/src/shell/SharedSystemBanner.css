@@ -2,6 +2,9 @@
    when a `?s=` link lands. Every value resolves from the viewer's tokens —
    no literal sizes or colours here, same contract as shell.css. */
 .app-shared-banner {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -11,11 +14,22 @@
   border-bottom: var(--border-width-thin) solid var(--color-divider);
   color: var(--color-text);
   font-family: var(--font-sans);
-  font-size: var(--font-size-sm);
+  font-size: var(--app-font-size-sm);
 }
 
 .app-shared-banner-text {
+  flex: 1 1 auto;
+  min-width: 0;
   font-weight: var(--font-weight-semibold);
+}
+
+.app-shared-banner-name {
+  display: inline-block;
+  max-width: min(32ch, 100%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 
 .app-shared-banner-actions {
@@ -28,9 +42,58 @@
 .app-shared-banner-btn {
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-md);
-  background: var(--color-surface-raised);
-  border: var(--border-width-thin) solid var(--color-border);
-  color: var(--color-text);
+  background: none;
+  border: var(--border-width-thin) solid transparent;
+  color: var(--color-text-secondary);
   font-family: var(--font-sans);
-  font-size: var(--font-size-sm);
+  font-size: var(--app-font-size-sm);
+  cursor: pointer;
+  transition: transform var(--app-duration-fast) var(--app-ease-out);
+}
+
+.app-shared-banner-btn:hover {
+  background: var(--color-hover-overlay);
+  color: var(--color-text);
+}
+
+.app-shared-banner-btn:active:not(:disabled) {
+  transform: scale(var(--app-motion-scale-active));
+}
+
+.app-shared-banner-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.app-shared-banner-btn--primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.app-shared-banner-btn--primary:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+  color: var(--color-on-accent);
+}
+
+.app-shared-banner-btn--primary:active:not(:disabled) {
+  background: var(--color-accent-active);
+  border-color: var(--color-accent-active);
+}
+
+.app-shared-banner-btn--secondary {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.app-shared-banner-btn--secondary:hover {
+  background: var(--color-hover-overlay);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shared-banner-btn:active:not(:disabled) {
+    transform: none;
+  }
 }

@@ -14,7 +14,7 @@ export default function ChatBody() {
             borderBottom: "var(--border-width-thin) solid var(--color-divider)",
           }}
         >
-          <Avat name="Grace Hopper" />
+          <Avat name="Grace Hopper" decorative />
           <div>
             <div style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)" }}>
               Grace Hopper
@@ -24,7 +24,13 @@ export default function ChatBody() {
             </div>
           </div>
         </div>
-        <div className="dsv-chat" style={{ padding: "var(--space-4)" }}>
+        <div
+          className="dsv-chat"
+          role="log"
+          aria-label="Conversation with Grace Hopper"
+          aria-live="polite"
+          style={{ padding: "var(--space-4)" }}
+        >
           <div className="dsv-muted" style={{ textAlign: "center", fontSize: "var(--font-size-xs)" }}>
             Today
           </div>
@@ -32,8 +38,8 @@ export default function ChatBody() {
           <div className="dsv-bubble dsv-bubble--me">Yes, live via postMessage.</div>
           <div className="dsv-bubble dsv-bubble--them">Great. Let’s add more screens.</div>
           <div className="dsv-bubble dsv-bubble--me">This screen is one of them 😄</div>
-          <div className="dsv-bubble dsv-bubble--them">
-            <span className="dsv-spinner dsv-spinner--xs" /> typing…
+          <div className="dsv-bubble dsv-bubble--them" role="status">
+            <span className="dsv-spinner dsv-spinner--xs" aria-hidden="true" /> typing…
           </div>
         </div>
         <div

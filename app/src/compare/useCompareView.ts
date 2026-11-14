@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { REFERENCE } from "../../../src/core/schema.js";
 import { resolveSystemTokens } from "../systems/store.ts";
 import type { DesignSystem } from "../systems/store.ts";
 import { readViewUrl } from "../lib/urlState.ts";
@@ -16,6 +17,11 @@ export interface OptionGroup {
 }
 
 const MAX_COLUMNS = 4;
+
+/** Every schema token name. A column must explicitly neutralize the ones its
+ *  system omits, or they resolve from document.documentElement (the ACTIVE
+ *  system) and an incomplete system renders with another system's values. */
+const SCHEMA_TOKEN_NAMES = (REFERENCE as { tokens: string[] }[]).flatMap((g) => g.tokens);
 
 /** Default comparable (legacy's `?c=` default was "button", same first entry
  *  here) — shared by the state initializer below and App's URL writer so the
@@ -37,7 +43,10 @@ export function useCompareView(systems: DesignSystem[]) {
   // values fall back to today's defaults, and the repair effect below drops
   // picked slugs with no matching system — so no querystring, same as before.
   const [picked, setPicked] = useState<string[]>(() => {
-    const linked = readViewUrl().cmp;
+    // A hand-edited link can repeat a slug or exceed the column cap; dedupe
+    // (first occurrence wins) and clamp, so ?cmp=a,a,b and ?cmp=a,b,c,d,e
+    // both start from a valid selection.
+    const linked = [...new Set(readViewUrl().cmp)].slice(0, MAX_COLUMNS);
     return linked.length > 0 ? linked : systems.slice(0, 2).map((s) => s.slug);
   });
   const [mode, setMode] = useState<CompareMode>(() =>
@@ -87,11 +96,16 @@ export function useCompareView(systems: DesignSystem[]) {
   const active = allOptions.find((o) => o.id === componentId) ?? allOptions[0] ?? null;
 
   // Picked systems in selection order — CompareColumn's `styleFor` scope and
-  // the diff table's group reads both derive from these.
-  const cols = useMemo(
-    () => systems.filter((s) => picked.includes(s.slug)),
-    [systems, picked],
-  );
+  // the diff table's group reads both derive from these. Driven by `picked`,
+  // not `systems` (catalogue order), so a column keeps the position the user
+  // picked it in, matching the rail's chip order.
+  const cols = useMemo(() => {
+    const bySlug = new Map(systems.map((s) => [s.slug, s]));
+    return picked.flatMap((slug) => {
+      const system = bySlug.get(slug);
+      return system ? [system] : [];
+    });
+  }, [systems, picked]);
 
   const toggle = (slug: string) => {
     userPickedRef.current = true;
@@ -101,10 +115,19 @@ export function useCompareView(systems: DesignSystem[]) {
   // One CSS-variable map per system — CompareColumn spreads this as inline
   // `style` so `var(--x)` inside that column resolves to its own tokens
   // instead of the page's :root (which only ever holds one active system).
+  // A schema token the system omits is set to `initial` (the guaranteed-
+  // invalid value) so `var(--x)` cannot inherit the active system's value.
   const styleFor = useMemo(() => {
     const map = new Map<string, Record<string, string>>();
-    for (const s of systems)
-      map.set(s.slug, Object.fromEntries(resolveSystemTokens(s).map((t) => [t.name, t.value])));
+    for (const s of systems) {
+      const scope: Record<string, string> = Object.fromEntries(
+        resolveSystemTokens(s).map((t) => [t.name, t.value]),
+      );
+      for (const name of SCHEMA_TOKEN_NAMES) {
+        if (!Object.prototype.hasOwnProperty.call(scope, name)) scope[name] = "initial";
+      }
+      map.set(s.slug, scope);
+    }
     return map;
   }, [systems]);
 
