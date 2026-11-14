@@ -1,8 +1,4 @@
 node_modules/
-preview/dist/
-dist-static/
-_site/
-systems/index.json
 .serena/
 
 # Hermes agent scratch dirs (runtime sentinels), never part of the repo
