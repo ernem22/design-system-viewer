@@ -3,47 +3,58 @@
 Paste a block of CSS custom properties, get a categorized token gallery, a
 live component preview, and a side-by-side diff between systems.
 
-Live: <https://ernem22.github.io/design-system-viewer>
+The app lives in `app/` (React 19 + TypeScript + Vite).
 
 ## Run
 
 ```bash
-npm start      # http://localhost:4173  (PORT to change)
-npm test
+cd app
+npm install
+npm run dev
 ```
 
-First `npm start` builds the `preview/` app (React + Radix, ~1 min once).
-Run `npm run build` again after changing anything under `preview/`.
+The dev server prints its URL (currently <http://localhost:5199>). Use
+`localhost`, not `127.0.0.1` — Vite binds to the IPv6 loopback (`::1`).
 
-Systems save to `systems/<slug>.json`. On GitHub Pages (no server) the
-bundled systems load from `systems/index.json`, and anything you add stays
-in that browser's localStorage.
+```bash
+npm test       # vitest
+npm run lint
+npm run build
+```
+
+Systems save to `systems/<slug>.json`. The dev server and the build emit
+`systems/index.json` from those files, so a system added to `systems/` shows up
+on the next reload in dev and in the next build. Anything added in the browser
+stays in that browser's localStorage.
 
 ## Tabs
 
 - **Tokens** — swatches, type specimens, spacing bars, shadow/radius cards.
-  Coverage against a 432-token reference (`schema.js`), value warnings,
+  Coverage against a 432-token reference (`src/core/schema.js`), value warnings,
   contrast (WCAG), copy/edit/export.
-- **Preview** — ~35 Radix primitives, extras Radix doesn't ship, and 15
-  composite screens, all rendered with the active system's tokens live.
-  This only reads the schema's exact names (`--color-accent`, `--space-4`, …) —
-  the Tokens gallery groups any name by pattern, but a token named anything
-  else renders there and nowhere else.
-- **Compare** — one component across 2–4 systems side by side, or a full
-  token diff table.
+- **Preview** — Radix primitives, extras Radix does not ship, and composite
+  screens, all rendered with the active system's tokens live. This only reads the
+  schema's exact names (`--color-accent`, `--space-4`, …) — the Tokens gallery
+  groups any name by pattern, but a token named anything else renders there and
+  nowhere else.
+- **Compare** — one component across systems side by side, or a full token diff
+  table.
 
-State (system, tab, compare selection) lives in the URL, so any view is a
-shareable link.
+State (system, tab, search, compare selection) lives in the URL (`?tab=`,
+`?sys=`, `?q=`, `?cmp=`), so any view is a shareable link.
 
 ## Layout
 
-- `src/core/` — parsing, taxonomy, schema, contrast (no dependencies)
-- `src/server/` — static server + `/api/systems`
-- `src/viewer/` — the Tokens tab
-- `preview/` — the React/Radix app (Preview + Compare)
+- `app/` — the React/TS Vite app; see `app/CLAUDE.md` for its code style.
+- `src/core/` — dependency-free parsing, taxonomy, schema and contrast. Plain JS,
+  imported by `app/` (`allowJs`); it is the shared source of truth, not legacy.
+- `systems/` — saved systems (`*.json`).
+- `tools/orchestration/` + `ORCHESTRATION.md` — the unattended pipeline that
+  develops `app/`.
 
 ## Limits
 
-Only a `dark` theme variant is parsed (light is the default; the Preview
-tab shows a dark toggle when a system ships one). Schema isn't editable
-from the UI. Nothing about a system is required.
+**Dark mode is retired** (user decision, 2026-09-23): it is not a feature of this
+product and will not be extended — no new dark handling. The `dark` variant is
+still parsed (`themes.dark`); the cleanup is deferred. Schema isn't editable from
+the UI. Nothing about a system is required.

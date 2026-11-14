@@ -1,0 +1,29 @@
+ M docs/orchestration/specs/coder.md
+ M docs/orchestration/specs/reviewer.md
+ M docs/orchestration/specs/tester.md
+ M tools/orchestration/close.sh
+ M tools/orchestration/reap.sh
+ M tools/orchestration/spawn.sh
+ M tools/orchestration/start.sh
+ M tools/orchestration/watch.sh
+?? .hermes-tmp.9QqWyB/
+?? .hermes-tmp.DDzngX/
+?? .hermes-tmp.GVKtYf/
+?? .hermes-tmp.IC4Vj3/
+?? .hermes-tmp.LvTDXb/
+?? .hermes-tmp.VUqhYx/
+?? .hermes-tmp.XNo3CP/
+?? .hermes-tmp.Y4W8ix/
+?? .hermes-tmp.bTNylv/
+?? .hermes-tmp.gRSVUZ/
+?? .hermes-tmp.pVgq0H/
+?? .hermes-tmp.qeXBHM/
+?? .hermes-tmp.xArnok/
+?? .hermes-tmp.y6OdXn/
+?? tools/orchestration/.hermes-tmp.CttURT/
+?? tools/orchestration/.hermes-tmp.K9VPeT/
+?? tools/orchestration/.hermes-tmp.YQK2pK/
+?? tools/orchestration/.hermes-tmp.aBB5tA/
+?? tools/orchestration/.hermes-tmp.bAs9T7/
+?? tools/orchestration/await.sh
+?? tools/orchestration/sweep.sh

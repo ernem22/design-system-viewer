@@ -1,0 +1,1100 @@
+/* Skeletal shell layout. All themed values resolve from the single
+   token root (src/tokens/tokens.css) — no fallbacks here. */
+
+.app-shell {
+  /* Structural constant, not a themed token — gallery.css reads it too,
+     so anchor-scrolled content clears the sticky topbar instead of
+     landing underneath it. */
+  --app-topbar-height: 44px;
+  /* Structural rail width, not a themed token (like the topbar height): the
+     rail frame and the topbar's leading nav cell both read it, so the rail
+     toggle lands on the same seam as the rail's right edge. */
+  --app-rail-width: 208px;
+  /* Topbar inset, read by both the bar's padding and the nav cell's width so
+     the cell still ends on the rail seam (padding + cell = rail width). */
+  --app-topbar-padding-inline: var(--space-3);
+  /* One shared landing offset: both the section anchors' scroll-margin-top
+     and the scrollspy's activation line read it, so a clicked row is by
+     construction the row the spy reports (lib/scrollspy.ts). Structural, like
+     the topbar height — resolved from the token root, no literal here. */
+  --app-rail-landing-offset: calc(var(--app-topbar-height) + var(--space-4));
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-areas:
+    "topbar topbar topbar"
+    "rail main props";
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: var(--app-topbar-height) minmax(0, 1fr);
+  /* clip, not hidden: hidden still leaves the shell programmatically
+     scrollable, so a rail fragment link (#id) would scroll the shell itself
+     and shift the whole layout; clip forbids scrolling entirely. */
+  overflow: clip;
+  background: var(--color-bg);
+  color: var(--color-text);
+  /* The chrome is part of the design system it displays: every shell rule
+     resolves type from the token root, never the platform stack. */
+  font-family: var(--font-sans);
+  font-size: var(--app-font-size-base);
+}
+
+/* Skip link (issue #227): the only keyboard entry past the topbar/rail
+   chrome into #app-main. Off-screen until focused (never display: none, so
+   it stays in the tab order), then the same token ring every control uses. */
+.app-skip-link {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  z-index: 100;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: var(--app-font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  transform: translateY(-300%);
+}
+
+.app-skip-link:focus-visible {
+  transform: none;
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Skip-target focus lands programmatically (mouse users never see it). */
+#app-main:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.app-topbar {
+  grid-area: topbar;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: grid;
+  /* minmax(0, 1fr) lets each side track shrink below its content width. A
+     bare `1fr` has an `auto` minimum, so at narrow viewports the side
+     clusters could not shrink and their content overflowed the fixed shell
+     into the centre (measured at 390px: the topbar was 402px wide inside the
+     390px shell, and the search input covered the tab triggers). */
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 0 var(--app-topbar-padding-inline);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.app-topbar-left,
+.app-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  /* The default `stretch` fills the track, so the cluster shrinks (and its
+     ellipsised children truncate) with the track instead of shrinking to
+     max-content and overflowing into the centre. `justify-self: start/end`
+     was the cause of that overflow: it sizes the cluster to its content. */
+  justify-self: stretch;
+}
+
+/* Actions stay pinned to the topbar's end edge while the track stretches. */
+.app-topbar-right {
+  justify-content: flex-end;
+}
+
+/* Leading nav cell above the rail (Rail toggle). It occupies the rail column's
+   width so the toggle's trailing edge sits on the rail/content seam, mirroring
+   the props toggle at the trailing edge of the action cluster. Structural
+   width, not themed: the topbar inset is subtracted because the cell starts
+   inside the bar's padding, so padding + cell still equals the rail width. */
+.app-topbar-nav {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: calc(var(--app-rail-width) - var(--app-topbar-padding-inline));
+}
+
+/* Thin separator between nav chrome and the brand lockup, so the toggle reads
+   as a control rather than part of the wordmark. */
+.app-topbar-divider {
+  flex: none;
+  width: var(--border-width-thin);
+  height: var(--space-4);
+  background: var(--color-divider);
+}
+
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--app-font-size-sm);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.app-brand-mark {
+  flex: none;
+}
+
+/* Focus-return anchor for the narrow drawer (App.tsx): the span carries the
+   ref but takes no box, so the toggle stays the topbar cluster's flex item. */
+.app-rail-toggle-slot {
+  display: contents;
+}
+
+.app-brand-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── system switcher (Radix Select) ── */
+
+.app-sysbtn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: var(--app-font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  height: 30px;
+  padding: 0 6px 0 8px;
+  max-width: 170px;
+  cursor: pointer;
+  /* Shrinkable so a narrow topbar ellipsises the name rather than overflowing
+     its track; the full name stays available via the trigger's `title`. */
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.app-sysbtn:hover {
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.app-sysbtn[data-state="open"] {
+  border-color: var(--color-accent-border);
+  color: var(--color-text);
+}
+
+.app-sysbtn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+.app-sysbtn-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-sysbtn-chev {
+  flex: none;
+  display: inline-flex;
+  color: var(--color-text-muted);
+}
+
+.app-select-content {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  z-index: var(--z-popover);
+}
+
+.app-sysmenu {
+  min-width: 220px;
+  /* Issue #334: with ~29+ systems the menu grew to its full height (measured
+     top 43, bottom 927 at 1440x900) and nothing scrolled — the Radix viewport
+     reported scrollHeight === clientHeight. Cap the menu to the space Radix
+     reports for the popper; the Radix viewport (a flex column child with its
+     own vertical scroll) then scrolls inside the cap for wheel, touch and
+     keyboard, and the highlighted item scrolls into view. */
+  max-height: var(--radix-select-content-available-height);
+}
+
+/* Scroll affordances for the switcher menu (issue #334): Radix only mounts
+   these while the viewport can scroll in that direction, so mouse users see
+   that there is more. Token surface/type only — no literal sizes. */
+.app-sysmenu-scroll {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  padding-block: var(--space-1);
+  color: var(--color-text-muted);
+  background: transparent;
+  cursor: default;
+}
+
+/* lib/icons has no chevron-up glyph, so the up button reuses chevron-down
+   rotated rather than adding one (only the issue's files may change). */
+.app-sysmenu-scroll-up > svg {
+  transform: rotate(180deg);
+}
+
+.app-select-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--app-font-size-xs);
+  padding: 6px 8px 6px 24px;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+  position: relative;
+}
+
+.app-select-item[data-highlighted] {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-text);
+}
+
+.app-select-item[data-state="checked"] {
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.app-select-item-indicator {
+  position: absolute;
+  left: 8px;
+  display: inline-flex;
+}
+
+.app-sysmenu-pct {
+  margin-left: auto;
+  padding-left: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--app-font-size-xs);
+  color: var(--color-warning-text);
+  flex: none;
+}
+
+.app-topbar-cov {
+  font-family: var(--font-mono);
+  font-size: var(--app-font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-warning-text);
+  background: var(--color-warning-subtle);
+  border: 1px solid var(--color-warning-border);
+  border-radius: 99px;
+  padding: 1px 7px;
+  flex: none;
+}
+
+/* ── section search (inside the rail frame, every tab that has a rail) ── */
+
+.app-rail-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  /* Separates the field from the first family header below it. */
+  margin-bottom: var(--space-2);
+}
+
+.app-rail-search > svg {
+  position: absolute;
+  left: var(--space-2-5);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.app-rail-search input {
+  font: inherit;
+  font-size: var(--app-font-size-xs);
+  color: var(--color-text);
+  background: var(--color-surface-sunken);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  height: 30px;
+  padding: 0 30px 0 32px;
+  width: 100%;
+  min-width: 0;
+  transition:
+    background var(--app-duration-fast) var(--app-ease-out),
+    border-color var(--app-duration-fast) var(--app-ease-out);
+}
+
+.app-rail-search input:hover {
+  border-color: var(--color-border);
+}
+
+.app-rail-search input:focus-visible {
+  /* The border/background tint alone is too subtle to read as focus (the
+     audit measured outline-width 0px on :focus-visible). Give the input the
+     same token ring every other control uses. */
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  background: var(--color-surface);
+  border-color: var(--color-accent-border);
+}
+
+.app-rail-search input::placeholder {
+  color: var(--color-text-disabled);
+}
+
+.app-rail-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.app-rail-search button {
+  position: absolute;
+  right: 3px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: var(--app-font-size-base);
+  line-height: 1;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.app-rail-search button:hover {
+  color: var(--color-text);
+  background: var(--color-hover-overlay);
+}
+
+.app-rail-search button:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+/* Shared button reset. Only the icon button resets its type here: a
+   `font: inherit` on `.app-sysbtn` would clobber the token font-size its own
+   rule sets (the audit measured the switcher at 16px, not `--font-size-xs`). */
+.app-sysbtn,
+.app-iconbtn {
+  cursor: pointer;
+}
+
+.app-iconbtn {
+  appearance: none;
+  flex: none;
+  font: inherit;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+}
+
+.app-iconbtn:not(:disabled):hover {
+  background: var(--color-hover-overlay);
+  color: var(--color-text);
+}
+
+.app-iconbtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.app-iconbtn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+/* Panel toggle buttons (IconToggleButton, a Radix Toggle) reflect their
+   state via Radix's own data-state — lit while the panel is open, same
+   treatment as a hover. */
+.app-iconbtn[data-state="on"] {
+  background: var(--color-hover-overlay);
+  color: var(--color-text);
+}
+
+.app-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 99px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-divider);
+  justify-self: center;
+}
+
+.app-tabs button {
+  appearance: none;
+  border: 0;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: var(--app-font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  padding: 3px 12px;
+  border-radius: 99px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+}
+
+.app-tabs button[data-state="active"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.app-tabs button:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+.app-rail {
+  grid-area: rail;
+  min-height: 0;
+  border-right: 1px solid var(--color-divider);
+}
+
+/* Each tab's props content lives inside the single PropsFrame scroller
+   (.app-props-inner) and is wrapped in its own Tabs.Content (Shell.tsx) —
+   without height:100% here, that wrapper auto-sizes to its content instead
+   of stretching the props panel. The rail needs no such rule: RailFrame's
+   content fills the scroller naturally. */
+.app-props-inner > [role="tabpanel"] {
+  height: 100%;
+}
+
+/* ── sidebar (Rail.tsx) ── */
+
+.app-rail-clip {
+  width: var(--app-rail-width);
+  height: 100%;
+  /* clip mirrors the shell contract: a layout frame must not be scrollable. */
+  overflow: clip;
+  /* No transition here (issue #282): the grid column snaps to its new width
+     in a single layout. Animating width relaid out .app-main every frame;
+     only the inner content below animates, with transform/opacity. */
+}
+
+.app-rail-clip[data-open="false"] {
+  width: 0;
+}
+
+.app-rail-inner {
+  position: relative;
+  width: var(--app-rail-width);
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-2-5) var(--space-5);
+  /* Compositor-only enter (issue #282): the column snaps, the content slides
+     with transform and fades with opacity (~200ms ease-out), so a toggle
+     costs one layout and never relayouts mid-animation. Motion resolves from
+     the viewer-private --app-* tokens: the inspected system overwrites the
+      shared --duration-* and --ease-* names inline (issue #284), which would
+     freeze this slide at 0ms on systems that zero them. */
+  transition:
+    transform var(--app-duration-normal) var(--app-ease-out),
+    opacity var(--app-duration-normal) var(--app-ease-out);
+}
+
+.app-rail-inner,
+.app-main,
+.app-props-inner {
+  /* Themed scrollbar (same tokens as the ScrollArea demo's thumb/track —
+     gallery/components/layout.css) instead of the browser default, so it
+     resolves from the active system like everything else in the shell. The
+     props panel scrolls inside its own frame too, so its bar takes the same
+     treatment as the rail and main. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+.app-rail-inner::-webkit-scrollbar,
+.app-main::-webkit-scrollbar,
+.app-props-inner::-webkit-scrollbar {
+  width: 8px;
+}
+
+.app-rail-inner::-webkit-scrollbar-track,
+.app-main::-webkit-scrollbar-track,
+.app-props-inner::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-rail-inner::-webkit-scrollbar-thumb,
+.app-main::-webkit-scrollbar-thumb,
+.app-props-inner::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: var(--radius-full);
+}
+
+.app-rail-inner::-webkit-scrollbar-thumb:hover,
+.app-main::-webkit-scrollbar-thumb:hover,
+.app-props-inner::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+.app-rail-clip[data-open="false"] .app-rail-inner {
+  opacity: 0;
+  transform: translateX(calc(var(--app-motion-distance-md) * -1));
+}
+
+.app-main {
+  grid-area: main;
+  min-width: 0;
+  min-height: 0;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+/* Slack below the last section so its top can reach the shared landing line
+   at max scroll (a section activates only once its top passes that line).
+   Sized from the viewport minus the topbar and the line itself — exact, not
+   the 50vh guess that left tall screens unable to activate. Only the tabs
+   that scroll to section anchors get it: Compare has no anchors, and the
+   global rule left a full viewport of empty scroll below its content. */
+.app-shell[data-tab="tokens"] .app-main,
+.app-shell[data-tab="preview"] .app-main {
+  padding-bottom: calc(100vh - var(--app-topbar-height) - var(--app-rail-landing-offset));
+}
+
+/* Compare's diff table can be wider than the content column when several
+   systems are picked. The one content scroller owns that horizontal overflow
+   too: a nested `overflow-x` wrapper would become the thead's sticky
+   reference on both axes and break its vertical stickiness against main. */
+.app-shell[data-tab="compare"] .app-main {
+  overflow-x: auto;
+}
+
+/* Tabs.Content uses forceMount (Shell.tsx) — in main so gallery ids exist
+   in the DOM regardless of the active tab (scrollspy watches them), and in
+   Rail/Props so their content survives a tab switch instead of unmounting
+   (keeps scroll position, open/collapsed groups). Radix's forceMount skips
+   its own `hidden` attribute (present is forced true), so inactive panels
+   are hidden here instead, keyed off its own data-state. */
+.app-main [role="tabpanel"][data-state="inactive"],
+.app-rail [role="tabpanel"][data-state="inactive"],
+.app-props [role="tabpanel"][data-state="inactive"] {
+  display: none;
+}
+
+.app-props {
+  grid-area: props;
+  min-height: 0;
+  border-left: 1px solid var(--color-divider);
+}
+
+.app-props-clip {
+  width: 300px;
+  height: 100%;
+  /* clip mirrors the shell contract: a layout frame must not be scrollable. */
+  overflow: clip;
+  /* No transition here either (issue #282) — same single-layout snap as the
+     rail clip; the inner content below owns the motion. */
+}
+
+.app-props-clip[data-open="false"] {
+  width: 0;
+}
+
+.app-props-inner {
+  width: 300px;
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  /* Same compositor-only enter as the rail inner (issue #282), mirrored. */
+  transition:
+    transform var(--app-duration-normal) var(--app-ease-out),
+    opacity var(--app-duration-normal) var(--app-ease-out);
+}
+
+.app-props-clip[data-open="false"] .app-props-inner {
+  opacity: 0;
+  transform: translateX(var(--app-motion-distance-md));
+}
+
+/* Issue #282: under reduced motion the panel slide drops away and only a
+   short opacity fade (100ms, within the ≤150ms budget) remains. */
+@media (prefers-reduced-motion: reduce) {
+  .app-rail-inner,
+  .app-props-inner {
+    transition: opacity var(--app-duration-fast) var(--app-ease-out);
+  }
+
+  .app-rail-clip[data-open="false"] .app-rail-inner,
+  .app-props-clip[data-open="false"] .app-props-inner {
+    transform: none;
+  }
+
+  /* The row color/background settle and the family caret are the two other
+     chrome transitions; a reduced-motion user gets the new state instantly
+     (positions never animate in the first place). */
+  .app-rail-link,
+  .app-rail-group-label,
+  .app-rail-group-chevron {
+    transition: none;
+  }
+}
+
+.app-placeholder {
+  margin: 0;
+  font-size: var(--app-font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/* The group header is an <h2> so the outline does not jump h1 → h3 (the rail
+   sits before main in the DOM). Without a size it falls back to the UA default
+   (18.72px/700); the label button/static label inside owns the visual scale,
+   so the heading box just carries the token size. */
+.app-rail-group > h2 {
+  /* Sticky current-family cue: the header pins to the top of the rail's own
+     frame while its rows scroll, so the active family stays readable even
+     when its rows are offstage. The opaque background is what keeps the rows
+     from showing through while pinned. */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 6px 0 2px;
+  background: var(--color-bg);
+  font-family: var(--font-sans);
+  font-size: var(--app-font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.app-rail-group + .app-rail-group {
+  margin-top: 4px;
+}
+
+.app-rail-group-label {
+  appearance: none;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: var(--app-font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+  color: var(--color-text-muted);
+  margin: 0;
+  padding: 2px 8px;
+  border-radius: var(--radius-md);
+  transition:
+    color var(--app-duration-fast) var(--app-ease-out),
+    background var(--app-duration-fast) var(--app-ease-out);
+}
+
+.app-rail-group-label:hover {
+  color: var(--color-text);
+  background: var(--color-hover-overlay);
+}
+
+.app-rail-group-text {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Search active: the header is a static label, not a toggle. Same type as the
+   toggle so the two states do not jump, minus the hover/pointer affordances. */
+.app-rail-group-static {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  font-size: var(--app-font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+  color: var(--color-text-muted);
+}
+
+.app-rail-group-chevron {
+  flex: none;
+  color: var(--color-text-muted);
+  transition: transform var(--app-duration-normal) var(--app-ease-out);
+}
+
+.app-rail-group-label[data-state="closed"] .app-rail-group-chevron {
+  transform: rotate(-90deg);
+}
+
+/* Counts share ONE meaning and one treatment: a group count is its child
+   rows, a row count is the items that row represents ("Component / Button 11").
+   Both render inline, mono, tabular and muted — the pill/vs-plain split the
+   redesign removed. */
+.app-rail-count,
+.app-rail-item-count {
+  flex: none;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--app-font-size-xs);
+  font-weight: var(--font-weight-medium);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.app-rail-group-items {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-rail-link {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  white-space: nowrap;
+  padding: var(--space-1-5) var(--space-2-5);
+  border-radius: var(--radius-lg);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: var(--app-font-size-sm);
+  font-weight: var(--font-weight-medium);
+  /* Only the row's color/background settle (~100ms) — position never animates. */
+  transition:
+    color var(--app-duration-fast) var(--app-ease-out),
+    background var(--app-duration-fast) var(--app-ease-out);
+}
+
+/* Rail names stay on one line (issue #286): the row never wraps, the name
+   truncates with an ellipsis inside its own span, and the count rides in a
+   separate right-aligned tabular-nums column the ellipsis never cuts off.
+   Sizes resolve from viewer tokens — no literal sizes here. */
+.app-rail-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-rail-link:hover {
+  color: var(--color-text);
+  background: var(--color-hover-overlay);
+}
+
+.app-rail-link:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+/* Active row = per-row background + a thin inset accent bar + weight/color
+   shift. There is no sliding indicator element and no position animation:
+   the shared landing offset (lib/scrollspy.ts) makes the clicked row the
+   geometry winner, so the highlight needs no pin and never glides. */
+.app-rail-link[aria-current="location"],
+.app-rail-link[aria-current="true"] {
+  color: var(--color-accent-text);
+  font-weight: var(--font-weight-semibold);
+  background: var(--color-accent-subtle);
+  box-shadow: inset var(--border-width-thick) 0 0 var(--color-accent);
+}
+
+/* Current-family cue: when a family holds the active section its header reads
+   a step stronger than the other collapsed families, even when the rows are
+   offstage (the sticky header stays pinned). */
+.app-rail-group[data-active] .app-rail-group-label,
+.app-rail-group[data-active] .app-rail-group-static {
+  color: var(--color-text);
+}
+
+.app-rail-nav {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-rail-empty {
+  margin: var(--space-2);
+  font-size: var(--app-font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.app-loading {
+  padding: var(--space-5);
+}
+
+/* Scoped-swap counter (legacy dsv-topbar-pill): click resets them all. */
+.app-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  height: 26px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--color-accent-border);
+  border-radius: var(--radius-full);
+  background: var(--color-accent-subtle);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--app-font-size-xs);
+  cursor: pointer;
+}
+
+.app-pill-reset {
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: var(--app-font-size-xs);
+}
+
+/* Topbar controls sit tight against their neighbours, so this pill uses the
+   same 1px offset as the other chrome rings instead of the full token gap. */
+.app-pill:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+/* ── narrow viewport: rails become overlay drawers ── */
+
+/* Below this width the two fixed-width rails (rail + props) would squeeze
+   .app-main to near-zero when both are open, so they stop participating in
+   the grid and float above main instead. Open/close state (topbar toggles +
+   localStorage) is untouched — the same data-open clips just render as
+   drawers down here, so Rail/CompareRail/Props content keeps working. */
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-areas:
+      "topbar"
+      "main";
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-rail,
+  .app-props {
+    position: absolute;
+    top: var(--app-topbar-height);
+    bottom: 0;
+    z-index: 40;
+    border: none;
+    background: transparent;
+    /* Closed drawers (zero-width clips) must not steal main's clicks. */
+    pointer-events: none;
+  }
+
+  .app-rail {
+    left: 0;
+  }
+
+  .app-props {
+    right: 0;
+  }
+
+  .app-rail-clip,
+  .app-props-clip {
+    background: var(--color-bg);
+    pointer-events: auto;
+  }
+
+  .app-rail-clip {
+    max-width: 85vw;
+    border-right: 1px solid var(--color-divider);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .app-props-clip {
+    max-width: 85vw;
+    border-left: 1px solid var(--color-divider);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .app-rail-inner,
+  .app-props-inner {
+    max-width: 85vw;
+  }
+
+  /* Touch targets: every rail row and family header clears the token's 44px
+     minimum in the drawer (the mouse-sized desktop rows are shorter). */
+  .app-rail-link,
+  .app-rail-group-label {
+    min-height: var(--touch-target-min);
+  }
+
+  /* Wheel/touch chains stop at the open rail drawer instead of scrolling the
+     background content behind it; the wheel lock itself is JS (App.tsx),
+     since `overflow: hidden` is banned on the shell's layout containers. */
+  .app-rail-clip {
+    overscroll-behavior: contain;
+  }
+
+  .app-shell[data-drawer-open] .app-main {
+    touch-action: none;
+  }
+
+  /* A closed clip is zero-width — drop its edge/shadow so no 1px seam
+     floats over main. (Parent can't be targeted from the child's
+     data-open without :has, so the border lives on the clip down here.) */
+  .app-rail-clip[data-open="false"],
+  .app-props-clip[data-open="false"] {
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  /* Topbar, drawer mode: every control stays in the layout. Dropping the
+     Preview-only chrome (coverage pill, search, edit-reset pill)
+     removes the only search / reset affordances on tablet and phone,
+     and the phone block below repeated that for the brand and copy-link
+     (#134). Instead the topbar is treated as a frame the contract allows to
+     scroll inside itself: the text cluster gives up width first (its labels
+     ellipsise) and, when even that does not fit, the topbar scrolls
+     horizontally. No control is `display: none`d, `overflow: hidden` is not
+     used, and the shell around it still never scrolls. */
+  .app-topbar {
+    display: flex;
+    overflow-x: auto;
+    /* A thin, themed bar like the rail/main scrollers: small enough to sit
+       inside the fixed 44px row without compressing the controls enough to
+       spring a second (vertical) scrollbar. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+
+  /* The text cluster gives up width first (its labels ellipsise) but never
+     collapses: `min-width: 0` from the base grid rule would let flex shrink
+     it to nothing and the tab strip would paint over it. The floor is one
+     layout step (capped at the frame itself), which keeps the rail toggle,
+     the wordmark mark and the switcher chevron on screen. The tab strip and
+     the action cluster keep their intrinsic size so every control stays
+     legible and the frame scrolls to reach it. */
+  .app-topbar-left {
+    flex: 0 1 auto;
+    min-width: min(var(--space-32), 100%);
+  }
+
+  /* Below 900px the rail is a drawer, not a grid column, so there is no rail
+     seam to align to: shrink the nav cell to its content and give the width
+     back to the brand and switcher. */
+  .app-topbar-nav {
+    width: auto;
+  }
+
+  .app-topbar-right,
+  .app-tabs {
+    flex: none;
+  }
+
+  /* Tabs stay centred in the space left between the clusters; the auto
+     margins collapse to zero once the line overflows and scrolls. */
+  .app-tabs {
+    margin-inline: auto;
+  }
+}
+
+/* Phone (issue #282): a single 44px row cannot hold the brand, the switcher,
+   the tabs and the actions at 360px (measured 451px of content in the frame),
+   so the topbar becomes two fixed rows — brand plus the overflow menu above,
+   the tab strip below — inside a doubled topbar track. The action cluster
+   lives behind the "More actions" popover (Shell.tsx) instead of overflowing
+   the frame, so the topbar's scrollWidth fits its clientWidth with every
+   control still reachable. The shell row and the drawer top track the doubled
+   height from the same token, so the drawers still start exactly below the
+   chrome. */
+@media (max-width: 480px) {
+  .app-shell {
+    grid-template-rows: calc(var(--app-topbar-height) * 2) minmax(0, 1fr);
+  }
+
+  .app-topbar {
+    display: grid;
+    grid-template-areas:
+      "left more"
+      "tabs tabs";
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 1fr 1fr;
+    align-items: center;
+    column-gap: var(--space-2);
+    row-gap: 0;
+    padding: 0 var(--space-2);
+  }
+
+  .app-topbar-left {
+    grid-area: left;
+    gap: var(--space-2);
+  }
+
+  .app-topbar-more {
+    grid-area: more;
+    justify-self: end;
+    display: flex;
+    align-items: center;
+  }
+
+  .app-tabs {
+    grid-area: tabs;
+    margin-inline: auto;
+    max-width: 100%;
+  }
+
+  .app-tabs button {
+    padding: 3px var(--space-2);
+  }
+
+  /* Phone (issue #327): the wordmark loses the row to the switcher — the
+     one control that says which system is active. Hide the wordmark text
+     (the mark stays) so the switcher keeps the remaining width. */
+  .app-brand-name {
+    display: none;
+  }
+
+  /* The switcher takes the remaining row width (issue #327): it grows with
+     the row instead of capping at 120px, so the name ellipsises only when
+     it really does not fit. The full name stays on the trigger's title
+     for sighted users and in its aria-label for AT. */
+  .app-syswrap {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .app-sysbtn {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: none;
+  }
+
+  /* The floating drawers start below the doubled topbar track. */
+  .app-rail,
+  .app-props {
+    top: calc(var(--app-topbar-height) * 2);
+  }
+}
+
+/* Phone overflow menu (issue #282): the action cluster behind "More actions".
+   A wrapping row, not a menuitem list — its children are icon buttons and
+   pills, which keep their own chrome and behaviour. (The section search is no
+   longer here — it lives in the rail frame.) */
+.app-menu {
+  z-index: var(--z-popover);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 10px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}

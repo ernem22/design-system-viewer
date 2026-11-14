@@ -1,0 +1,64 @@
+FIXER TEMPLATE — fill every `<>`, delete nothing.
+
+A previous phase read this PR and returned `status: fail` with the findings
+below. Apply exactly those findings, nothing else.
+
+TARGET: this worktree, the PR's own branch. Write only under `app/`, and only the
+files the findings name: `<file set>`.
+
+THE FINDINGS, verbatim:
+
+  <paste reason + fix_required exactly as the Reviewer or CI wrote them>
+
+**STEP 0 — reproduce each finding before you fix it.** A Reviewer's finding is a claim
+too. Reproduce every one on the parent commit (its `where:` line is your pointer) and
+record the observed value; the Reviewer's own reading can be half wrong — one said
+"`.app-toast-warn` is absent" when the class was applied and only the CSS rule was
+missing. A finding you cannot reproduce is reported as `unreproducible` with what you
+tried, never silently "fixed".
+
+Fix each one so a reader can point at the line that closes it. Do not re-scope,
+do not re-design, do not "improve while you are in there" — an unrequested change
+is what makes the next Reviewer return `scope_ok: no` and blocks the merge.
+
+WHEN A FINDING IS UNCLEAR: do not guess at intent and do not ask — no coordinator
+answers questions, and a worker waiting on an answer sits until its deadline (measured
+2026-10-05, coder-116). Settle with `status: blocked` and a `reason:` line naming the
+finding and what is unclear. Do not silently drop a finding you disagree with —
+say so in the report.
+
+EVIDENCE — the same evidence a Coder owes, plus:
+  - for each finding, the before/after of the line you changed;
+  - `npm --prefix app run test` counts, `build` success, `lint` clean;
+  - a test that fails on the pre-fix commit and passes now, named;
+  - rewrite the PR body so `## Verified` / `## Not verified` describe the FIXED
+    head, not the pre-fix one.
+
+DELIVERY: set your worktree identity first — `bash tools/orchestration/identity.sh fixer`
+(sets `user.name=orca-fixer`, `user.email=$BOT_EMAIL`). If your branch predates that
+script — a PR opened before it landed — run the coordinator checkout's copy from inside
+your own worktree: `bash <coordinator-checkout>/tools/orchestration/identity.sh fixer`.
+It reads the `identity.env` beside itself and writes `--worktree` config for the
+worktree you are standing in, so the PR branch gains no files and no review history is
+disturbed. Then commit with a
+`[fixer]` prefix in the subject and push to the PR's own
+branch. Do not open a new PR, do not merge, do not change labels.
+
+OBSERVABLE ACCEPTANCE — your worker_done body must start with exactly:
+
+status: succeeded | failed | blocked
+role: fixer
+task: <task id from your preamble>
+commit: <sha you pushed>
+tests: pass | fail
+pr: <number>
+fixed: <one line per finding>
+
+Send worker_done once, from this terminal. **Do not retype the command: your
+dispatch preamble prints it verbatim, including the `--dispatch-capability dcap_...`
+token that is unique to your dispatch.** A hand-written command is rejected with
+`dispatch_capability_invalid: The Dispatch capability is missing`, and your report
+then reaches the coordinator only as a rejection echo — no settlement, no verdict.
+Check the command carries `--task-id`, `--dispatch-id`, `--outcome=succeeded`
+(equals sign; the space form is rejected), `--files-modified <csv>` and the
+capability token.

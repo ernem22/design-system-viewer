@@ -1,0 +1,217 @@
+name: Pipeline gate (verdict)
+
+# The merge gate, computed by GitHub instead of by the coordinator.
+#
+# The coordinator used to merge when three signals (CI green, Reviewer PASS, Tester
+# PASS) had been read by hand, and the one thing a human-in-the-loop check cannot do
+# reliably is confirm that a verdict was produced against the *current* head - the
+# pipeline already made that mistake once (a Tester verified a build from the wrong
+# branch). So the verdicts become machine-readable and the gate becomes a commit status:
+#
+#   * a Reviewer or Tester posts its verdict as a PR comment in a fenced block:
+#
+#         ```dsv-verdict
+#         status: pass
+#         role: reviewer
+#         commit: 422f8cb
+#         scope_ok: yes
+#         ```
+#
+#   * this workflow parses every comment and review, keeps the latest verdict per role
+#     **whose commit matches the PR head**, and posts `pipeline/verdict` on that head:
+#     success only when reviewer=pass with scope_ok=yes AND tester=pass on the SAME head.
+#     A verdict without a commit, or from an older head, can never approve anything.
+#   * branch protection requires that status, so GitHub itself refuses the merge.
+#   * a PR that changes nothing under `app/src/` is not applicable and passes
+#     automatically - documentation and tooling PRs have no reviewer/tester to wait for.
+#
+# It also answers the maintainer's comments, deterministically, with no model involved:
+# `/hold` freezes a PR, `/rework` sends it back for a fix, `/resume` clears both.
+
+on:
+  issue_comment:
+    types: [created, edited]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: PR number to re-evaluate
+        required: true
+      simulate_gate_error:
+        description: 'TEST HOOK: set to "module_missing" to make the gate fail on purpose and prove the fail-closed wrapper writes a failure status instead of silence. Leave empty in normal use.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+  statuses: write
+
+concurrency:
+  group: pipeline-gate-${{ github.event.issue.number || github.event.pull_request.number || inputs.pr }}
+  cancel-in-progress: false
+
+jobs:
+  verdict:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the BASE, never the PR's own tree: this step exists only so the gate can
+      # require tools/orchestration/gate-logic.cjs, and if that file came from the PR the
+      # PR would be deciding its own gate. Greptile and CodeRabbit both flagged exactly
+      # that ("PR code controls the gate"); the module must come from the commit the PR
+      # is merging into.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.repository.default_branch }}
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+
+            // ---- which PR are we looking at? ------------------------------------
+            let prNumber = null;
+            if (context.eventName === 'issue_comment') {
+              if (!context.payload.issue.pull_request) {
+                core.info('comment is not on a pull request - nothing to gate');
+                return;
+              }
+              prNumber = context.payload.issue.number;
+            } else if (context.eventName === 'pull_request') {
+              prNumber = context.payload.pull_request.number;
+            } else if (context.eventName === 'workflow_dispatch') {
+              prNumber = Number(context.payload.inputs.pr);
+            }
+            if (!prNumber) {
+              core.info('no pull request in this event - nothing to gate');
+              return;
+            }
+
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            const head = pr.head.sha;
+            const shortHead = head.slice(0, 7);
+            const target = `https://github.com/${owner}/${repo}/pull/${prNumber}`;
+
+            const setStatus = async (state, description) => {
+              await github.rest.repos.createCommitStatus({
+                owner, repo, sha: head, state, context: 'pipeline/verdict',
+                description: description.slice(0, 140), target_url: target,
+              });
+              core.info(`pipeline/verdict -> ${state} :: ${description}`);
+            };
+
+            // ---- maintainer commands, parsed literally (no model in the loop) ---
+            if (context.eventName === 'issue_comment' && context.payload.action === 'created') {
+              const body = (context.payload.comment.body || '').trim();
+              const who = context.payload.comment.author_association;
+              const trusted = ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(who);
+              const cmd = /^\/(hold|rework|resume)\b/i.exec(body);
+              if (cmd) {
+                if (!trusted) {
+                  core.info(`/${cmd[1]} ignored: ${who} is not a maintainer`);
+                } else {
+                  const verb = cmd[1].toLowerCase();
+                  const add = verb === 'hold' ? 'hold' : verb === 'rework' ? 'rework' : null;
+                  for (const label of ['hold', 'rework']) {
+                    if (label === add) {
+                      await github.rest.issues.addLabels({ owner, repo, issue_number: prNumber, labels: [label] }).catch(() => {});
+                    } else if (verb !== 'rework' || label === 'hold') {
+                      await github.rest.issues.removeLabel({ owner, repo, issue_number: prNumber, name: label }).catch(() => {});
+                    }
+                  }
+                  // Defensive: this block sits ABOVE the fail-closed wrapper below, so a
+                  // throw here would end the run before the gate ever evaluates, and no
+                  // pipeline/verdict status would be written for this event — the PR would
+                  // just keep whatever status it already had. The label calls above already
+                  // swallow their failures; the acknowledgement comment gets the same care.
+                  await github.rest.issues.createComment({
+                    owner, repo, issue_number: prNumber,
+                    body: verb === 'hold'
+                      ? 'Pipeline: **held** (`hold`). The gate stays red until `/resume`.'
+                      : verb === 'rework'
+                        ? 'Pipeline: **rework requested** (`rework`). The next Fixer dispatch picks up this comment thread verbatim.'
+                        : 'Pipeline: **resumed**. The gate re-evaluates on the next verdict.',
+                  }).catch((e) => {
+                    core.info(`/${verb}: could not post the acknowledgement comment (${e && e.message})`);
+                  });
+                }
+              }
+            }
+
+            // ---- FAIL CLOSED from here down -------------------------------------
+            // Everything below is wrapped, INCLUDING the scope checks: a missing module, a
+            // throw inside the decision, or an unexpected shape must end with a
+            // `pipeline/verdict` status of `failure` and a non-zero exit - never with no
+            // status at all. Measured 2026-09-28: the unguarded require meant a crash left
+            // the PR on whatever status it already had (fail-open), and the gate self-test's
+            // case (v) could not produce a failure with a reason.
+            try {
+              // Test hook: reachable only through workflow_dispatch, never from a PR event.
+              // It sits before the scope checks on purpose - otherwise a dispatch against a
+              // PR that touches no app/src would return early and never exercise the wrapper
+              // (CodeRabbit Major).
+              if (context.payload.inputs && context.payload.inputs.simulate_gate_error === 'module_missing') {
+                require(`${process.env.GITHUB_WORKSPACE}/tools/orchestration/does-not-exist.cjs`);
+              }
+
+            // ---- is this PR in scope at all? ------------------------------------
+            const files = await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: prNumber, per_page: 100 });
+            const touchesApp = files.some((f) => f.filename.startsWith('app/src/'));
+            const labels = pr.labels.map((l) => l.name);
+            if (labels.includes('hold')) {
+              await setStatus('failure', `held by a maintainer (/resume to release) - head ${shortHead}`);
+              return;
+            }
+            if (!touchesApp) {
+              await setStatus('success', `no app/src change - gate not applicable - head ${shortHead}`);
+              return;
+            }
+
+            // ---- parse and decide, with the same module the probe runs ----------
+            const fs = require('fs');
+            const { evaluate } = require(`${process.env.GITHUB_WORKSPACE}/tools/orchestration/gate-logic.cjs`);
+
+              // The allowlist is read from the TRUSTED BASE checkout (the same one the module
+              // comes from), never from the PR head, so a PR cannot add itself to the list.
+              // Comment text never reaches a shell `run:` line: the whole decision is JS and
+              // the only data crossing into it is field values on the API objects.
+              let allowlist = ['ernem22'];
+              try {
+                const parsed = JSON.parse(fs.readFileSync(`${process.env.GITHUB_WORKSPACE}/tools/orchestration/gate-allowlist.json`, 'utf8'));
+                if (Array.isArray(parsed.allowed) && parsed.allowed.length) allowlist = parsed.allowed;
+              } catch (e) {
+                core.warning(`gate-allowlist.json unreadable (${e.message}); using the built-in default`);
+              }
+
+              const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: prNumber, per_page: 100 });
+              const reviews = await github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: prNumber, per_page: 100 });
+              const authorOf = (o) => ({
+                login: (o && o.user && o.user.login) || '',
+                author_association: (o && o.author_association) || '',
+              });
+              const candidates = [
+                ...comments.map((c) => ({ body: c.body, at: c.created_at, author: authorOf(c) })),
+                ...reviews.map((r) => ({ body: r.body, at: r.submitted_at || r.created_at, author: authorOf(r) })),
+              ];
+
+              const result = evaluate({ head, comments: candidates, allowlist });
+              core.info(`gate detail: ${JSON.stringify(result.detail)}`);
+              await setStatus(result.state, result.description);
+            } catch (err) {
+              const reason = String((err && err.message) || err).replace(/\s+/g, ' ').slice(0, 120);
+              core.error(`gate unavailable: ${reason}`);
+              // Write the failure with a direct API call, not through setStatus, so a failure
+              // inside setStatus cannot hide itself. If even this fails, the non-zero exit
+              // below is still the loud part.
+              try {
+                await github.rest.repos.createCommitStatus({
+                  owner, repo, sha: head, state: 'failure', context: 'pipeline/verdict',
+                  description: `gate unavailable: ${reason}`.slice(0, 140), target_url: target,
+                });
+              } catch (e2) {
+                core.error(`could not write the failure status either: ${String((e2 && e2.message) || e2)}`);
+              }
+              core.setFailed(`gate unavailable: ${reason}`);
+              return;
+            }

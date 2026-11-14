@@ -1,0 +1,444 @@
+/* Row renderers: token row shell, color swatches, and the per-kind demos
+   (bar/radius/shadow/motion/type/number). Table/group/empty primitives
+   shared with SchemaView.tsx live in TokenGroup.css. */
+
+.tok-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* One row, one grid: name, value and demo are fixed tracks, so the value
+   column sits at the same offset in every group and the flat groups (no
+   demo) keep those columns instead of a table. Tracks are proportional
+   and the gaps come from the token layer — no offset literals. */
+.tok-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.4fr);
+  align-items: center;
+  column-gap: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.tok-row:hover {
+  background: var(--color-hover-overlay);
+}
+
+.tok-row[aria-selected="true"] {
+  background: var(--color-accent-subtle);
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.tok-row-name {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--app-font-size-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The one value treatment: muted in a demo row and in a flat row alike. */
+.tok-row-value {
+  min-width: 0;
+  font-size: var(--app-font-size-sm);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tok-ref {
+  color: var(--color-accent-text);
+  font-size: var(--app-font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+.tok-row-demo {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.tok-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+.tok-swatch {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  cursor: pointer;
+  background: var(--color-surface);
+}
+
+.tok-swatch:hover {
+  border-color: var(--color-border-strong);
+}
+
+.tok-swatch[aria-selected="true"] {
+  border-color: var(--color-focus-ring);
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.tok-chip {
+  height: var(--space-10);
+  border-radius: var(--radius-sm);
+  background: var(--val);
+  border: 1px solid var(--color-border-subtle);
+  margin-bottom: var(--space-2);
+}
+
+.tok-swatch-name {
+  font-family: var(--font-mono);
+  font-size: var(--app-font-size-xs);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tok-swatch-value {
+  font-size: var(--app-font-size-xs);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Scale ramp (issue #308): a color scale reads as one continuous strip, not
+   ten separate cards. Cells share the strip edge-to-edge with no gap and each
+   takes an equal share of the row; every size and ink below resolves from the
+   token layer. */
+.tok-scale {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* The strip's own scroll container: below 600 px cells hold a token
+   min-width so the ramp scrolls inside this box — the page never scrolls. */
+.tok-ramp-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.tok-ramp {
+  display: flex;
+  align-items: stretch;
+}
+
+.tok-ramp-cell {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+}
+
+.tok-ramp-cell:hover .tok-ramp-meta {
+  background: var(--color-hover-overlay);
+}
+
+.tok-ramp-cell[aria-selected="true"] {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.tok-ramp-cell[aria-selected="true"] .tok-ramp-meta {
+  background: var(--color-accent-subtle);
+}
+
+/* Full-bleed swatch: no margin, radius or border, so neighbouring chips meet
+   into one unbroken color strip. */
+.tok-ramp-chip {
+  height: var(--space-10);
+  background: var(--val);
+}
+
+.tok-ramp-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  min-width: 0;
+}
+
+.tok-ramp-step {
+  font-family: var(--font-mono);
+  font-size: var(--app-font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tok-ramp-value {
+  font-size: var(--app-font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tok-ramp-ratio {
+  font-size: var(--app-font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tok-ramp-ratio[data-pass="true"] {
+  color: var(--color-accent-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+@media (max-width: 600px) {
+  .tok-ramp-cell {
+    min-width: var(--space-16);
+  }
+
+  /* Narrow viewport (issue #311): a row is two lines — the name spans the
+     full width on line 1 and wraps at hyphen boundaries or anywhere
+     (never ellipsized), while line 2 holds the value on the left and the
+     demo on the right. Swatch and ramp layouts keep their own rules above.
+     Every size and gap resolves from the token layer — no literals. */
+  .tok-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "name name"
+      "value demo";
+    row-gap: var(--space-1);
+    align-items: start;
+  }
+
+  .tok-row-name {
+    grid-area: name;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
+
+  .tok-row-value {
+    grid-area: value;
+  }
+
+  .tok-row-demo {
+    grid-area: demo;
+    justify-content: flex-end;
+  }
+}
+
+.tok-bar {
+  height: var(--space-3);
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+}
+
+.tok-radiusbox {
+  width: var(--space-10);
+  height: var(--space-10);
+  background: var(--color-accent-subtle);
+  border: 1px solid var(--color-accent-border);
+}
+
+.tok-shadowbox {
+  width: var(--space-10);
+  height: var(--space-10);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+}
+
+/* Shadow specimens (issue #310): the old 40px dark square on a dark page hid
+   every shadow but the rings. Each token now draws a card at least
+   --space-16 by --space-12 inside a padded stage with room for a 72px blur
+   to spread without the row clipping it (the stage never scrolls, so
+   scrollWidth === clientWidth). The stage ground flips between the page and
+   the inverse surface via the group-level toggle; on the inverse (dark in
+   the light theme) stage the card matches the stage so a light shadow reads.
+   Every ink and size resolves from the token layer — no literals. */
+.tok-shadowgroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.tok-shadowtoggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.tok-shadowcaption {
+  font-size: var(--app-font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.tok-shadowtoggle button {
+  font-size: var(--app-font-size-xs);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.tok-shadowtoggle button[aria-pressed="true"] {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent-border);
+}
+
+.tok-shadowtoggle button:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.tok-shadowstage {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg);
+  overflow: visible;
+}
+
+.tok-shadowstage[data-stage="inverse"] {
+  background: var(--color-surface-inverse);
+}
+
+.tok-shadowcard {
+  width: var(--space-16);
+  min-width: var(--space-16);
+  height: var(--space-12);
+  min-height: var(--space-12);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+}
+
+.tok-shadowstage[data-stage="inverse"] .tok-shadowcard {
+  background: var(--color-surface-inverse);
+}
+
+/* Opacity specimens (issue #310): the accent square sits over a checkerboard
+   so partial transparency is visible. The board is two token inks in a
+   repeating-conic tile — no literal colors. */
+.tok-opacitystage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  background-image: repeating-conic-gradient(
+    var(--color-border-subtle) 0% 25%,
+    var(--color-surface) 0% 50%
+  );
+  background-size: var(--space-4) var(--space-4);
+}
+
+.tok-motionbox {
+  width: var(--space-10);
+  height: var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+}
+
+.tok-typespec {
+  font-size: var(--font-size-base);
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* TypeRow specimen (issue #309): never ellipsizes — the row falls back to the
+   short "Ag" pair (picked by measuring scrollWidth against clientWidth) before
+   a large size could cut to "Aa B…" or "A…", so overflow only ever clips
+   cleanly on the first paint before the measure runs. */
+.tok-typespec-fit {
+  min-width: 0;
+  max-width: 100%;
+  color: var(--color-text);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* TypeRow value stack (issue #309): the raw value keeps the single-line muted
+   ellipsis treatment on its own line (the full value stays on `title`), and
+   the resolved px size sits below it. Every size and ink resolves from the
+   token layer — no literals. */
+.tok-typevalue {
+  white-space: normal;
+  text-overflow: clip;
+}
+
+.tok-typevalue-raw {
+  display: block;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tok-typeresolved {
+  display: block;
+  font-size: var(--app-font-size-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tok-lineheight {
+  white-space: normal;
+  background: var(--color-surface-raised);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.tok-num {
+  font-family: var(--font-mono);
+  font-size: var(--app-font-size-sm);
+  font-variant-numeric: tabular-nums;
+  background: var(--color-surface-raised);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+/* Keyboard focus must be visible without changing the resting look: the
+   shared focus ring (not the accent border, which is too low-contrast on the
+   row surface) for rows, swatches, ramp cells and schema rows. */
+.tok-row:focus-visible,
+.tok-swatch:focus-visible,
+.tok-ramp-cell:focus-visible,
+.tok-raw tr[data-token]:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}

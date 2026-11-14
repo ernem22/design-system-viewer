@@ -1,0 +1,27 @@
+/* Form + validation section — Radix Form, Password Toggle Field, OTP field.
+   Ported from preview/src/styles/components.css. */
+
+.dsv-form-card { max-width: var(--space-80); width: 100%; }
+.dsv-form-field { display: flex; flex-direction: column; gap: var(--space-1-5); margin-bottom: var(--space-4); }
+.dsv-form-row { display: flex; justify-content: space-between; align-items: baseline; }
+.dsv-form-message { font-size: var(--font-size-xs); color: var(--color-danger-text); }
+.dsv-form-message[data-valid] { color: var(--color-success-text); }
+.dsv-form-message--sent { margin-top: var(--space-2); }
+.dsv-form-submit { width: 100%; }
+
+.dsv-pwd-field { max-width: var(--space-72); }
+.dsv-pwd { position: relative; display: flex; }
+.dsv-pwd input { flex: 1; padding-right: var(--size-control-md); }
+.dsv-pwd button {
+  position: absolute; right: 0; top: 0; height: 100%; width: var(--size-control-md);
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: none; color: var(--color-text-muted); cursor: pointer;
+}
+.dsv-otp { display: flex; gap: var(--control-icon-gap); }
+.dsv-otp input {
+  width: var(--input-height-md); height: var(--input-height-lg); text-align: center;
+  font-size: var(--font-size-lg); font-family: var(--font-mono);
+  background: var(--color-surface); color: var(--color-input-text);
+  border: var(--input-border-width) solid var(--color-border); border-radius: var(--input-radius);
+}
+.dsv-otp input:focus-visible { border-color: var(--color-accent-border); }

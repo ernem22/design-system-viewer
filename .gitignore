@@ -1,7 +1,8 @@
 node_modules/
-preview/dist/
-dist-static/
-_site/
-systems/index.json
-app/dist
-.serena
+.serena/
+
+# Hermes agent scratch dirs (runtime sentinels), never part of the repo
+.hermes-tmp*/
+
+# Byproduct of running tools/orchestration/lib/reconcile.py directly
+tools/orchestration/lib/__pycache__/

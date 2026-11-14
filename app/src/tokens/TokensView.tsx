@@ -1,0 +1,96 @@
+import type { DesignSystem } from "../systems/store.ts";
+import { ContrastSection } from "./ContrastSection.tsx";
+import { SchemaView } from "./SchemaView.tsx";
+import { TokenGroup } from "./TokenGroup.tsx";
+import { TokenToolbar } from "./TokenToolbar.tsx";
+import type { TokensViewModel } from "./useTokensView.ts";
+import { groupAnchor } from "./useTokensView.ts";
+import "./TokensView.css";
+
+/**
+ * Tokens tab main column: lint row + toolbar + gallery/schema. Clicking any
+ * token row selects it for the right-rail inspector — the only editor; rows
+ * never copy or edit in place.
+ */
+export function TokensView({
+  system,
+  view,
+  onAddTokens,
+}: {
+  system: DesignSystem;
+  view: TokensViewModel;
+  onAddTokens: () => void;
+}) {
+  const {
+    warnings,
+    visibleGroups,
+    absentGroups,
+    shownCount,
+    searching,
+    schemaMode,
+    filter,
+    selectToken,
+  } = view;
+
+  return (
+    <div className="tok-view">
+      {warnings.length > 0 && (
+        <details className="tok-warns">
+          <summary>
+            <span aria-hidden="true">⚠</span> {warnings.length} possible value issues
+          </summary>
+          {warnings.map((w) => (
+            <div key={w.name}>
+              <code>
+                {w.name}: {w.value}
+              </code>{" "}
+              — {w.msg}
+            </div>
+          ))}
+        </details>
+      )}
+      <TokenToolbar
+        view={view}
+        system={system}
+        onAddTokens={onAddTokens}
+      />
+      {schemaMode ? (
+        <SchemaView view={view} onPick={selectToken} />
+      ) : (
+        <div className="tok-gallery">
+          {visibleGroups.map((v) => (
+            <TokenGroup
+              key={v.group.id}
+              visible={v}
+              showMissing={view.showMissing}
+              selectedName={view.selected?.name ?? null}
+              onPick={selectToken}
+            />
+          ))}
+          {view.showMissing &&
+            absentGroups.map((g) => (
+              <section className="tok-group" id={groupAnchor(g.id)} key={g.id}>
+                <h2>
+                  {g.label}
+                  <span>0/{g.expected}</span>
+                </h2>
+                <div className="tok-missing">
+                  missing: {g.missing.map((n) => <code key={n}>{n}</code>)}
+                </div>
+              </section>
+            ))}
+          {searching && !shownCount && (
+            <div className="tok-empty">
+              No tokens matching “<b>{filter.trim()}</b>”.
+            </div>
+          )}
+          {/* Contrast is global to the system, not to the filter — legacy
+              appendContrast only ran filter-less (and never in schema mode,
+              which this branch already excludes). It reads the resolved
+              value map. */}
+          {!searching && <ContrastSection values={view.valueMap} />}
+        </div>
+      )}
+    </div>
+  );
+}

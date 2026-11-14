@@ -1,0 +1,29 @@
+/* Tokens tab main column: lint row. Toolbar styles live in
+   TokenToolbar.css; demo/row styles in TokenGroup.css/rows.css; right-rail
+   styles in TokensProps.css. */
+
+.tok-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  max-width: 1100px;
+}
+
+.tok-warns {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+}
+
+.tok-warns summary {
+  cursor: pointer;
+  font-weight: var(--font-weight-medium);
+}
+
+.tok-warns code {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+}

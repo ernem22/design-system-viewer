@@ -1,0 +1,81 @@
+/* Fallback UI for the chrome-level ErrorBoundary. A crash may have been
+   caused by the inspected system's tokens, so every colour here is a
+   viewer-private --app-error-* literal instead of the themed --color-* names
+   that are being recovered from. Sizes are fixed for the same reason. */
+
+.app-error {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  padding: 32px 24px;
+  background: var(--app-error-bg);
+  color: var(--app-error-text);
+}
+
+.app-error-card {
+  max-width: 560px;
+  width: 100%;
+  padding: 24px;
+  background: var(--app-error-surface);
+  border: 1px solid var(--app-error-border);
+  border-radius: 12px;
+  text-align: left;
+}
+
+.app-error-card:focus {
+  outline: 2px solid var(--app-error-focus);
+  outline-offset: 2px;
+}
+
+.app-error-title {
+  margin: 0 0 8px;
+  font-size: var(--heading-section);
+  line-height: 1.25;
+  color: var(--app-error-text);
+}
+
+.app-error-message {
+  margin: 0 0 20px;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--app-error-text-secondary);
+}
+
+.app-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.app-error-btn {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--app-error-border);
+  border-radius: 8px;
+  background: var(--app-error-surface);
+  color: var(--app-error-text);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.app-error-btn:hover {
+  background: var(--app-error-details-bg);
+}
+
+.app-error-btn:focus-visible {
+  outline: 2px solid var(--app-error-focus);
+  outline-offset: 2px;
+}
+
+.app-error-btn--primary {
+  border-color: var(--app-error-button-bg);
+  background: var(--app-error-button-bg);
+  color: var(--app-error-button-text);
+}
+
+.app-error-btn--primary:hover {
+  background: var(--app-error-danger);
+  border-color: var(--app-error-danger);
+}

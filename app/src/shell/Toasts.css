@@ -1,0 +1,121 @@
+.app-toasts {
+  position: fixed;
+  /* Home-indicator clearance: the stack floats above the OS gesture bar. */
+  bottom: calc(var(--space-5) + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  z-index: var(--z-toast);
+  pointer-events: none;
+  /* The stack never exceeds the viewport — children wrap inside it. */
+  max-width: 90vw;
+}
+
+.app-toast {
+  /* The stack itself stays click-through so it never blocks the canvas; each
+     toast opts back in so its close control and hover-pause are reachable. */
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: var(--app-font-size-sm);
+  box-shadow: var(--shadow-md);
+  /* Long messages wrap and break inside the 90vw stack instead of
+     overflowing the viewport (nowrap painted them off-screen). */
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-align: center;
+  /* Occasional UI enters with a standard ease-out under 300ms. A transition
+     (not keyframes) retargets when toasts stack in quick succession instead
+     of restarting. Durations/easing resolve from the viewer-private --app-*
+     tokens: the inspected system overwrites the shared --duration-* /
+     --motion-* names inline, which would freeze this motion at 0ms. */
+  transition:
+    transform var(--app-duration-normal) var(--app-ease-out),
+    opacity var(--app-duration-normal) var(--app-ease-out);
+}
+
+/* Enter-from state for the transition above: the toast slides up from
+   translateY(8px) (--app-motion-distance-md) and fades in over ~200ms. */
+@starting-style {
+  .app-toast {
+    transform: translateY(var(--app-motion-distance-md));
+    opacity: 0;
+  }
+}
+
+/* Exit runs shorter (100ms fast token) so a dismissed toast is gone within
+   150ms. Toasts.tsx keeps the node mounted with data-leaving until the fade
+   completes; the leaving toast stays in flow so the stack below never jumps. */
+.app-toast[data-leaving="true"] {
+  transform: translateY(var(--app-motion-distance-sm));
+  opacity: 0;
+  transition-duration: var(--app-duration-fast);
+  transition-timing-function: var(--app-ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Reduced motion fades with opacity only — no sliding on enter or exit. */
+  .app-toast {
+    transition: opacity var(--app-duration-fast) var(--app-ease-out);
+  }
+  @starting-style {
+    .app-toast {
+      transform: none;
+      opacity: 0;
+    }
+  }
+  .app-toast[data-leaving="true"] {
+    transform: none;
+  }
+}
+
+.app-toast-msg {
+  min-width: 0;
+}
+
+/* Explicit dismiss for the persistent error tone. 24px square keeps the
+   target at the WCAG 2.5.8 floor without growing the pill. */
+.app-toast-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  margin-right: calc(-1 * var(--space-2));
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.app-toast-close:hover {
+  background: var(--color-hover-overlay);
+}
+
+.app-toast-close:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: 0;
+}
+
+.app-toast-warn {
+  border-color: var(--color-warning);
+  color: var(--color-warning-text);
+}
+
+.app-toast-err {
+  border-color: var(--color-danger);
+  color: var(--color-danger-text);
+}

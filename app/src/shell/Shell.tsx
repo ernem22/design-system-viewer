@@ -1,0 +1,204 @@
+import { useState, type ReactNode } from "react";
+import * as Tabs from "@radix-ui/react-tabs";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
+import * as Popover from "@radix-ui/react-popover";
+import { readViewUrl, type UrlTab } from "../lib/urlState.ts";
+import { usePhoneViewport } from "../lib/panelStorage.ts";
+import { Icon } from "../lib/icons.tsx";
+import RailFrame from "./RailFrame.tsx";
+import PropsFrame from "./PropsFrame.tsx";
+import "./shell.css";
+
+export type AppTab = UrlTab;
+
+/** One tab's trigger label plus everything that swaps with it when it
+   becomes active — main content, and optionally its own Rail/Props content.
+   A single list a caller builds once, instead of separate id/label/content/
+   rail/propsPanel records that must be kept in sync by convention alone. */
+export interface ShellTab {
+  id: AppTab;
+  label: string;
+  content: ReactNode;
+  rail?: ReactNode;
+  /** Accessible name for the shell's single rail landmark while this tab is
+      active — the one nav holds different content per tab (sections, token
+      groups, systems), so its label tracks the tab. Falls back to "Sections". */
+  railLabel?: string;
+  propsPanel?: ReactNode;
+}
+
+export interface ShellSlots {
+  /** Leading nav cell above the rail column: the rail toggle lives here, at
+      the cell's trailing edge (the rail/content seam), separated from the
+      brand by a divider. Distinct from `brand` so the toggle reads as nav
+      chrome, not part of the lockup, and mirrors the props toggle on the
+      trailing side. */
+  leadingNav?: ReactNode;
+  brand: ReactNode;
+  systemSwitcher?: ReactNode;
+  actions?: ReactNode;
+  tabs: ShellTab[];
+  /** Whole-panel collapse state for the one rail frame Shell renders. Owned by
+     App (toggled from the topbar) like `tab`, passed down so Shell stays a
+     controlled chrome shell with no state of its own. */
+  railOpen: boolean;
+  /** Whole-panel collapse state for the one props frame Shell renders, same
+     lifted-from-App shape as `railOpen`. */
+  propsOpen: boolean;
+  /** True while a narrow-viewport drawer is open — surfaces a hook the CSS
+     uses to lock the background scroller (no `overflow: hidden`). */
+  drawerOpen?: boolean;
+  /** Controlled tab state — App.tsx lifts this so its URL-sync effect sees
+     every switch. Shell still owns layout; this is chrome state passed down
+     as props, same shape as railOpen/propsOpen. Absent = uncontrolled. */
+  tab?: AppTab;
+  onTabChange?: (tab: AppTab) => void;
+}
+
+/** Narrows Radix's raw `string` callback value to `AppTab` by checking it
+   against the actual tab ids in play, instead of asserting it with `as`. */
+function isKnownTab(value: string, tabs: ShellTab[]): value is AppTab {
+  return tabs.some((t) => t.id === value);
+}
+
+/**
+ * Layout + tab state only. All content arrives via slots —
+ * Shell never owns gallery, preview, compare or panel content.
+ *
+ * The Rail/Props chrome (open/close toggle, width, animation) is the same
+ * across every tab — only what's inside swaps with the active tab. Both
+ * frames (RailFrame, PropsFrame) are rendered once, outside the tab map, so
+ * exactly one `.app-rail-inner` and one `.app-props-inner` exist and a tab
+ * switch swaps their content instead of rebuilding the scrollers (which would
+ * reset scroll). Each tab's rail/props content is still forceMount'ed, same as
+ * `main`'s, so switching tabs hides it (via the [data-state="inactive"] rule
+ * in shell.css) instead of unmounting it — Rail keeps its open/collapsed
+ * groups when you tab away and back.
+ */
+export default function Shell({
+  leadingNav,
+  brand,
+  systemSwitcher,
+  actions,
+  tabs,
+  railOpen,
+  propsOpen,
+  drawerOpen,
+  tab: controlledTab,
+  onTabChange,
+}: ShellSlots) {
+  // Uncontrolled fallback still honors a deep-linked ?tab= on mount (the
+  // controlled path gets it from App instead — same reader either way).
+  // Shell never writes the URL: App owns the single replaceState writer so
+  // tab switches can't clobber the system/compare params mid-write.
+  const [innerTab, setInnerTab] = useState<AppTab>(() => readViewUrl().tab ?? "tokens");
+  const tab = controlledTab ?? innerTab;
+  // Phone topbar (issue #282): at ≤480px the action cluster no longer fits
+  // next to the tab strip (measured 451px of content in a 360px frame), so it
+  // collapses behind one "More actions" popover instead of overflowing the
+  // frame. Every control stays mounted — just relocated — so no affordance is
+  // lost on small screens.
+  const phone = usePhoneViewport();
+  // The rail's accessible name follows the active tab's content (Preview
+  // sections, Tokens groups, Compare systems); one nav, one label at a time.
+  const railLabel = tabs.find((t) => t.id === tab)?.railLabel ?? "Sections";
+
+  return (
+    <Tabs.Root
+      value={tab}
+      onValueChange={(v) => {
+        if (!isKnownTab(v, tabs)) return;
+        if (controlledTab === undefined) setInnerTab(v);
+        onTabChange?.(v);
+      }}
+      asChild
+    >
+      <div className="app-shell" data-tab={tab} data-drawer-open={drawerOpen || undefined}>
+        {/* Skip link (issue #227): the single keyboard entry to <main>, which
+            carries the matching id below. TabIndex -1 on main lets the anchor
+            move focus there without adding it to the tab order. */}
+        <a href="#app-main" className="app-skip-link">
+          Skip to main content
+        </a>
+        <header className="app-topbar">
+          {/* The document's single h1 (issue #117): the viewer had 0 h1 and
+              94 h2, so the outline had no top. Visually hidden (absolutely
+              positioned, so it takes no grid track) — the visible identity is
+              the brand lockup, but screen readers get the page root. */}
+          <VisuallyHidden.Root asChild>
+            <h1>Design System Viewer</h1>
+          </VisuallyHidden.Root>
+          <div className="app-topbar-left">
+            {leadingNav ? (
+              <>
+                <div className="app-topbar-nav">{leadingNav}</div>
+                <span className="app-topbar-divider" aria-hidden="true" />
+              </>
+            ) : null}
+            {brand}
+            {systemSwitcher}
+          </div>
+          <Tabs.List className="app-tabs" aria-label="Views">
+            {tabs.map(({ id, label }) => (
+              <Tabs.Trigger key={id} value={id}>
+                {label}
+              </Tabs.Trigger>
+            ))}
+          </Tabs.List>
+          {phone ? (
+            <div className="app-topbar-more">
+              <Popover.Root>
+                <Popover.Trigger
+                  className="app-iconbtn"
+                  aria-label="More actions"
+                  title="More actions"
+                >
+                  <Icon name="dots" size={15} />
+                </Popover.Trigger>
+                <Popover.Portal>
+                  <Popover.Content className="app-menu" sideOffset={8} align="end">
+                    {actions}
+                  </Popover.Content>
+                </Popover.Portal>
+              </Popover.Root>
+            </div>
+          ) : (
+            <div className="app-topbar-right">{actions}</div>
+          )}
+        </header>
+
+        <nav id="app-rail" className="app-rail" aria-label={railLabel}>
+          <RailFrame open={railOpen}>
+            {tabs.map(({ id, rail }) =>
+              rail ? (
+                <Tabs.Content key={id} value={id} forceMount>
+                  {rail}
+                </Tabs.Content>
+              ) : null,
+            )}
+          </RailFrame>
+        </nav>
+
+        <main id="app-main" className="app-main" tabIndex={-1}>
+          {tabs.map(({ id, content }) => (
+            <Tabs.Content key={id} value={id} forceMount>
+              {content}
+            </Tabs.Content>
+          ))}
+        </main>
+
+        <aside id="app-props" className="app-props" aria-label="Properties">
+          <PropsFrame open={propsOpen}>
+            {tabs.map(({ id, propsPanel }) =>
+              propsPanel ? (
+                <Tabs.Content key={id} value={id} forceMount>
+                  {propsPanel}
+                </Tabs.Content>
+              ) : null,
+            )}
+          </PropsFrame>
+        </aside>
+      </div>
+    </Tabs.Root>
+  );
+}

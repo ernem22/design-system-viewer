@@ -1,0 +1,35 @@
+/* Inspector token editor — the only token edit form. It renders inside the
+   right rail after the explicit Edit action (or as the Add-token form for a
+   missing schema token). .tok-pop-input keeps its historical class name; the
+   popover that named it is gone. */
+
+.tok-pop-input {
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-md);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  padding: var(--space-2);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tok-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tok-edit-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.tok-edit-actions {
+  display: flex;
+  gap: var(--space-2);
+}

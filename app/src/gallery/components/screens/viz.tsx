@@ -1,0 +1,63 @@
+import "./screens.css";
+
+const BARS = [42, 68, 55, 88, 60, 96, 74, 80];
+
+const CHANNELS = ["Organic", "Paid", "Referral", "Social", "Email", "Direct", "Partner", "Other"];
+
+export default function VizBody() {
+  return (
+    <div className="dsv-stack">
+      <div className="dsv-inline" style={{ justifyContent: "space-between" }}>
+        <h3 style={{ margin: 0, fontSize: "var(--font-size-lg)" }}>Channel mix</h3>
+        <span className="dsv-muted" style={{ fontSize: "var(--font-size-xs)" }}>
+          Q2 · all channels
+        </span>
+      </div>
+      <div className="dsv-card">
+        <div
+          className="dsv-inline"
+          style={{
+            alignItems: "flex-end",
+            gap: "var(--space-2)",
+            height: 150,
+            borderBottom: "var(--border-width-thick) solid var(--color-chart-axis)",
+          }}
+          role="img"
+          aria-label={`Channel mix: ${CHANNELS.map((c, i) => `${c} ${BARS[i]}%`).join(", ")}`}
+        >
+          {BARS.map((h, i) => (
+            <div
+              key={i}
+              title={`${h}%`}
+              aria-hidden="true"
+              style={{
+                flex: 1,
+                height: `${h}%`,
+                background: `var(--color-chart-${i + 1})`,
+                borderRadius: "var(--radius-sm) var(--radius-sm) 0 0",
+              }}
+            />
+          ))}
+        </div>
+        <div className="dsv-inline" style={{ gap: "var(--space-3)", marginTop: "var(--space-3)", flexWrap: "wrap" }}>
+          {CHANNELS.map((l, i) => (
+            <span key={l} className="dsv-inline" style={{ fontSize: "var(--font-size-xs)" }}>
+              <span
+                style={{
+                  width: "var(--space-2-5)",
+                  height: "var(--space-2-5)",
+                  borderRadius: "var(--radius-sm)",
+                  background: `var(--color-chart-${i + 1})`,
+                }}
+              />
+              {l}
+              <span className="dsv-muted" style={{ fontVariantNumeric: "tabular-nums" }}>
+                {BARS[i]}%
+              </span>
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
