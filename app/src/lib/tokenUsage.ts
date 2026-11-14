@@ -222,12 +222,35 @@ const ALL_FNS = (() => {
   return merged;
 })();
 
-// entry id -> Body function name, read from `{ id: "…", …, Body: XxxBody }`
-// literals in gallery/components/index.ts.
+// entry id -> Body function name, resolved through the code-split loaders
+// (issue #328): gallery/components/index.ts now pairs each id with
+// `Body: lazyBody(BODY_LOADERS.<id>)`, and BODY_LOADERS maps that id to the
+// body file's dynamic import. Follow both hops to the file's default-exported
+// function, whose source the scan above already holds.
 const ENTRY_BODIES = (() => {
-  const map = new Map<string, string>();
+  const loaderFiles = new Map<string, string>();
+  const entryLoaders = new Map<string, string>();
   for (const src of Object.values(entriesSource)) {
-    for (const m of src.matchAll(/id:\s*"([^"]+)"[^}]*?Body:\s*(\w+)/g)) map.set(m[1], m[2]);
+    for (const m of src.matchAll(/(?:"([\w-]+)"|(\w+)):\s*\(\)\s*=>\s*import\(\s*"([^"]+)"/g)) {
+      loaderFiles.set(m[1] ?? m[2], m[3].replace(/^\.\//, ""));
+    }
+    for (const m of src.matchAll(/id:\s*"([^"]+)"[^}]*?BODY_LOADERS(?:\.(\w+)|\["([^"]+)"\])/g)) {
+      entryLoaders.set(m[1], m[3] ?? m[2]);
+    }
+  }
+  const defaultFn = new Map<string, string>();
+  const sourcePaths = Object.entries(tsxSources);
+  for (const [path, src] of sourcePaths) {
+    const m = src.match(/export default function (\w+)/);
+    if (m) defaultFn.set(path, m[1]);
+  }
+  const map = new Map<string, string>();
+  for (const [id, key] of entryLoaders) {
+    const file = loaderFiles.get(key);
+    if (!file) continue;
+    const match = sourcePaths.find(([path]) => path.endsWith(`/${file}`) || path === file);
+    const fn = match ? defaultFn.get(match[0]) : undefined;
+    if (fn) map.set(id, fn);
   }
   return map;
 })();

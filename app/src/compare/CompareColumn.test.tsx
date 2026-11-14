@@ -54,6 +54,23 @@ async function renderColumns(
   return host;
 }
 
+/** Gallery section bodies are React.lazy now (issue #328), so the Suspense
+    fallback paints first. Wait, inside act, until every column's body has
+    replaced its `.dsv-section-loading` placeholder — otherwise the id queries
+    below run against the fallback and see nothing. */
+async function waitForLazyBodies(el: HTMLElement): Promise<void> {
+  const deadline = Date.now() + 2000;
+  while (Date.now() < deadline) {
+    const loading = el.querySelectorAll(".dsv-section-loading").length;
+    const rendered = el.querySelectorAll(".cmp-col-body > :not(.dsv-section-loading)").length;
+    if (loading === 0 && rendered >= 2) return;
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+  }
+  throw new Error("gallery bodies did not resolve before the deadline");
+}
+
 afterEach(() => {
   act(() => root?.unmount());
   root = null;
@@ -150,6 +167,7 @@ function LivePortalProbe() {
 describe("CompareColumn gallery section id namespacing", () => {
   it("namespaces Forms ids and resolves each label within its own column", async () => {
     const el = await renderColumns(galleryOption("gallery-forms"), ["aurora", "chatgpt"]);
+    await waitForLazyBodies(el);
     const ids = idsIn(el);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids).toEqual(expect.arrayContaining(["aurora-f-email", "chatgpt-f-email"]));
@@ -168,6 +186,7 @@ describe("CompareColumn gallery section id namespacing", () => {
 
   it("namespaces the Login screen ids per column", async () => {
     const el = await renderColumns(galleryOption("gallery-screen-login"), ["aurora", "chatgpt"]);
+    await waitForLazyBodies(el);
     const ids = idsIn(el);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids).toEqual(expect.arrayContaining(["aurora-l-email", "chatgpt-l-email"]));

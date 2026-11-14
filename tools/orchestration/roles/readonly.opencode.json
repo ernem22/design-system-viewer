@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "opencode-go/deepseek-v4-pro",
+  "model": "opencode/glm-5.3-flash-free",
   "permission": {
     "external_directory": "deny",
     "edit": "deny",

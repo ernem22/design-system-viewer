@@ -1,10 +1,11 @@
-# Model fallback order per role config, owner-approved (2026-10-07; muse first for every role, the
-# other Zen free models dropped by the owner). model-switch.sh moves a role to the
-# next model AFTER its current one that answers a probe; it never picks a model that is not listed here.
+# Model fallback order per role config (owner-approved 2026-10-18: free first, then cheap paid; no
+# Claude or GPT). Since 2026-10-18 every spec carries a `stage:` and its model comes from
+# roles/models.txt, picked per worker by the dispatcher; the role config's model below is used only
+# for a spec without a stage line. model-switch.sh still moves a config along this order.
 # One line per config: `<config>: <model> <model> ...` (config = write | readonly | tester).
 # write = Coder and Fixer; readonly = Reviewer; tester = Tester.
 # Models are OpenCode ids: `opencode-go/...` is the Go subscription, `opencode/...-free` is Zen's free
 # tier (only usable from inside OpenCode, which is where workers run).
-write: opencode/muse-spark-1.3-contributor-free opencode-go/muse-spark-1.3-contributor
-readonly: opencode/muse-spark-1.3-contributor-free opencode-go/muse-spark-1.3-contributor opencode-go/deepseek-v4-pro
-tester: opencode/muse-spark-1.3-contributor-free opencode-go/muse-spark-1.3-contributor opencode-go/deepseek-v4.1-flash
+write: opencode/deepseek-v4.1-flash-free opencode/glm-5.3-flash-free opencode-go/deepseek-v4.1-flash opencode-go/glm-5.3-flash
+readonly: opencode/glm-5.3-flash-free opencode/deepseek-v4.1-flash-free opencode-go/glm-5.3-flash opencode-go/deepseek-v4.1-flash
+tester: opencode/deepseek-v4.1-flash-free opencode/glm-5.3-flash-free opencode-go/deepseek-v4.1-flash opencode-go/glm-5.3-flash

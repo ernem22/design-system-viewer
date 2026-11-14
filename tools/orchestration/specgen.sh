@@ -91,6 +91,7 @@ gen_tester() {   # pr head branch
   write_spec "200-tester-$pr-$head.spec" "name: tester-$pr-$head
 base: origin/$br
 role: tester
+stage: tester
 title: Tester PR #$pr @ $head
 pr: $pr
 head: $head
@@ -170,6 +171,7 @@ keeps the latest verdict, so yours replaces the earlier one.
   write_spec "300-reviewer-$pr-$head$SUF.spec" "name: reviewer-$pr-$head$SUF
 base: origin/$br
 role: reviewer
+stage: reviewer$SUF
 title: Reviewer PR #$pr @ $head${SUF:+ (recheck)}
 pr: $pr
 head: $head
@@ -218,6 +220,7 @@ gen_conflict() {   # pr head branch - the PR conflicts with the base: merge the 
   write_spec "100-fixer-$pr-$head.spec" "name: fixer-$pr-$head
 base: origin/$br
 role: fixer
+stage: fixer-conflict
 title: Fixer PR #$pr @ $head (merge conflict)
 pr: $pr
 head: $head
@@ -256,6 +259,7 @@ gen_fixer() {   # pr head branch
   write_spec "100-fixer-$pr-$head.spec" "name: fixer-$pr-$head
 base: origin/$br
 role: fixer
+stage: fixer
 title: Fixer PR #$pr @ $head
 pr: $pr
 head: $head
@@ -304,6 +308,7 @@ gen_ci_fixer() {   # pr head branch - both verdicts passed but the PR's app CI c
   write_spec "100-fixer-$pr-$head.spec" "name: fixer-$pr-$head
 base: origin/$br
 role: fixer
+stage: fixer-ci
 title: CI fixer PR #$pr @ $head
 pr: $pr
 head: $head
@@ -350,6 +355,7 @@ gen_coder() {   # issue
   write_spec "500-coder-$n.spec" "name: coder-$n
 base: origin/$BASE
 role: coder
+stage: coder
 title: Coder issue #$n
 issue: $n
 deadline: 5400" "You work in this worktree only. Write only under \`app/\`. Do not touch files held by other

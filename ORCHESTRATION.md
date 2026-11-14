@@ -29,8 +29,13 @@ the reason it keeps flowing when something outside the rules happens.
   - `queue/`, `running/*.env` (live workers), `done/<spec>.<outcome>` (results);
   - `report-<task>.txt` (a worker's report), `tail-<task>.txt` (a worker's last screen);
   - `dispatch.enabled` (acting), `dispatch.paused` (paused, with the reason).
-- Role models: `tools/orchestration/roles/{write,readonly,tester}.opencode.json` (`write` = Coder and
-  Fixer, `readonly` = Reviewer). The fallback order, approved by the owner: `roles/fallback.txt`.
+- Models: `tools/orchestration/roles/models.txt`, one ordered list per stage (coder, fixer,
+  fixer-conflict, fixer-ci, reviewer, reviewer-recheck, tester), owner-approved: free models first, then
+  cheap paid ones, never Claude or GPT. The dispatcher picks per worker: attempt 1 on the first model
+  that is up, a retry on the next one, and a model whose worker showed a provider error is skipped for
+  60 minutes (`model-down` event, `$S/models-down/`). Role permissions stay in
+  `roles/{write,readonly,tester}.opencode.json`; their `model` and `roles/fallback.txt` only matter for a
+  spec without a `stage:` line.
 - Keep-alive: the Task Scheduler task `dsv-dispatcher` runs `bootstrap.sh` every 5 minutes. It starts
   a dispatcher when none is alive.
 - Reference: `docs/orchestration/reference/roles.md` (events, delivery, merging) and `dispatcher.md`
@@ -83,7 +88,13 @@ problem again.
 ### 2. Model watchdog
 
 A `provider-error` event means a worker's screen showed a provider-looking error: quota, rate limit,
-401/402/403/429, billing or overloaded. The dispatcher only detects it. **Hermes decides what it means.**
+401/402/403/429, billing or overloaded. Since 2026-10-18 the dispatcher acts on it by itself: it marks
+that model down for 60 minutes (`model-down` event) and every stage moves to its next model in
+`roles/models.txt`. Hermes no longer needs to switch anything for a stage; it reports the events, and
+when every model of a stage is down (the dispatcher then runs the first one anyway) it pauses with
+`dispatch.sh --pause "no working model for <stage>"` and tells the owner. A model missing from
+`models.txt` needs the owner's approval. The steps below apply only to the role configs (specs without
+a `stage:` line).
 
 1. Read `tail-<task>.txt` for that dispatch. Then check whether the same model has another
    `provider-error` in the last 30 minutes (`grep provider-error "$S/events.log"`).
