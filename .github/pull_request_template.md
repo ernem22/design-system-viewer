@@ -31,6 +31,6 @@ npm --prefix app test       → <result>
 
 ## Scope
 
-- [ ] `app/` only — not `src/core`, not `preview/`, not repo root
+- [ ] `app/` only — not `src/core`, not repo root (the legacy `preview/` app is gone)
 - [ ] Nothing changed that the issue did not ask for
 - [ ] Tests added for new behaviour, or a stated reason none apply

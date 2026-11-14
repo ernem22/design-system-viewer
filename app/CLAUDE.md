@@ -1,6 +1,7 @@
 # app/ — code style
 
-React + TS + Vite sub-app, replacing repo root's `src/` and `preview/`.
+React + TS + Vite app. It replaced the legacy root `src/` viewer and `preview/`
+apps; both are gone.
 Root `CLAUDE.md` still applies.
 
 ## Commands
@@ -67,4 +68,5 @@ Explain why, not what.
 - Tokens applied via `document.documentElement.style` (`App.tsx`), not postMessage — unlike `preview/`'s iframe bridge. Compare columns scope tokens as inline styles; gallery portals must pass `usePortalContainer()`.
 - Token inspector is Preview-only (`InCompareContext` hides it in Compare). Section token scans key by entry id (`tokensForEntry`) — never rely on `Body.name`, it's minified in builds.
 - Coverage is always recomputed from CSS (`systemCoveragePercent`), never read from stored snapshots.
-- Port from `preview/`, don't import it; `preview/` stays untouched.
+- Shared parsing/taxonomy/schema/contrast live in `src/core/`; import it, don't
+  fork it into `app/`.
